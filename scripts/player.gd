@@ -6,7 +6,7 @@ signal hit_confirmed(killed: bool)
 signal took_damage(amount: float)
 signal died
 
-const ToySoldier = preload("res://scripts/toy_soldier.gd")
+const Soldier = preload("res://scripts/plastic_soldier.gd")
 const Weapons = preload("res://scripts/weapons.gd")
 const Fx = preload("res://scripts/fx.gd")
 const Grenade = preload("res://scripts/grenade.gd")
@@ -77,7 +77,7 @@ func _ready() -> void:
     col_shape.position.y = 0.9
     add_child(col_shape)
 
-    model = ToySoldier.new()
+    model = Soldier.create()
     add_child(model)
     model.build(PLAYER_COLOR, "rifle")
 
@@ -215,6 +215,8 @@ func _update_camera(delta: float) -> void:
 func _combat(delta: float) -> void:
     var w := cur()
     aiming = Input.is_action_pressed("aim") and not sprinting
+    if aiming:
+        model.notify_shot()
     if reload_t > 0.0:
         reload_t -= delta
         if reload_t <= 0.0:
@@ -265,7 +267,7 @@ func _fire(w: Dictionary) -> void:
             _start_reload()
         else:
             fire_cd = 0.3
-            Game.play_sfx("click", global_position, -6.0)
+            Game.play_sfx("empty", global_position, -4.0)
             level.notify("Out of ammo - find an ammo crate or switch weapons", 1.5)
         return
     mag[current] -= 1
@@ -310,6 +312,7 @@ func _fire(w: Dictionary) -> void:
             hit_confirmed.emit(killed)
             Game.play_ui("hit", -10.0)
     Fx.muzzle_flash(level, muzzle_pos)
+    model.notify_shot()
     Game.play_sfx(w["sound"], muzzle_pos)
     level.make_noise(global_position, w["noise"])
     bloom = minf(bloom + w["bloom"], 4.0)
@@ -348,7 +351,7 @@ func _start_reload() -> void:
     if mag[current] >= w["mag"] or reserve[current] <= 0:
         return
     reload_t = w["reload"]
-    Game.play_sfx("reload", global_position, -4.0)
+    Game.play_sfx(w.get("reload_sound", "reload"), global_position, -4.0)
     stats_changed.emit()
 
 
@@ -387,6 +390,7 @@ func _throw_grenade() -> void:
         return
     grenades -= 1
     grenade_cd = 0.9
+    Game.play_sfx("throw", global_position, -4.0)
     var fwd := -camera.global_transform.basis.z
     var g = Grenade.new()
     g.setup(level)

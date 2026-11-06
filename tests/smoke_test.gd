@@ -11,6 +11,9 @@ func _ready() -> void:
     main = load("res://scenes/main.tscn").instantiate()
     add_child(main)
     await _frames(30)
+    _audio_checks()
+    var PS = load("res://scripts/plastic_soldier.gd")
+    _check(PS.available(), "plastic soldier model loads")
     main.show_campaign()
     await _frames(5)
     main.show_settings()
@@ -67,6 +70,8 @@ func _play_level(i: int) -> void:
     await _frames(10)
     var L = main.level
     var p = L.player
+    _check(Game._ambience.playing, "L%d ambience playing" % i)
+    _check(L.enemies[0].model.get("rig") != null, "L%d enemies use the plastic model" % i)
     _check(L.enemies.size() > 10, "L%d spawned %d enemies" % [i, L.enemies.size()])
     _check(p.is_on_floor() or p.global_position.y < 2.0, "L%d player grounded at %s" % [i, p.global_position])
     # Let the AI run for a few seconds with the player invulnerable.
@@ -120,3 +125,12 @@ func _play_level(i: int) -> void:
     await _wait_finish()
     _check(finished_result == true, "L%d mission accomplished -> debrief" % i)
     await _frames(5)
+
+
+func _audio_checks() -> void:
+    var from_files := 0
+    for k in Game.SFX_FILES:
+        if Game.sfx.has(k) and Game.sfx[k] is Array:
+            from_files += 1
+    _check(from_files == Game.SFX_FILES.size(), "recorded SFX loaded (%d/%d)" % [from_files, Game.SFX_FILES.size()])
+    _check(Game._music.playing, "music playing (%s)" % Game._music_path.get_file())

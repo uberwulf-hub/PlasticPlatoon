@@ -6,7 +6,13 @@
 
 ArmyMen's Revenge 2026 is a third-person toy-soldier shooter built in **Godot 4.3**. You play a green plastic commando fighting the Tan Army across three operations, using modern weapons, kit and air support. Soldiers who die melt into puddles.
 
-Everything is generated in code: the models, maps, effects, UI and sound effects. The project has no binary assets, so it's small and works well with git.
+![City](docs/screenshots/city.png)
+
+**Assets (all CC0, see [CREDITS.md](CREDITS.md) and [docs/ASSET_RESEARCH.md](docs/ASSET_RESEARCH.md)):**
+- **Soldiers:** Quaternius's animated Toon Shooter soldier, recolored at runtime to green or tan plastic. It has 17 animations, and the guns switch with your weapon.
+- **Buildings and props:** Kenney's City, Car and Nature kits, plus Quaternius's Toon Shooter environment (sandbag trenches, containers, wrecks, chain-reacting explosive barrels).
+- **Audio:** recorded gunfire, explosions, reloads and radio chatter, plus orchestral music for each map and ambience (desert wind, city traffic, a giant ticking clock), all from OpenGameArt.
+- If an asset is missing, the game falls back to its procedural models and synthesized sounds, so it always runs.
 
 ## Running it
 
@@ -69,6 +75,8 @@ scripts/
   main.gd                Title diorama, menus, briefing, debrief
   level.gd               Level runtime: builder API, objectives, pause, explosions
   level_data.gd          The three maps + briefing text  <- add new maps here
+  plastic_soldier.gd     CC0 animated soldier recolored to green/tan plastic
+  barrel.gd              Explosive barrels (chain reactions)
   player.gd              Third-person controller, weapons, grenades, drone
   enemy.gd               Tan Army AI (patrol / investigate / combat)
   toy_soldier.gd         Procedural plastic soldier model + melt animation
@@ -76,6 +84,10 @@ scripts/
   target.gd              Destructible objectives
   pickup.gd              Supply crates
   rocket.gd, grenade.gd, drone_strike.gd, fx.gd, hud.gd, ui_util.gd
+assets/
+  models/soldier.gltf    Animated soldier (Quaternius, CC0)
+  packs/                 Kenney + Quaternius model packs (CC0); use level.prop("pack/file.glb", pos, rot, fit)
+  audio/{music,sfx,ambience}   CC0 audio; drop-in replacements are picked up by name
 tests/
   smoke_test.tscn        Headless playthrough of all operations
   screenshot.tscn        Renders menu/level screenshots
@@ -83,7 +95,7 @@ tests/
 
 ### Adding a map
 
-Add an entry to `META` in `level_data.gd`, write a `static func _yourmap(L) -> Dictionary` that uses the helpers (`L.box`, `L.cyl`, `L.wall`, `L.add_enemy`, `L.add_target`, `L.add_pickup`, …), and route to it from `build()`. Objective types are `destroy`, `kill_hvt`, `kill_all` and `extract`.
+Add an entry to `META` in `level_data.gd`, write a `static func _yourmap(L) -> Dictionary` that uses the helpers (`L.prop` for any model in `assets/packs`, `L.box`, `L.cyl`, `L.wall`, `L.add_enemy`, `L.add_target`, `L.add_pickup`, `L.add_barrel`, …), and route to it from `build()`. Objective types are `destroy`, `kill_hvt`, `kill_all` and `extract`.
 
 ### Tests
 
@@ -99,6 +111,6 @@ It plays through every operation (spawning, firing, grenades, drone strikes, AI 
 
 - Vehicles: a drivable JLTV, a Tan APC and an attack helicopter
 - Friendly AI squadmates
-- Real audio and music in place of the synthesized SFX
+- More recorded SFX from the Sonniss GDC bundle (see docs/ASSET_RESEARCH.md)
 - Navmesh pathfinding (the current AI uses steering and line of sight)
 - Split-screen or online co-op

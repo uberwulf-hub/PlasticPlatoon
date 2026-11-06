@@ -14,6 +14,7 @@ const HUD = preload("res://scripts/hud.gd")
 const LevelData = preload("res://scripts/level_data.gd")
 const Fx = preload("res://scripts/fx.gd")
 const UI = preload("res://scripts/ui_util.gd")
+const Barrel = preload("res://scripts/barrel.gd")
 
 var level_index := 0
 var info: Dictionary = {}
@@ -30,7 +31,9 @@ var kills := 0
 var headshots := 0
 var ended := false
 var pause_layer: CanvasLayer
+var _boom_t := 12.0
 var _mats := {}
+static var _scenes := {}
 
 
 func _ready() -> void:
@@ -54,11 +57,15 @@ func _ready() -> void:
     Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
     _begin_objective(0)
     notify(info["name"].to_upper(), 3.5)
+    Game.play_music(info.get("music", ""), -8.0)
+    Game.play_ambience(info.get("ambience", ""), info.get("ambience_db", -12.0))
+    Game.play_ui("radio", -8.0)
 
 
 func _exit_tree() -> void:
     if Game.current_level == self:
         Game.current_level = null
+        Game.stop_ambience()
 
 
 func is_playing() -> bool:
@@ -197,6 +204,73 @@ func sphere(pos: Vector3, r: float, color: Color, scale_v := Vector3.ONE, m: Mat
     return mi
 
 
+## Places a model from assets/packs. `fit` (model-local axes, before rotation)
+## stretches it to that size in metres; zero components keep uniform scale.
+## Returns null if the file is missing so callers can fall back to boxes.
+func prop(path: String, pos: Vector3, rot_y := 0.0, fit := Vector3.ZERO, collide := true, tint := Color(1, 1, 1, 0)) -> Node3D:
+    var full := "res://assets/packs/" + path
+    if not _scenes.has(full):
+        _scenes[full] = load(full) if ResourceLoader.exists(full) else null
+    var ps: PackedScene = _scenes[full]
+    if ps == null:
+        return null
+    var root := StaticBody3D.new() if collide else Node3D.new()
+    root.position = pos
+    root.rotation.y = rot_y
+    add_child(root)
+    var inst: Node3D = ps.instantiate()
+    root.add_child(inst)
+    var ab := _local_aabb(root, inst)
+    var s := Vector3.ONE
+    if fit != Vector3.ZERO:
+        var known: Array = []
+        for k in 3:
+            if fit[k] > 0.0 and ab.size[k] > 0.001:
+                s[k] = fit[k] / ab.size[k]
+                known.append(s[k])
+        var avg := 1.0
+        if not known.is_empty():
+            avg = known.reduce(func(a, b): return a + b) / known.size()
+        for k in 3:
+            if fit[k] <= 0.0:
+                s[k] = avg
+    inst.scale = s
+    inst.position = Vector3(0, -ab.position.y * s.y, 0)
+    if tint.a > 0.0:
+        _tint(inst, tint)
+    if collide:
+        var cs := CollisionShape3D.new()
+        var bs := BoxShape3D.new()
+        var size := ab.size * s
+        bs.size = Vector3(maxf(size.x, 0.1), maxf(size.y, 0.1), maxf(size.z, 0.1))
+        cs.shape = bs
+        cs.position = (ab.get_center() * s) + inst.position
+        root.add_child(cs)
+    return root
+
+
+func _local_aabb(root: Node3D, inst: Node3D) -> AABB:
+    var ab := AABB()
+    var first := true
+    var inv := root.global_transform.affine_inverse()
+    for m in inst.find_children("*", "MeshInstance3D", true, false):
+        var a: AABB = (inv * m.global_transform) * m.get_aabb()
+        ab = a if first else ab.merge(a)
+        first = false
+    return ab
+
+
+func _tint(inst: Node3D, tint: Color) -> void:
+    for m in inst.find_children("*", "MeshInstance3D", true, false):
+        var mi := m as MeshInstance3D
+        for i in mi.mesh.get_surface_count():
+            var src := mi.get_active_material(i)
+            if src is BaseMaterial3D:
+                var d: BaseMaterial3D = src.duplicate()
+                d.albedo_color = d.albedo_color * Color(tint.r, tint.g, tint.b)
+                mi.set_surface_override_material(i, d)
+
+
 func wall(a: Vector3, b: Vector3, h: float, thick: float, color: Color) -> void:
     var d := b - a
     var length := Vector2(d.x, d.z).length()
@@ -244,6 +318,12 @@ func add_target(pos: Vector3, kind: String, tag: String, rot_y := 0.0) -> Node:
     return t
 
 
+func add_barrel(pos: Vector3) -> void:
+    var b = Barrel.new()
+    b.setup(self, pos)
+    add_child(b)
+
+
 func add_pickup(pos: Vector3, kind: String) -> void:
     var p = Pickup.new()
     p.setup(self, kind, pos)
@@ -285,6 +365,19 @@ func add_helipad(pos: Vector3) -> Node3D:
     smoke.color_ramp.set_color(0, Color(0.3, 1.0, 0.4, 0.8))
     smoke.color_ramp.set_color(1, Color(0.3, 0.9, 0.4, 0.0))
     smoke.gravity = Vector3(0, 4.0, 0)
+    var heli_path := "res://assets/audio/ambience/helicopter.ogg"
+    if ResourceLoader.exists(heli_path):
+        var heli := AudioStreamPlayer3D.new()
+        var hs: AudioStream = load(heli_path)
+        if hs is AudioStreamOggVorbis:
+            hs.loop = true
+        heli.stream = hs
+        heli.bus = "SFX"
+        heli.unit_size = 25.0
+        heli.max_distance = 220.0
+        heli.position.y = 12.0
+        heli.autoplay = true
+        root.add_child(heli)
     return root
 
 
@@ -351,12 +444,18 @@ func _begin_objective(i: int) -> void:
         extraction = add_helipad(o["pos"])
     if i > 0:
         notify("NEW OBJECTIVE: " + o["text"], 3.5)
+        Game.play_ui("radio", -6.0)
 
 
 func _process(delta: float) -> void:
     if ended:
         return
     elapsed += delta
+    if info.get("distant_booms", false):
+        _boom_t -= delta
+        if _boom_t <= 0.0:
+            _boom_t = randf_range(9.0, 22.0)
+            Game.play_ui("distant_boom", randf_range(-20.0, -12.0))
     if obj_index >= objectives.size():
         return
     var o: Dictionary = objectives[obj_index]

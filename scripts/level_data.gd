@@ -45,7 +45,13 @@ static func _rot(v: Vector3, r: float) -> Vector3:
 
 # ----------------------------------------------------------- props ----
 
+const TOON := "quaternius_toon_shooter/Environment/"
+const CARS := ["sedan", "suv", "taxi", "van", "police", "hatchback-sports", "truck", "delivery", "ambulance", "sedan-sports"]
+
+
 static func container(L, pos: Vector3, rot: float, color: Color) -> void:
+    if L.prop(TOON + "Container_Long.gltf", pos, rot + PI / 2, Vector3(6.1, 2.6, 2.5), true, color.lightened(0.25)):
+        return
     L.box(pos + Vector3(0, 1.3, 0), Vector3(2.5, 2.6, 6.1), color, rot)
     for i in 5:
         var off := _rot(Vector3(1.27, 1.3, -2.4 + i * 1.2), rot)
@@ -53,6 +59,15 @@ static func container(L, pos: Vector3, rot: float, color: Color) -> void:
 
 
 static func vehicle(L, pos: Vector3, rot: float, color: Color, burnt := false) -> void:
+    if burnt:
+        if L.prop(TOON + "Debris_BrokenCar.gltf", pos, rot, Vector3(0, 1.8, 5.0)):
+            var f := Fx.fire(L, pos + Vector3(0, 1.4, 0), 0.8)
+            f.amount = 14
+            return
+    else:
+        var car: String = CARS[absi(int(pos.x * 7.0 + pos.z * 13.0)) % CARS.size()]
+        if L.prop("kenney_car_kit/%s.glb" % car, pos, rot, Vector3(0, 0, 4.8)):
+            return
     var c := color.darkened(0.6) if burnt else color
     L.box(pos + Vector3(0, 0.9, 0), Vector3(2.3, 1.0, 4.8), c, rot)
     L.box(pos + _rot(Vector3(0, 1.75, -0.4), rot), Vector3(2.1, 0.8, 2.2), c.darkened(0.1), rot)
@@ -82,10 +97,14 @@ static func watchtower(L, pos: Vector3, color: Color) -> void:
 
 
 static func sandbags(L, pos: Vector3, rot: float, length := 4.0) -> void:
+    if L.prop(TOON + "SackTrench.gltf", pos, rot, Vector3(length, 1.15, 1.0)):
+        return
     L.box(pos + Vector3(0, 0.5, 0), Vector3(length, 1.0, 0.9), Color(0.68, 0.6, 0.42), rot)
 
 
 static func palm(L, pos: Vector3) -> void:
+    if L.prop("kenney_nature/tree_palmTall.glb", pos, pos.x, Vector3(0, 7.5, 0)):
+        return
     L.cyl(pos + Vector3(0, 3.0, 0), 0.25, 6.0, Color(0.45, 0.35, 0.22), true, Vector3.ZERO, null, 0.18)
     for i in 6:
         var a := i * TAU / 6.0
@@ -93,6 +112,9 @@ static func palm(L, pos: Vector3) -> void:
 
 
 static func tree(L, pos: Vector3) -> void:
+    var kind: String = ["tree_default", "tree_oak", "tree_detailed"][absi(int(pos.x + pos.z)) % 3]
+    if L.prop("kenney_nature/%s.glb" % kind, pos, pos.z, Vector3(0, 6.0, 0)):
+        return
     L.cyl(pos + Vector3(0, 1.5, 0), 0.3, 3.0, Color(0.4, 0.3, 0.2))
     L.sphere(pos + Vector3(0, 4.2, 0), 2.2, Color(0.25, 0.45, 0.2), Vector3(1, 0.85, 1))
 
@@ -111,6 +133,10 @@ static func rocks(L, rng: RandomNumberGenerator, count: int, half: float, avoid:
         if not ok:
             continue
         var s := rng.randf_range(0.8, 3.0)
+        var rock: String = ["rock_largeA", "rock_largeB", "rock_largeC", "rock_tallA", "rock_tallB", "stone_largeA"][rng.randi() % 6]
+        if L.prop("kenney_nature/%s.glb" % rock, p, rng.randf() * TAU, Vector3(s * 1.6, 0, s * 1.6), true, color.lightened(0.3)):
+            placed += 1
+            continue
         L.box_rot(p + Vector3(0, s * 0.35, 0), Vector3(s * 1.4, s, s * 1.1), color, Vector3(rng.randf() * 0.3, rng.randf() * TAU, rng.randf() * 0.3))
         placed += 1
 
@@ -120,7 +146,7 @@ static func rocks(L, rng: RandomNumberGenerator, count: int, half: float, avoid:
 static func _desert(L) -> Dictionary:
     var rng := RandomNumberGenerator.new()
     rng.seed = 2026
-    var sand := Color(0.74, 0.62, 0.42)
+    var sand := Color(0.66, 0.54, 0.36)
     var hesco_c := Color(0.7, 0.62, 0.44)
     var mud := Color(0.78, 0.66, 0.48)
     var green := Color(0.3, 0.38, 0.24)
@@ -221,13 +247,29 @@ static func _desert(L) -> Dictionary:
     for h in houses:
         avoid.append([Vector3(h[0], 0, h[1]), 9.0])
     rocks(L, rng, 30, 100.0, avoid, Color(0.62, 0.5, 0.38))
+    for b in [Vector3(-25, 0, -70), Vector3(-23.8, 0, -70.6), Vector3(15, 0, -60), Vector3(29, 0, -82),
+            Vector3(12, 0, 10), Vector3(-36, 0, 4), Vector3(42, 0, 12)]:
+        L.add_barrel(b)
+    L.prop(TOON + "WaterTank_Platform.gltf", Vector3(-20, 0, -92), 0.0, Vector3(0, 7.0, 0))
+    L.prop(TOON + "Barrier_Large.gltf", Vector3(-13, 0, -41), 0.0, Vector3(4.5, 0, 0))
+    L.prop(TOON + "Barrier_Large.gltf", Vector3(13, 0, -41), 0.0, Vector3(4.5, 0, 0))
+    L.prop(TOON + "Structure_2.gltf", Vector3(-58, 0, 50), 0.4, Vector3(0, 4.5, 0))
+    for i in 14:
+        var cp := Vector3(rng.randf_range(-95, 95), 0, rng.randf_range(-95, 95))
+        var clear := true
+        for a in avoid:
+            if Vector2(cp.x - a[0].x, cp.z - a[0].z).length() < a[1]:
+                clear = false
+        if clear:
+            L.prop("kenney_nature/%s.glb" % ["cactus_tall", "cactus_short"][i % 2], cp, rng.randf() * TAU, Vector3(0, rng.randf_range(2.0, 4.0), 0))
 
     return {
         "spawn": Vector3(0, 0.5, 86), "spawn_yaw": 0.0, "drones": 1,
         "start_weapons": ["carbine", "shotgun"],
         "sky_top": Color(0.32, 0.55, 0.85), "sky_horizon": Color(0.9, 0.82, 0.68),
         "sun_color": Color(1.0, 0.93, 0.8), "sun_energy": 1.15, "sun_rot": Vector3(-52, 30, 0),
-        "fog": 0.0035, "ambient": 0.7,
+        "fog": 0.0035, "ambient": 0.7, "exposure": 0.85,
+        "music": "res://assets/audio/music/battle_theme_a.ogg", "ambience": "res://assets/audio/ambience/desert_wind.ogg", "ambience_db": -10.0, "distant_booms": true,
         "objectives": [
             {"type": "destroy", "tag": "jammers", "text": "Destroy the Tan Army radar jammers"},
             {"type": "extract", "pos": Vector3(74, 0, -6), "text": "Reach the extraction helipad (east)"},
@@ -275,14 +317,22 @@ static func _urban(L) -> Dictionary:
                     var bz := z0 + 3.0 + ld * 0.5 + b * (ld + 4.0)
                     var h := rng.randf_range(7.0, 26.0)
                     var col: Color = palette[rng.randi() % palette.size()]
-                    L.box(Vector3(bx, h * 0.5, bz), Vector3(lw, h, ld), col)
-                    var band := col.darkened(0.45)
-                    var y := 3.0
-                    while y < h - 1.5:
-                        L.box(Vector3(bx, y, bz), Vector3(lw + 0.12, 1.1, ld + 0.12), band, 0.0, false)
-                        y += 4.0
-                    L.box(Vector3(bx, h + 0.4, bz), Vector3(lw, 0.8, ld), col.darkened(0.15), 0.0, false)
-                    L.box(Vector3(bx + lw * 0.2, h + 1.0, bz - ld * 0.2), Vector3(2.0, 1.2, 1.6), Color(0.6, 0.6, 0.6), 0.0, false)
+                    var model := ""
+                    if h > 20.0:
+                        model = "kenney_city_commercial/building-skyscraper-%s.glb" % "abcde"[rng.randi() % 5]
+                    elif i == 3 or j == 3:
+                        model = "kenney_city_industrial/building-%s.glb" % "abcdefghijklmnopqrst"[rng.randi() % 20]
+                    else:
+                        model = "kenney_city_commercial/building-%s.glb" % "abcdefghijklmn"[rng.randi() % 14]
+                    var face: float = [0.0, PI / 2, PI, -PI / 2][rng.randi() % 4]
+                    var fit := Vector3(ld, h, lw) if absf(sin(face)) > 0.5 else Vector3(lw, h, ld)
+                    if L.prop(model, Vector3(bx, 0, bz), face, fit) == null:
+                        L.box(Vector3(bx, h * 0.5, bz), Vector3(lw, h, ld), col)
+                        var band := col.darkened(0.45)
+                        var y := 3.0
+                        while y < h - 1.5:
+                            L.box(Vector3(bx, y, bz), Vector3(lw + 0.12, 1.1, ld + 0.12), band, 0.0, false)
+                            y += 4.0
                     if snipers < 5 and h < 18.0 and rng.randf() < 0.28:
                         snipers += 1
                         L.box(Vector3(bx, h, bz), Vector3(lw, 0.2, ld), col)   # walkable roof
@@ -302,6 +352,14 @@ static func _urban(L) -> Dictionary:
             Vector3(40, 0, -3), Vector3(40, 0, 3), Vector3(-40, 0, 0), Vector3(50, 0, -40), Vector3(-50, 0, 40)]:
         L.box(p + Vector3(0, 0.55, 0), Vector3(3.2, 1.1, 0.7), Color(0.75, 0.74, 0.7))
 
+    for b in [Vector3(8, 0, 8), Vector3(-8.5, 0, -46), Vector3(46, 0, 8), Vector3(-46, 0, 46), Vector3(9, 0, -52), Vector3(-9, 0, 52)]:
+        L.add_barrel(b)
+    for s in streets:
+        for k in [-80.0, -25.0, 25.0, 80.0]:
+            L.prop(TOON + "StreetLight.gltf", Vector3(s + 7.6, 0, k), PI / 2, Vector3(0, 6.5, 0))
+            L.prop(TOON + "StreetLight.gltf", Vector3(k, 0, s - 7.6), 0.0, Vector3(0, 6.5, 0))
+    for c in [Vector3(-2, 0, 37), Vector3(2, 0, 37), Vector3(-2, 0, -37), Vector3(2.5, 0, -37), Vector3(37, 0, 1.5)]:
+        L.prop("kenney_car_kit/cone.glb", c, 0.0, Vector3(0, 0.9, 0), false)
     var troops := [
         [Vector3(0, 0, 20), "rifleman"], [Vector3(6, 0, 0), "gunner"], [Vector3(-8, 0, -6), "rifleman"],
         [Vector3(-2, 0, -38), "rifleman"], [Vector3(2, 0, -55), "rocketeer"], [Vector3(30, 0, -2), "rifleman"],
@@ -328,6 +386,7 @@ static func _urban(L) -> Dictionary:
         "sky_top": Color(0.4, 0.5, 0.65), "sky_horizon": Color(0.78, 0.74, 0.7),
         "sun_color": Color(1.0, 0.85, 0.7), "sun_energy": 1.15, "sun_rot": Vector3(-35, -40, 0),
         "fog": 0.006, "ambient": 0.8,
+        "music": "res://assets/audio/music/war_theme.ogg", "ambience": "res://assets/audio/ambience/city_traffic.ogg", "ambience_db": -14.0, "distant_booms": true,
         "objectives": [
             {"type": "kill_hvt", "text": "Eliminate Colonel Khaki (north-east plaza)"},
             {"type": "destroy", "tag": "sams", "text": "Destroy the mobile SAM launchers"},
@@ -434,6 +493,13 @@ static func _tabletop(L) -> Dictionary:
     L.box(Vector3(-25, 0.01, 10), Vector3(7, 0.02, 7), Color(0.98, 0.9, 0.3), 0.2, false)
     L.box(Vector3(-50, 0.01, -5), Vector3(7, 0.02, 7), Color(0.98, 0.5, 0.6), -0.3, false)
 
+    # Giant toy vehicles left on the table
+    L.prop("kenney_car_kit/race-future.glb", Vector3(-30, 0, 40), 0.15, Vector3(0, 0, 14.0))
+    L.prop("kenney_car_kit/firetruck.glb", Vector3(-58, 0, -50), 1.2, Vector3(0, 0, 16.0))
+    L.add_barrel(Vector3(-40, 0, 0))
+    L.add_barrel(Vector3(36, 0, -2))
+    L.add_barrel(Vector3(4, 0, -42))
+
     # Tan fortifications + objectives
     L.add_target(Vector3(-45, 0, 8), "booster", "boosters", 0.2)
     L.add_target(Vector3(40, 0, -8), "booster", "boosters", -0.3)
@@ -473,6 +539,7 @@ static func _tabletop(L) -> Dictionary:
         "sky_top": Color(0.62, 0.58, 0.52), "sky_horizon": Color(0.74, 0.7, 0.62),
         "sun_color": Color(1.0, 0.9, 0.75), "sun_energy": 0.95, "sun_rot": Vector3(-60, 20, 0),
         "fog": 0.0, "ambient": 0.6, "exposure": 0.85,
+        "music": "res://assets/audio/music/determined_pursuit.ogg", "ambience": "res://assets/audio/ambience/clock_tick.ogg", "ambience_db": -8.0,
         "objectives": [
             {"type": "destroy", "tag": "boosters", "text": "Destroy the Tan Army Wi-Fi signal boosters"},
             {"type": "kill_all", "text": "Clear the table of all Tan forces"},

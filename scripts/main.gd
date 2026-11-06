@@ -5,7 +5,7 @@ extends Node
 const Level = preload("res://scripts/level.gd")
 const LevelData = preload("res://scripts/level_data.gd")
 const UI = preload("res://scripts/ui_util.gd")
-const ToySoldier = preload("res://scripts/toy_soldier.gd")
+const Soldier = preload("res://scripts/plastic_soldier.gd")
 const Fx = preload("res://scripts/fx.gd")
 
 var ui: CanvasLayer
@@ -72,6 +72,8 @@ func show_main_menu() -> void:
     _clear_level()
     get_tree().paused = false
     Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+    Game.stop_ambience()
+    Game.play_music("res://assets/audio/music/menu_militaristic_tune.ogg", -8.0)
     if diorama == null:
         _build_diorama()
     var root := _new_ui()
@@ -157,6 +159,19 @@ func show_settings() -> void:
     slider.custom_minimum_size = Vector2(480, 24)
     slider.value_changed.connect(func(v): Game.mouse_sensitivity = v)
     vb.add_child(slider)
+    for row in [["Music volume", "music_volume"], ["Effects volume", "sfx_volume"]]:
+        vb.add_child(UI.label(row[0], 18))
+        var vs := HSlider.new()
+        vs.min_value = 0.0
+        vs.max_value = 1.0
+        vs.step = 0.05
+        vs.value = Game.get(row[1])
+        vs.custom_minimum_size = Vector2(480, 24)
+        var prop: String = row[1]
+        vs.value_changed.connect(func(v):
+            Game.set(prop, v)
+            Game.apply_volumes())
+        vb.add_child(vs)
     var inv := CheckBox.new()
     inv.text = "Invert mouse Y"
     inv.button_pressed = Game.invert_y
@@ -209,6 +224,7 @@ func _on_level_finished(success: bool, stats: Dictionary) -> void:
     var i: int = stats["level"]
     if success:
         Game.unlock(i + 1)
+        Game.play_ui("ui_confirm", -2.0)
     get_tree().paused = true
     Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
     var root := _new_ui(0.6)
@@ -301,13 +317,13 @@ func _build_diorama() -> void:
         [Vector3(2.4, 0, -0.4), 0.3, "launcher"], [Vector3(-3.4, 0, 1.2), -0.4, "sniper"],
     ]
     for p in poses:
-        var s = ToySoldier.new()
+        var s = Soldier.create()
         diorama.add_child(s)
         s.build(Color(0.27, 0.48, 0.17), p[2])
         s.position = p[0]
         s.rotation.y = p[1]
         s.animate(0.016, 0.0, p[2] == "sniper")
-    var dead = ToySoldier.new()
+    var dead = Soldier.create()
     diorama.add_child(dead)
     dead.build(Color(0.8, 0.68, 0.44), "rifle")
     dead.position = Vector3(1.5, 0, -6)

@@ -16,6 +16,11 @@ var phase := 0.0
 var crouch_amount := 0.0
 var aim_pitch := 0.0
 var _flash_t := 0.0
+var hat_offset := Vector3(0, 1.0, 0)
+
+
+func notify_shot() -> void:
+    pass
 
 
 func build(c: Color, kind := "rifle") -> void:

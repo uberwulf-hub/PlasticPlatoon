@@ -14,6 +14,22 @@ var unlocked_level := 0
 var current_level: Node = null
 
 var sfx := {}
+var music_volume := 0.7
+var sfx_volume := 1.0
+var _music: AudioStreamPlayer
+var _music_path := ""
+var _ambience: AudioStreamPlayer
+
+## Recorded CC0 sounds (see CREDITS.md). Each name may have several variants;
+## anything missing falls back to the synthesized placeholder.
+const SFX_FILES := {
+    "rifle": ["rifle", "rifle_2"], "enemy_rifle": ["enemy_rifle"], "lmg": ["lmg"],
+    "shotgun": ["shotgun"], "sniper": ["sniper"], "rocket": ["rocket"],
+    "explosion": ["explosion", "explosion_2"], "empty": ["empty"], "click": ["ui_click"],
+    "reload_rifle": ["reload_rifle"], "reload_shotgun": ["reload_shotgun"], "reload_sniper": ["reload_sniper"],
+    "throw": ["throw"], "pickup": ["pickup"], "radio": ["radio_1", "radio_2", "radio_3", "radio_4"],
+    "ui_confirm": ["ui_confirm"], "ui_error": ["ui_error"], "distant_boom": ["ambience/distant_explosion"],
+}
 
 
 func _ready() -> void:
@@ -21,7 +37,15 @@ func _ready() -> void:
     randomize()
     _setup_inputs()
     _load()
+    _setup_buses()
     _build_sfx()
+    _load_sfx_files()
+    _music = AudioStreamPlayer.new()
+    _music.bus = "Music"
+    add_child(_music)
+    _ambience = AudioStreamPlayer.new()
+    _ambience.bus = "SFX"
+    add_child(_ambience)
 
 
 # ---------------------------------------------------------------- input ----
@@ -99,6 +123,8 @@ func save() -> void:
     cfg.set_value("settings", "mouse_sensitivity", mouse_sensitivity)
     cfg.set_value("settings", "invert_y", invert_y)
     cfg.set_value("settings", "difficulty", difficulty)
+    cfg.set_value("settings", "music_volume", music_volume)
+    cfg.set_value("settings", "sfx_volume", sfx_volume)
     cfg.set_value("progress", "unlocked_level", unlocked_level)
     cfg.save(SAVE_PATH)
 
@@ -110,6 +136,8 @@ func _load() -> void:
     mouse_sensitivity = cfg.get_value("settings", "mouse_sensitivity", mouse_sensitivity)
     invert_y = cfg.get_value("settings", "invert_y", invert_y)
     difficulty = clampi(cfg.get_value("settings", "difficulty", difficulty), 0, 2)
+    music_volume = cfg.get_value("settings", "music_volume", music_volume)
+    sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
     unlocked_level = clampi(cfg.get_value("progress", "unlocked_level", 0), 0, LEVEL_COUNT - 1)
 
 
@@ -119,7 +147,8 @@ func play_sfx(sound: String, pos: Vector3, volume_db := 0.0) -> void:
     if not sfx.has(sound) or get_child_count() > 64:
         return
     var p := AudioStreamPlayer3D.new()
-    p.stream = sfx[sound]
+    p.stream = _pick(sound)
+    p.bus = "SFX"
     p.volume_db = volume_db
     p.unit_size = 14.0
     p.max_distance = 260.0
@@ -134,11 +163,86 @@ func play_ui(sound: String, volume_db := -4.0) -> void:
     if not sfx.has(sound):
         return
     var p := AudioStreamPlayer.new()
-    p.stream = sfx[sound]
+    p.stream = _pick(sound)
+    p.bus = "SFX"
     p.volume_db = volume_db
     add_child(p)
     p.finished.connect(p.queue_free)
     p.play()
+
+
+func _pick(sound: String) -> AudioStream:
+    var v = sfx[sound]
+    if v is Array:
+        return v.pick_random()
+    return v
+
+
+func _load_sfx_files() -> void:
+    for sound in SFX_FILES:
+        var variants: Array = []
+        for f in SFX_FILES[sound]:
+            var path := ("res://assets/audio/%s.ogg" if "/" in f else "res://assets/audio/sfx/%s.ogg") % f
+            if ResourceLoader.exists(path):
+                variants.append(load(path))
+        if not variants.is_empty():
+            sfx[sound] = variants
+    for alias in ["reload_rifle", "reload_shotgun", "reload_sniper"]:
+        if not sfx.has(alias):
+            sfx[alias] = sfx["reload"]
+    if not sfx.has("enemy_rifle"):
+        sfx["enemy_rifle"] = sfx["rifle"]
+    for alias in ["empty", "throw", "ui_confirm", "ui_error"]:
+        if not sfx.has(alias):
+            sfx[alias] = sfx["click"]
+
+
+func _setup_buses() -> void:
+    for b in ["Music", "SFX"]:
+        if AudioServer.get_bus_index(b) == -1:
+            AudioServer.add_bus()
+            AudioServer.set_bus_name(AudioServer.bus_count - 1, b)
+            AudioServer.set_bus_send(AudioServer.bus_count - 1, "Master")
+    apply_volumes()
+
+
+func apply_volumes() -> void:
+    AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Music"), linear_to_db(maxf(music_volume, 0.0001)))
+    AudioServer.set_bus_volume_db(AudioServer.get_bus_index("SFX"), linear_to_db(maxf(sfx_volume, 0.0001)))
+
+
+## Crossfades to a looping music track (no-op if it's already playing).
+func play_music(path: String, volume_db := -6.0) -> void:
+    if path == _music_path or not ResourceLoader.exists(path):
+        return
+    _music_path = path
+    var stream: AudioStream = load(path)
+    if stream is AudioStreamOggVorbis:
+        stream.loop = true
+    var tw := create_tween()
+    if _music.playing:
+        tw.tween_property(_music, "volume_db", -40.0, 0.8)
+    tw.tween_callback(func():
+        _music.stream = stream
+        _music.volume_db = -40.0
+        _music.play())
+    tw.tween_property(_music, "volume_db", volume_db, 1.2)
+
+
+func play_ambience(path: String, volume_db := -10.0) -> void:
+    if path == "" or not ResourceLoader.exists(path):
+        _ambience.stop()
+        return
+    var stream: AudioStream = load(path)
+    if stream is AudioStreamOggVorbis:
+        stream.loop = true
+    _ambience.stream = stream
+    _ambience.volume_db = volume_db
+    _ambience.play()
+
+
+func stop_ambience() -> void:
+    _ambience.stop()
 
 
 func _build_sfx() -> void:

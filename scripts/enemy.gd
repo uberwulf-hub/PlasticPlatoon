@@ -2,7 +2,7 @@ extends CharacterBody3D
 ## Tan Army soldier AI: patrol -> investigate -> combat, with line-of-sight,
 ## hearing, burst fire, strafing and the obligatory melting death.
 
-const ToySoldier = preload("res://scripts/toy_soldier.gd")
+const Soldier = preload("res://scripts/plastic_soldier.gd")
 const Fx = preload("res://scripts/fx.gd")
 const Rocket = preload("res://scripts/rocket.gd")
 
@@ -12,7 +12,7 @@ const GRAVITY := 16.0
 
 const TYPES := {
     "rifleman": {"hp": 60.0, "damage": 6.0, "interval": 0.13, "burst": 3, "pause": 1.3, "range": 55.0,
-        "sight": 45.0, "speed": 3.6, "spread": 3.2, "model": "rifle", "kind": "hitscan", "sound": "rifle"},
+        "sight": 45.0, "speed": 3.6, "spread": 3.2, "model": "rifle", "kind": "hitscan", "sound": "enemy_rifle"},
     "gunner": {"hp": 100.0, "damage": 4.5, "interval": 0.09, "burst": 8, "pause": 1.9, "range": 50.0,
         "sight": 45.0, "speed": 2.6, "spread": 4.5, "model": "lmg", "kind": "hitscan", "sound": "lmg"},
     "rocketeer": {"hp": 70.0, "damage": 32.0, "interval": 0.1, "burst": 1, "pause": 4.5, "range": 65.0,
@@ -20,7 +20,7 @@ const TYPES := {
     "sniper": {"hp": 50.0, "damage": 28.0, "interval": 0.1, "burst": 1, "pause": 3.6, "range": 120.0,
         "sight": 95.0, "speed": 0.0, "spread": 0.9, "model": "sniper", "kind": "hitscan", "sound": "sniper"},
     "officer": {"hp": 320.0, "damage": 8.0, "interval": 0.12, "burst": 4, "pause": 1.1, "range": 60.0,
-        "sight": 50.0, "speed": 3.2, "spread": 2.5, "model": "rifle", "kind": "hitscan", "sound": "rifle"},
+        "sight": 50.0, "speed": 3.2, "spread": 2.5, "model": "rifle", "kind": "hitscan", "sound": "enemy_rifle"},
 }
 
 enum { PATROL, INVESTIGATE, COMBAT }
@@ -72,7 +72,7 @@ func _ready() -> void:
     cs.shape = cap
     cs.position.y = 0.9
     add_child(cs)
-    model = ToySoldier.new()
+    model = Soldier.create()
     add_child(model)
     model.build(OFFICER_TAN if is_hvt else TAN, s["model"])
     if is_hvt:
@@ -86,7 +86,9 @@ func _ready() -> void:
         var red := StandardMaterial3D.new()
         red.albedo_color = Color(0.6, 0.1, 0.08)
         cap_mi.material_override = red
-        cap_mi.position = Vector3(0, 1.0, 0)
+        cap_mi.position = model.hat_offset
+        if model.has_method("notify_shot") and model.get("rig") != null:
+            cap_mi.scale = Vector3(1.9, 1.3, 1.9)
         model.torso.add_child(cap_mi)
     rotation.y = randf() * TAU
     look_yaw = rotation.y
@@ -298,6 +300,7 @@ func _shoot(p) -> void:
             Fx.impact(level, end, hit["normal"])
     Fx.tracer(level, muzzle, end, Color(1.0, 0.45, 0.3))
     Fx.muzzle_flash(level, muzzle)
+    model.notify_shot()
     Game.play_sfx(s["sound"], muzzle, -3.0)
 
 
