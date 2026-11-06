@@ -93,6 +93,8 @@ func _play_level(i: int) -> void:
         await _camera_wall_test(L, p)
     if L.vehicles.size() > 0:
         await _vehicle_test(i, L, p)
+    if L.enemy_vehicles.size() > 0:
+        await _enemy_vehicle_test(i, L, p)
     # Teleport near an enemy and let it engage.
     var e = null
     for x in L.enemies:
@@ -100,7 +102,8 @@ func _play_level(i: int) -> void:
             e = x
             break
     if e:
-        p.global_position = e.global_position + Vector3(8, 0.5, 0)
+        var spot = _open_spot_near(L, e, [8.0, 12.0, 16.0])
+        p.global_position = spot if spot != null else e.global_position + Vector3(8, 0.5, 0)
         await _frames(180)
         var engaged := 0
         for x in L.enemies:
@@ -126,6 +129,9 @@ func _play_level(i: int) -> void:
                 for x in L.enemies:
                     if is_instance_valid(x) and x.alive:
                         x.take_damage(99999.0, Vector3.ZERO, x.global_position + Vector3(0, 1.7, 0), false)
+                for x in L.enemy_vehicles:
+                    if is_instance_valid(x) and x.alive:
+                        x.take_damage(99999.0, Vector3.ZERO, x.global_position, true)
             "extract":
                 p.global_position = o["pos"] + Vector3(0, 1.0, 0)
         await _frames(20)
@@ -174,6 +180,9 @@ func _camera_wall_test(L, p) -> void:
 
 
 func _vehicle_test(i: int, L, p) -> void:
+    # Pause Tan vehicles so they can't wander over and block this driving check.
+    for t in L.enemy_vehicles:
+        t.set_physics_process(false)
     for v in L.vehicles.duplicate():
         var side: Vector3 = v.global_transform.basis.x
         p.global_position = v.global_position - side * (v.k["size"].x * 0.5 + 1.2) + Vector3(0, 0.3, 0)
@@ -189,7 +198,7 @@ func _vehicle_test(i: int, L, p) -> void:
         await _frames(30)
         v.drive_input = Vector2.ZERO
         var moved: float = start.distance_to(v.global_position)
-        _check(moved > 3.0, "L%d %s: drove %.1fm" % [i, v.kind, moved])
+        _check(moved > 3.0, "L%d %s: drove %.1fm%s" % [i, v.kind, moved, "" if moved > 3.0 else " [alive=%s hp=%.0f speed=%.1f floor=%s pos=%s driver=%s tan_near=%s]" % [v.alive, v.hp, v.speed, v.is_on_floor(), v.global_position.snapped(Vector3.ONE * 0.1), p.vehicle == v, _tan_near(L, v.global_position)]])
         _check(p.global_position.distance_to(v.global_position) < 1.5, "L%d %s: driver rides along" % [i, v.kind])
         var shots: int = p.shots_fired
         v.fire_cd = 0.0
@@ -208,6 +217,8 @@ func _vehicle_test(i: int, L, p) -> void:
     await _frames(5)
     _check(not v0.alive and p.vehicle == null and p.alive, "L%d destroyed vehicle ejects driver" % i)
     _check(not v0.can_enter(), "L%d wrecks can't be re-entered" % i)
+    for t in L.enemy_vehicles:
+        t.set_physics_process(true)
 
 
 
@@ -248,3 +259,79 @@ func _invisible_wall_test(i: int, L) -> void:
     if checked == 0:
         return              # map has no trees/lamps/cacti
     _check(blocked.is_empty(), "L%d no invisible walls around %d tree/lamp/cactus probes %s" % [i, checked, str(blocked.slice(0, 4)) if not blocked.is_empty() else ""])
+
+
+
+## Tan jeeps/tanks: spot the player, drive, aim, shoot, can't be stolen, and
+## count as kills when destroyed.
+func _enemy_vehicle_test(i: int, L, p) -> void:
+    p.invulnerable = false
+    p.health = 100000.0      # survive the test but still register hits
+    var dmg_total := 0.0
+    for v in L.enemy_vehicles:
+        if not v.alive:
+            continue            # already destroyed by an earlier part of the test
+        _check(not v.can_enter(), "L%d tan %s can't be entered" % [i, v.kind])
+        var travelled0: float = v.ai_travelled
+        var shots0: int = v.ai_shots
+        var spot = _open_spot_near(L, v)
+        if spot == null:
+            continue
+        p.global_position = spot
+        var hp0: float = p.health
+        await _frames(420)
+        _check(v.ai_alert > 0.0, "L%d tan %s spotted the player" % [i, v.kind])
+        _check(v.ai_shots > shots0, "L%d tan %s opened fire (%d shots)%s" % [i, v.kind, v.ai_shots - shots0, "" if v.ai_shots > shots0 else " [alert=%.1f los=%s react=%.2f player_d=%.1f spot=%s]" % [v.ai_alert, v._ai_los, v._ai_react, v.global_position.distance_to(p.global_position), spot]])
+        var drove: float = v.ai_travelled - travelled0
+        _check(drove > 5.0 or v.kind == "tank", "L%d tan %s drove %.1fm%s" % [i, v.kind, drove, "" if drove > 5.0 or v.kind == "tank" else " [alert=%.1f los=%s charge=%.1f stuck=%d speed=%.1f home_d=%.1f pos=%s player_d=%.1f]" % [v.ai_alert, v._ai_los, v._ai_charge_t, v._ai_stuck_count, v.speed, v.global_position.distance_to(v.home), v.global_position.snapped(Vector3.ONE), v.global_position.distance_to(p.global_position)]])
+        dmg_total += hp0 - p.health
+    _check(dmg_total > 0.0, "L%d tan vehicles hurt the player (%.0f dmg total)" % [i, dmg_total])
+    var v0 = null
+    for t in L.enemy_vehicles:
+        if t.alive:
+            v0 = t
+            break
+    if v0 != null:
+        var before: int = L.kills
+        v0.take_damage(99999.0, Vector3.ZERO, v0.global_position, true)
+        await _frames(3)
+        _check(not v0.alive and L.kills >= before + 1, "L%d destroying a tan vehicle counts as a kill" % i)
+    p.health = 100.0
+    p.invulnerable = true
+
+
+
+## A spot ~25 m from the vehicle that is on solid ground, not inside anything,
+## and in clear view of it.
+func _open_spot_near(L, v, dists := [25.0, 18.0, 32.0]):
+    var space: PhysicsDirectSpaceState3D = L.get_world_3d().direct_space_state
+    var cap := CapsuleShape3D.new()
+    cap.radius = 0.4
+    cap.height = 1.8
+    var ex: Array[RID] = [v.get_rid()]
+    for dist in dists:
+        for k in 16:
+            var dir := Vector3.FORWARD.rotated(Vector3.UP, v.rotation.y + k * TAU / 16.0)
+            var pos: Vector3 = v.global_position + dir * dist
+            var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(pos + Vector3(0, 3, 0), pos + Vector3(0, -2, 0), 1))
+            if ground.is_empty() or absf(ground["position"].y - v.global_position.y) > 1.0:
+                continue
+            var q := PhysicsShapeQueryParameters3D.new()
+            q.shape = cap
+            q.transform = Transform3D(Basis(), ground["position"] + Vector3(0, 1.0, 0))
+            q.collision_mask = 1 | 4
+            if not space.intersect_shape(q, 1).is_empty():
+                continue
+            var los := space.intersect_ray(PhysicsRayQueryParameters3D.create(v.global_position + Vector3(0, 1.8, 0), ground["position"] + Vector3(0, 1.2, 0), 1, ex))
+            if los.is_empty():
+                return ground["position"] + Vector3(0, 0.3, 0)
+    return null
+
+
+
+func _tan_near(L, pos: Vector3) -> String:
+    var out := []
+    for t in L.enemy_vehicles:
+        if t.global_position.distance_to(pos) < 12.0:
+            out.append("%s %.1fm" % [t.kind, t.global_position.distance_to(pos)])
+    return str(out)

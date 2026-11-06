@@ -69,6 +69,22 @@ Walk up to a jeep or tank and press **E**. WASD drives, the mouse aims the mount
 
 Rockets, grenades and drone strikes still hurt vehicles. If your vehicle is destroyed, you're thrown clear and take some damage.
 
+### Tan Army vehicles
+
+The Tan Army fields its own tan-plastic jeeps and tanks on every map:
+- **Desert:** two jeeps (one patrolling the village, one on the western approach) and a tank inside the compound.
+- **City:** two jeeps on the outer streets, a tank at the north crossroads, and one guarding Colonel Khaki's plaza.
+- **Tabletop:** a jeep among the energy drinks and a tank by the north booster.
+
+How they behave:
+- They patrol near their post. They react when they spot you, hear gunfire nearby or take a hit.
+- **Tan jeeps** close in to about 22 m and circle you while the gunner fires bursts. They'll run you over if you're on foot.
+- **Tan tanks** hold off at 35–45 m, turn to face you, and fire the cannon once the turret is lined up (about every 4–5 s). They also use the coax MG at close range.
+- They don't chase you across the whole map; they stay within a set distance of their post.
+- If you're driving, they target your vehicle.
+
+**How to kill them:** tank armour shrugs off rifle fire, so use the AT4, frags, a drone strike or your own tank. Each one destroyed counts toward Tan forces and the "clear the table" objective.
+
 ## Campaign
 
 1. **Operation Dust Lid**: desert FOB, a mud-brick village and a fortified Tan compound with watchtower snipers. Destroy 3 radar jammers, then extract.

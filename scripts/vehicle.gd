@@ -8,6 +8,7 @@ const Rocket = preload("res://scripts/rocket.gd")
 const CameraRig = preload("res://scripts/camera_rig.gd")
 
 const GREEN := Color(0.27, 0.48, 0.17)
+const TAN := Color(0.80, 0.68, 0.44)
 const GRAVITY := 18.0
 
 const KINDS := {
@@ -51,21 +52,59 @@ var fire2_cd := 0.0
 var engine: AudioStreamPlayer3D
 var _enter_cd := 0.0
 
+# ---- Tan Army AI (enemy vehicles) ----
+const AI := {
+    "jeep": {"hp": 260.0, "speed_scale": 0.7, "sight": 75.0, "pref_dist": 22.0, "leash": 70.0,
+        "burst": 6, "burst_pause": 1.6, "mg_damage": 7.0, "mg_spread": 3.5},
+    "tank": {"hp": 700.0, "speed_scale": 0.8, "sight": 95.0, "pref_dist": 40.0, "leash": 55.0,
+        "cannon_cd": 4.5, "cannon_damage": 55.0, "coax_range": 45.0, "burst": 8, "burst_pause": 2.0,
+        "mg_damage": 5.0, "mg_spread": 4.0},
+}
+var team := "green"
+var ai := false
+var body_color := GREEN
+var home := Vector3.ZERO
+var ai_alert := 0.0               # >0 while engaged / hunting
+var ai_last_seen := Vector3.ZERO
+var _ai_los := false
+var _ai_los_t := 0.0
+var _ai_aim := Vector3.ZERO
+var _ai_patrol := Vector3.ZERO
+var _ai_patrol_t := 0.0
+var _ai_burst := 0
+var _ai_burst_cd := 1.0
+var _ai_orbit := 1.0
+var _ai_stuck_t := 0.0
+var _ai_reverse_t := 0.0
+var _ai_react := 0.0
+var _ai_ram_cd := 0.0
+var _ai_charge_t := 0.0          # >0: give up circling and drive straight at the target
+var _ai_stuck_count := 0
+var _ai_stuck_decay := 0.0
+var ai_shots := 0
+var ai_travelled := 0.0
 
-func setup(lvl: Node, kd: String, pos: Vector3, rot_y := 0.0) -> void:
+
+func setup(lvl: Node, kd: String, pos: Vector3, rot_y := 0.0, tm := "green") -> void:
     level = lvl
     kind = kd
     position = pos
     rotation.y = rot_y
+    team = tm
+    ai = tm == "tan"
+    body_color = TAN if ai else GREEN
+    home = pos
 
 
 func _ready() -> void:
     k = KINDS[kind]
-    hp = k["hp"]
+    hp = AI[kind]["hp"] if ai else k["hp"]
     add_to_group("damageable")
     add_to_group("vehicles")
-    collision_layer = 1
-    collision_mask = 1 | 4
+    collision_layer = 4 if ai else 1       # tan vehicles sit on the enemies layer
+    collision_mask = (1 | 2 | 4) if ai else (1 | 4)
+    _ai_patrol = home
+    _ai_orbit = [-1.0, 1.0].pick_random()
     floor_snap_length = 0.5
     floor_max_angle = deg_to_rad(40)
     var size: Vector3 = k["size"]
@@ -137,9 +176,9 @@ func _cyl(parent: Node3D, pos: Vector3, r: float, h: float, m: Material, rot := 
 
 
 func _build_jeep() -> void:
-    var body := _mat(GREEN)
-    var dark := _mat(GREEN.darkened(0.25))
-    var tire := _mat(GREEN.darkened(0.5))
+    var body := _mat(body_color)
+    var dark := _mat(body_color.darkened(0.25))
+    var tire := _mat(body_color.darkened(0.5))
     _box(self, Vector3(0, 0.8, 0.1), Vector3(2.0, 0.55, 3.9), body)             # tub
     _box(self, Vector3(0, 1.12, -1.35), Vector3(1.9, 0.35, 1.3), body)          # hood
     _box(self, Vector3(0, 1.0, -2.05), Vector3(1.7, 0.5, 0.12), dark)           # grille
@@ -173,9 +212,9 @@ func _build_jeep() -> void:
 
 
 func _build_tank() -> void:
-    var body := _mat(GREEN)
-    var dark := _mat(GREEN.darkened(0.25))
-    var track := _mat(GREEN.darkened(0.5))
+    var body := _mat(body_color)
+    var dark := _mat(body_color.darkened(0.25))
+    var track := _mat(body_color.darkened(0.5))
     _box(self, Vector3(0, 1.05, 0), Vector3(2.6, 0.9, 6.0), body)               # hull
     _box(self, Vector3(0, 1.2, -3.0), Vector3(2.6, 0.6, 0.6), body, Vector3(deg_to_rad(-35), 0, 0))
     for x in [-1.45, 1.45]:
@@ -208,7 +247,7 @@ func _build_tank() -> void:
 # ------------------------------------------------------------ enter/exit ----
 
 func can_enter() -> bool:
-    return alive and driver == null
+    return alive and driver == null and not ai
 
 
 func enter(p) -> void:
@@ -272,7 +311,11 @@ func _physics_process(delta: float) -> void:
     _enter_cd = maxf(0.0, _enter_cd - delta)
     var throttle := 0.0
     var steer := 0.0
-    if driver != null and alive:
+    if ai and alive:
+        var ctl := _ai_update(delta)
+        throttle = ctl.x
+        steer = ctl.y
+    elif driver != null and alive:
         var inp: Vector2 = drive_input if drive_input != null else Input.get_vector("move_left", "move_right", "move_forward", "move_back")
         throttle = -inp.y
         steer = -inp.x
@@ -284,7 +327,7 @@ func _physics_process(delta: float) -> void:
             if Input.is_action_pressed("aim"):
                 fire_secondary()
 
-    var max_fwd: float = k["max_speed"]
+    var max_fwd: float = k["max_speed"] * (AI[kind]["speed_scale"] if ai else 1.0)
     var max_rev: float = k["reverse"]
     if throttle > 0.0:
         speed = move_toward(speed, max_fwd * throttle, k["accel"] * delta * (2.0 if speed < 0.0 else 1.0))
@@ -307,12 +350,19 @@ func _physics_process(delta: float) -> void:
     var before := global_position
     move_and_slide()
     _handle_collisions(delta, before)
+    if ai:
+        ai_travelled += (global_position - before).length()
 
     if driver != null:
         driver.global_position = global_position + Vector3(0, 0.6, 0)
         driver.velocity = velocity
         _aim_turret(delta)
         _update_camera(delta)
+        engine.pitch_scale = 0.6 + absf(speed) / max_fwd * 0.9
+    elif ai and alive:
+        _aim_turret(delta)
+        if ai_alert > 0.0 and not engine.playing:
+            engine.play()
         engine.pitch_scale = 0.6 + absf(speed) / max_fwd * 0.9
     elif turret:
         turret.rotation.y = lerp_angle(turret.rotation.y, 0.0, delta)
@@ -322,6 +372,12 @@ func _handle_collisions(delta: float, before: Vector3) -> void:
     for i in get_slide_collision_count():
         var c := get_slide_collision(i)
         var other = c.get_collider()
+        if ai:
+            # Tan vehicles run down green infantry on foot.
+            if other != null and other.is_in_group("player") and other.alive and absf(speed) > 6.0 and _ai_ram_cd <= 0.0:
+                _ai_ram_cd = 1.0
+                other.take_damage(30.0 * Game.enemy_damage_mult(), global_position, other.global_position, true)
+            continue
         if other != null and other.is_in_group("enemies") and other.alive and absf(speed) > 5.0:
             other.take_damage(400.0, global_position, other.global_position + Vector3(0, 1, 0), true)
             Game.play_sfx("melt", other.global_position, -2.0)
@@ -360,6 +416,8 @@ func _update_camera(delta: float) -> void:
 # --------------------------------------------------------------- weapons ----
 
 func _aim_point() -> Vector3:
+    if ai:
+        return _ai_aim
     var from := camera.global_position
     var dir := -camera.global_transform.basis.z
     var ex: Array[RID] = [get_rid()]
@@ -379,18 +437,28 @@ func fire_primary() -> void:
         var to_target := (target - m).normalized()
         if to_target.dot(dir) > 0.97:
             dir = to_target
+        if ai:
+            fire_cd = AI[kind]["cannon_cd"] * randf_range(0.85, 1.25)
+            ai_shots += 1
         var r = Rocket.new()
-        r.setup(self, level, m, dir, k["primary_damage"], 7.0)
+        if ai:
+            r.setup(self, level, m, dir, AI[kind]["cannon_damage"] * Game.enemy_damage_mult(), 6.0)
+        else:
+            r.setup(self, level, m, dir, k["primary_damage"], 7.0)
         r.speed = 90.0
         level.add_child(r)
         Fx.explosion(level, m, 1.2)
         Game.play_sfx("sniper", m, 6.0)
         Game.play_sfx("explosion", m, -4.0)
-        level.make_noise(m, 90.0)
+        if not ai:
+            level.make_noise(m, 90.0)
         if driver:
             driver.shake = maxf(driver.shake, 0.6)
     else:
-        _bullet(muzzle.global_position, k["primary_damage"], 2.0, "lmg")
+        if ai:
+            _bullet(muzzle.global_position, AI[kind]["mg_damage"] * Game.enemy_damage_mult(), AI[kind]["mg_spread"] * Game.enemy_spread_mult(), "lmg")
+        else:
+            _bullet(muzzle.global_position, k["primary_damage"], 2.0, "lmg")
 
 
 func fire_secondary() -> void:
@@ -410,7 +478,7 @@ func _bullet(from: Vector3, damage: float, spread_deg: float, sound: String) -> 
     dir = (dir + bx * r * cos(a) + by * r * sin(a)).normalized()
     var to := from + dir * 300.0
     var ex: Array[RID] = [get_rid()]
-    var hit := Fx.ray(self, from, to, 1 | 4, ex)
+    var hit := Fx.ray(self, from, to, (1 | 2) if ai else (1 | 4), ex)
     var end := to
     if not hit.is_empty():
         end = hit["position"]
@@ -424,10 +492,13 @@ func _bullet(from: Vector3, damage: float, spread_deg: float, sound: String) -> 
             Fx.impact(level, end, hit["normal"])
     if driver:
         driver.shots_fired += 1
-    Fx.tracer(level, from, end, Color(1.0, 0.75, 0.35))
+    if ai:
+        ai_shots += 1
+    Fx.tracer(level, from, end, Color(1.0, 0.45, 0.3) if ai else Color(1.0, 0.75, 0.35))
     Fx.muzzle_flash(level, from)
-    Game.play_sfx(sound, from, 0.0)
-    level.make_noise(from, 60.0)
+    Game.play_sfx(sound, from, -3.0 if ai else 0.0)
+    if not ai:
+        level.make_noise(from, 60.0)
 
 
 # ---------------------------------------------------------------- damage ----
@@ -439,6 +510,8 @@ func take_damage(amount: float, _source: Vector3, hit_pos: Vector3, explosive :=
         amount *= k["bullet_armor"]
         Fx.impact(level, hit_pos, Vector3.UP)
     hp -= amount
+    if ai:
+        hear(_source)
     if driver:
         driver.took_damage.emit(amount * 0.5)
         driver.shake = maxf(driver.shake, 0.25)
@@ -458,9 +531,218 @@ func _destroy() -> void:
     for m in mats:
         m.albedo_color = m.albedo_color.darkened(0.7)
         m.roughness = 0.9
+    engine.stop()
     level.apply_explosion(p, 6.0, 60.0)   # before ejecting, so the driver isn't hit twice
+    if ai:
+        level.on_enemy_vehicle_destroyed(self)
     var d = driver
     exit_vehicle()
     if d != null:
         d.take_damage(35.0, p, d.global_position, true)
         level.notify("VEHICLE DESTROYED - BAIL OUT!", 2.0)
+
+
+# -------------------------------------------------------------- Tan AI ----
+
+## Alerts this vehicle to a noise / attacker position.
+func hear(pos: Vector3) -> void:
+    if not ai or not alive:
+        return
+    if ai_alert <= 0.0:
+        _ai_react = randf_range(0.6, 1.2) * Game.enemy_reaction_mult()
+    ai_alert = maxf(ai_alert, 6.0)
+    ai_last_seen = pos
+
+
+## Whatever the AI should shoot: the player on foot, or the vehicle they drive.
+func _ai_target() -> Node3D:
+    var p = level.player if level else null
+    if p == null or not is_instance_valid(p) or not p.alive:
+        return null
+    return p.vehicle if p.vehicle != null else p
+
+
+## Returns Vector2(throttle, steer) and handles aiming/firing.
+func _ai_update(delta: float) -> Vector2:
+    var a: Dictionary = AI[kind]
+    _ai_ram_cd = maxf(0.0, _ai_ram_cd - delta)
+    _ai_react = maxf(0.0, _ai_react - delta)
+    var tgt := _ai_target()
+    var tpos := Vector3.ZERO
+    var dist := 99999.0
+    if tgt != null:
+        tpos = tgt.global_position + Vector3(0, 1.0, 0)
+        dist = global_position.distance_to(tpos)
+
+    _ai_los_t -= delta
+    if _ai_los_t <= 0.0:
+        _ai_los_t = randf_range(0.2, 0.35)
+        _ai_los = false
+        if tgt != null and dist < a["sight"] * 1.3:
+            var ex: Array[RID] = [get_rid()]
+            var eye := global_position + Vector3(0, k["size"].y + 0.3, 0)
+            var hit := Fx.ray(self, eye, tpos, 1, ex)
+            _ai_los = hit.is_empty() or hit["collider"] == tgt
+    if _ai_los and dist < a["sight"]:
+        if ai_alert <= 0.0:
+            _ai_react = randf_range(0.6, 1.2) * Game.enemy_reaction_mult()
+        ai_alert = 6.0
+        ai_last_seen = tpos
+    else:
+        ai_alert = maxf(0.0, ai_alert - delta)
+
+    # ---- where to drive ----
+    var dest := _ai_patrol
+    var throttle_cap := 0.45
+    var hold := false
+    if ai_alert > 0.0:
+        throttle_cap = 1.0
+        var pref: float = a["pref_dist"]
+        var to_t := ai_last_seen - global_position
+        to_t.y = 0.0
+        var d := to_t.length()
+        if kind == "tank":
+            if d > pref + 10.0 or not _ai_los:
+                dest = ai_last_seen
+            elif d < pref - 15.0:
+                dest = global_position - to_t.normalized() * 12.0
+            else:
+                hold = true
+        else:
+            if d > pref + 12.0 or not _ai_los or _ai_charge_t > 0.0:
+                dest = ai_last_seen
+            else:
+                # Circle the target at roughly the preferred distance, but keep the
+                # circling point out in the open (not inside a building).
+                var radial := -to_t.normalized()
+                var tangent := radial.cross(Vector3.UP) * _ai_orbit
+                dest = _ai_clear_point(ai_last_seen, ai_last_seen + radial * pref + tangent * 14.0)
+        if global_position.distance_to(home) > a["leash"]:
+            dest = home
+    else:
+        _ai_patrol_t -= delta
+        if _ai_patrol_t <= 0.0 or global_position.distance_to(_ai_patrol) < 5.0:
+            _ai_patrol_t = randf_range(8.0, 14.0)
+            var ang := randf() * TAU
+            _ai_patrol = home + Vector3(cos(ang), 0, sin(ang)) * randf_range(6.0, 18.0)
+
+    # ---- steering ----
+    var to_d := dest - global_position
+    to_d.y = 0.0
+    var throttle := 0.0
+    var steer := 0.0
+    if not hold and to_d.length() > 4.0:
+        var want := atan2(-to_d.x, -to_d.z)
+        var diff := wrapf(want - rotation.y, -PI, PI)
+        steer = clampf(diff * 2.0, -1.0, 1.0)
+        throttle = throttle_cap
+        if k["pivot_turn"] and absf(diff) > 0.7:
+            throttle = 0.0                      # tanks turn on the spot first
+        elif absf(diff) > 1.8:
+            throttle *= 0.5
+        steer = clampf(steer + _ai_avoid(), -1.0, 1.0)
+    elif hold and ai_alert > 0.0 and k["pivot_turn"]:
+        # Hold position but keep the front armour toward the target.
+        var face := ai_last_seen - global_position
+        var diff2 := wrapf(atan2(-face.x, -face.z) - rotation.y, -PI, PI)
+        if absf(diff2) > 0.5:
+            steer = clampf(diff2, -1.0, 1.0)
+
+    _ai_charge_t = maxf(0.0, _ai_charge_t - delta)
+    _ai_stuck_decay -= delta
+    if _ai_stuck_decay <= 0.0:
+        _ai_stuck_count = 0
+    # Unstick: if we want to move but can't, back up and turn the other way.
+    if _ai_reverse_t > 0.0:
+        _ai_reverse_t -= delta
+        throttle = -0.8
+        steer = -steer if steer != 0.0 else 1.0
+    elif throttle > 0.2 and Vector2(get_real_velocity().x, get_real_velocity().z).length() < 1.0:
+        _ai_stuck_t += delta
+        if _ai_stuck_t > 1.2:
+            _ai_stuck_t = 0.0
+            _ai_reverse_t = 1.3
+            _ai_orbit = -_ai_orbit
+            _ai_patrol_t = 0.0
+            _ai_stuck_count += 1
+            _ai_stuck_decay = 8.0
+            if _ai_stuck_count >= 2:
+                _ai_charge_t = 4.0      # circling keeps failing here; just charge
+    else:
+        _ai_stuck_t = 0.0
+
+    _ai_shoot(delta, tgt, tpos, dist)
+    return Vector2(throttle, steer)
+
+
+## Pulls `want` back toward `from` if there's a wall in between.
+func _ai_clear_point(from: Vector3, want: Vector3) -> Vector3:
+    var ex: Array[RID] = [get_rid()]
+    var a := from + Vector3(0, 1.0, 0)
+    var hit := Fx.ray(self, a, want + Vector3(0, 1.0, 0), 1, ex)
+    if hit.is_empty():
+        return want
+    var p: Vector3 = hit["position"]
+    return Vector3(p.x, want.y, p.z) - (want - from).normalized() * 4.0
+
+
+## Whisker rays ahead: steer away from whichever side is more blocked.
+func _ai_avoid() -> float:
+    var ex: Array[RID] = [get_rid()]
+    var o := global_position + Vector3(0, 1.0, 0)
+    var fwd := -global_transform.basis.z
+    var look: float = 5.0 + absf(speed) * 0.5 + k["size"].z * 0.5
+    var hl := Fx.ray(self, o, o + fwd.rotated(Vector3.UP, 0.45) * look, 1 | 4, ex)
+    var hr := Fx.ray(self, o, o + fwd.rotated(Vector3.UP, -0.45) * look, 1 | 4, ex)
+    var dl: float = look if hl.is_empty() else o.distance_to(hl["position"])
+    var dr: float = look if hr.is_empty() else o.distance_to(hr["position"])
+    if dl >= look and dr >= look:
+        return 0.0
+    return 0.8 if dl > dr else -0.8
+
+
+func _ai_shoot(delta: float, tgt: Node3D, tpos: Vector3, dist: float) -> void:
+    if tgt == null or ai_alert <= 0.0:
+        cam_pitch = -0.18
+        return
+    # Aim (with some lead) and let the turret traverse toward it.
+    var lead: Vector3 = tgt.velocity * clampf(dist / 90.0, 0.0, 0.6)
+    var aim := (tpos if _ai_los else ai_last_seen) + lead
+    var tur := turret.global_position if turret else global_position + Vector3(0, 2, 0)
+    var to := aim - tur
+    cam_yaw = atan2(-to.x, -to.z)
+    cam_pitch = atan2(to.y, Vector2(to.x, to.z).length()) - 0.18
+    if not _ai_los or _ai_react > 0.0:
+        return
+    var a: Dictionary = AI[kind]
+    var mdir := -muzzle.global_transform.basis.z
+    var aligned := mdir.dot((aim - muzzle.global_position).normalized())
+    if kind == "tank":
+        if aligned > 0.995 and fire_cd <= 0.0 and dist < a["sight"]:
+            _ai_aim = aim + Vector3(randf_range(-1, 1), randf_range(-0.3, 0.6), randf_range(-1, 1)) * dist * 0.02 * Game.enemy_spread_mult()
+            fire_primary()
+        if dist < a["coax_range"] and aligned > 0.97:
+            _ai_mg_burst(delta, aim, true)
+    elif aligned > 0.96:
+        _ai_mg_burst(delta, aim, false)
+
+
+func _ai_mg_burst(delta: float, aim: Vector3, coax: bool) -> void:
+    var a: Dictionary = AI[kind]
+    _ai_burst_cd -= delta
+    if _ai_burst <= 0:
+        if _ai_burst_cd <= 0.0:
+            _ai_burst = a["burst"]
+        return
+    _ai_aim = aim
+    if coax:
+        if fire2_cd <= 0.0:
+            fire2_cd = 0.11
+            _bullet(coax_muzzle.global_position, a["mg_damage"] * Game.enemy_damage_mult(), a["mg_spread"] * Game.enemy_spread_mult(), "lmg")
+            _ai_burst -= 1
+    elif fire_cd <= 0.0:
+        fire_primary()              # sets its own cooldown
+        fire_cd = 0.11
+        _ai_burst -= 1
+    if _ai_burst <= 0:
+        _ai_burst_cd = a["burst_pause"] * randf_range(0.8, 1.3)

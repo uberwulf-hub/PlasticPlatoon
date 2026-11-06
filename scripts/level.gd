@@ -25,6 +25,7 @@ var objectives: Array = []
 var obj_index := 0
 var enemies: Array = []
 var vehicles: Array = []
+var enemy_vehicles: Array = []   # Tan Army jeeps and tanks (AI)
 var props: Array = []          # every model placed with prop(): {node, path}
 var hvts: Array = []
 var targets_by_tag := {}
@@ -347,6 +348,19 @@ func add_vehicle(kind: String, pos: Vector3, rot_y := 0.0) -> Node:
     return v
 
 
+func add_enemy_vehicle(kind: String, pos: Vector3, rot_y := 0.0) -> Node:
+    var v = Vehicle.new()
+    v.setup(self, kind, pos, rot_y, "tan")
+    add_child(v)
+    enemy_vehicles.append(v)
+    return v
+
+
+func on_enemy_vehicle_destroyed(v) -> void:
+    kills += 1
+    notify("TAN %s DESTROYED" % v.kind.to_upper(), 2.0)
+
+
 func nearest_vehicle(pos: Vector3, max_dist: float) -> Node:
     var best = null
     var best_d := max_dist
@@ -430,7 +444,7 @@ func notify(text: String, dur := 2.5) -> void:
 
 
 func make_noise(pos: Vector3, radius: float) -> void:
-    for e in enemies:
+    for e in enemies + enemy_vehicles:
         if is_instance_valid(e) and e.alive and e.global_position.distance_to(pos) < radius:
             e.hear(pos)
 
@@ -464,7 +478,7 @@ func on_target_destroyed(t) -> void:
 
 
 func enemies_alive() -> int:
-    return _alive_count(enemies)
+    return _alive_count(enemies) + _alive_count(enemy_vehicles)
 
 
 func _alive_count(arr: Array) -> int:
@@ -507,7 +521,7 @@ func _process(delta: float) -> void:
         "kill_hvt":
             done = _alive_count(hvts) == 0
         "kill_all":
-            done = _alive_count(enemies) == 0
+            done = enemies_alive() == 0
         "extract":
             done = player.alive and player.global_position.distance_to(o["pos"]) < 5.5
     if done:
@@ -524,7 +538,7 @@ func get_objective_text() -> String:
             var arr: Array = targets_by_tag.get(o["tag"], [])
             return "%s  (%d/%d)" % [o["text"], arr.size() - _alive_count(arr), arr.size()]
         "kill_all":
-            return "%s  (%d left)" % [o["text"], _alive_count(enemies)]
+            return "%s  (%d left)" % [o["text"], enemies_alive()]
     return o["text"]
 
 
@@ -539,9 +553,9 @@ func get_objective_point() -> Variant:
         "kill_hvt":
             candidates = hvts
         "kill_all":
-            if _alive_count(enemies) > 6:
+            if enemies_alive() > 6:
                 return null
-            candidates = enemies
+            candidates = enemies + enemy_vehicles
         "extract":
             return o["pos"] + Vector3(0, 1.0, 0)
     var best = null
