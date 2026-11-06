@@ -1,10 +1,10 @@
 {
-  "name": "ArmyMen's Revenge 2026",
+  "name": "Plastic Platoon: Revenge 2026",
   "category": "Game",
   "description": "A third-person plastic-soldier shooter. Lead the green army against the Tan Army with modern weapons, frag grenades and drone strikes across a desert outpost, a war-torn city and a giant kitchen table.",
   "icon": "store/icon.png",
   "assets": {
-    "windows": "ArmyMensRevenge-windows.zip"
+    "windows": "PlasticPlatoon-windows.zip"
   },
   "requirements": [
     "Windows 10 or 11 (64-bit)",
@@ -12,7 +12,7 @@
     "About 250 MB of disk space",
     "Keyboard and mouse"
   ],
-  "rightsConfirmed": false,
+  "rightsConfirmed": true,
   "credits": [
     {
       "asset": "Godot Engine 4.3 (runtime in the .exe)",

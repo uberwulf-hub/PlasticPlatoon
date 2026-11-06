@@ -1,10 +1,10 @@
-# ArmyMen's Revenge 2026
+# Plastic Platoon: Revenge 2026
 
 **Plastic soldiers. Modern warfare.**
 
 ![Desert](docs/screenshots/desert.png)
 
-ArmyMen's Revenge 2026 is a third-person toy-soldier shooter built in **Godot 4.3**. You play a green plastic commando fighting the Tan Army across three operations, using modern weapons, kit and air support. Soldiers who die melt into puddles.
+Plastic Platoon: Revenge 2026 is a third-person toy-soldier shooter built in **Godot 4.3**. You play a green plastic commando fighting the Tan Army across three operations, using modern weapons, kit and air support. Soldiers who die melt into puddles.
 
 ![City](docs/screenshots/city.png)
 

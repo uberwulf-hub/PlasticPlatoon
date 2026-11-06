@@ -1,11 +1,11 @@
 ; Engine configuration file.
-; ArmyMen's Revenge 2026 - Godot 4.3+
+; Plastic Platoon: Revenge 2026 - Godot 4.3+
 
 config_version=5
 
 [application]
 
-config/name="ArmyMen's Revenge 2026"
+config/name="Plastic Platoon: Revenge 2026"
 config/description="Plastic soldiers. Modern warfare. A third-person toy-soldier shooter."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")

@@ -2,7 +2,7 @@ extends Node
 ## Global game state (autoload "Game"): input map, settings, save data,
 ## difficulty helpers and procedurally synthesized sound effects.
 
-const SAVE_PATH := "user://armymens_revenge.cfg"
+const SAVE_PATH := "user://plastic_platoon.cfg"
 const LEVEL_COUNT := 3
 const DIFFICULTY_NAMES := ["Recruit", "Regular", "Veteran"]
 const RATE := 22050

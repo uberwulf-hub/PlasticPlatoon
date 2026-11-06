@@ -20,7 +20,7 @@ Every third-party asset in this project is released under **CC0 1.0 (public doma
 
 Kenney's packs are also available at https://kenney.nl/assets, and each pack folder includes its own `License.txt`.
 
-**Extras (not in the project, shipped separately as `ArmyMensRevenge_ExtraPacks.zip`):**
+**Extras (not in the project, shipped separately as `PlasticPlatoon_ExtraPacks.zip`):**
 - 3D Apocalyptic Building / City by Majadroid (CC0): https://opengameart.org/content/3d-apocalyptic-building-city-cc0
 - Vehicles Assets pt1 by eracoon (CC0): https://opengameart.org/content/vehicles-assets-pt1
 - The full Ultimate Gun Pack by Quaternius, including Blend and OBJ sources (CC0)
