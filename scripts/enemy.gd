@@ -268,7 +268,7 @@ func _combat(delta: float, p, to_p: Vector3, dist: float) -> Vector3:
 func _shoot(p) -> void:
     var muzzle: Vector3 = model.get_muzzle_position()
     if s["kind"] == "rocket":
-        var aim: Vector3 = p.global_position + Vector3(0, 0.4, 0) + p.velocity * 0.35
+        var aim: Vector3 = p.global_position + Vector3(0, 0.4 if p.vehicle == null else 0.2, 0) + p.velocity * 0.35
         var r = Rocket.new()
         r.setup(self, level, muzzle, (aim - muzzle).normalized(), s["damage"] * Game.enemy_damage_mult(), 4.0)
         r.speed = 30.0
@@ -294,8 +294,9 @@ func _shoot(p) -> void:
     var end := to
     if not hit.is_empty():
         end = hit["position"]
-        if hit["collider"] == p:
-            p.take_damage(s["damage"] * Game.enemy_damage_mult(), global_position, end, false)
+        var col = hit["collider"]
+        if col == p or (p.vehicle != null and col == p.vehicle):
+            col.take_damage(s["damage"] * Game.enemy_damage_mult(), global_position, end, false)
         else:
             Fx.impact(level, end, hit["normal"])
     Fx.tracer(level, muzzle, end, Color(1.0, 0.45, 0.3))

@@ -61,6 +61,7 @@ func _setup_inputs() -> void:
     _keys("reload", [KEY_R])
     _keys("grenade", [KEY_G])
     _keys("drone", [KEY_F])
+    _keys("interact", [KEY_E])
     _keys("pause", [KEY_ESCAPE, KEY_P])
     for i in 5:
         _keys("weapon_%d" % (i + 1), [KEY_1 + i])
@@ -260,6 +261,7 @@ func _build_sfx() -> void:
     sfx["objective"] = _tones([523.0, 659.0, 784.0, 1046.0], 0.11)
     sfx["beep"] = _tones([1200.0, 0.0, 1200.0, 0.0, 1200.0], 0.09)
     sfx["fail"] = _tones([392.0, 330.0, 262.0], 0.2)
+    sfx["engine"] = _engine_loop()
 
 
 func _to_wav(samples: PackedFloat32Array, gain: float) -> AudioStreamWAV:
@@ -292,6 +294,27 @@ func _burst(dur: float, decay: float, smooth: float, thump_f: float, thump_amt: 
             v += sin(TAU * thump_f * t * (1.0 - t * 0.5)) * exp(-t * decay * 0.8) * thump_amt * 0.35
         out[i] = v
     return _to_wav(out, gain)
+
+
+## One-second seamless engine loop (whole numbers of cycles so it loops cleanly).
+func _engine_loop() -> AudioStreamWAV:
+    var n := RATE
+    var out := PackedFloat32Array()
+    out.resize(n)
+    var lp := 0.0
+    for i in n:
+        var t := float(i) / RATE
+        var v := 0.0
+        for h in [[48.0, 1.0], [96.0, 0.5], [144.0, 0.3], [24.0, 0.6]]:
+            v += sin(TAU * h[0] * t) * h[1]
+        v += sin(TAU * 8.0 * t) * 0.25 * sin(TAU * 48.0 * t)      # firing pulses
+        lp += (randf_range(-1.0, 1.0) - lp) * 0.2
+        out[i] = v * 0.6 + lp * 0.4
+    var s := _to_wav(out, 0.5)
+    s.loop_mode = AudioStreamWAV.LOOP_FORWARD
+    s.loop_begin = 0
+    s.loop_end = n
+    return s
 
 
 func _clicks(times: Array) -> AudioStreamWAV:

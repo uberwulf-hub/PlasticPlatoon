@@ -190,7 +190,7 @@ func show_controls() -> void:
         ["W A S D", "Move"], ["Mouse", "Look / aim"], ["Left click", "Fire"],
         ["Right click", "Aim down sights / scope"], ["Shift", "Sprint"], ["C / Ctrl", "Crouch (harder to spot)"],
         ["Space", "Jump"], ["R", "Reload"], ["1 - 5 / Wheel", "Switch weapon"],
-        ["G", "Throw frag grenade"], ["F", "Call Reaper drone strike at crosshair"], ["Esc / P", "Pause"],
+        ["G", "Throw frag grenade"], ["E", "Get in / out of a jeep or tank"], ["F", "Call Reaper drone strike at crosshair"], ["Esc / P", "Pause"], ["In vehicles", "WASD drive, mouse aims the gun, LMB fire, RMB tank coax MG"],
     ]
     var grid := GridContainer.new()
     grid.columns = 2

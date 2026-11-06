@@ -12,6 +12,8 @@ const Fx = preload("res://scripts/fx.gd")
 const Grenade = preload("res://scripts/grenade.gd")
 const Rocket = preload("res://scripts/rocket.gd")
 const DroneStrike = preload("res://scripts/drone_strike.gd")
+const CameraRig = preload("res://scripts/camera_rig.gd")
+const SHOULDER := Vector3(0.6, 0.15, 0)
 
 const WALK_SPEED := 5.5
 const SPRINT_SPEED := 8.8
@@ -38,7 +40,9 @@ var model
 var col_shape: CollisionShape3D
 var capsule: CapsuleShape3D
 var pivot: Node3D
-var spring: SpringArm3D
+var rig = CameraRig.new()
+var cam_len := 3.4
+var vehicle: Node = null      # set while driving a jeep/tank
 var camera: Camera3D
 
 var pitch := -0.12
@@ -84,17 +88,11 @@ func _ready() -> void:
     pivot = Node3D.new()
     pivot.position = Vector3(0, 1.55, 0)
     add_child(pivot)
-    spring = SpringArm3D.new()
-    spring.spring_length = 3.4
-    spring.collision_mask = 1
-    spring.margin = 0.25
-    spring.position = Vector3(0.6, 0.15, 0)
-    pivot.add_child(spring)
-    spring.add_excluded_object(get_rid())
     camera = Camera3D.new()
     camera.fov = 70.0
     camera.far = 900.0
-    spring.add_child(camera)
+    pivot.add_child(camera)
+    camera.position = SHOULDER + Vector3(0, 0, 3.4)
     camera.current = true
 
     for id in Weapons.ORDER:
@@ -117,7 +115,7 @@ func is_scoped() -> bool:
 # ---------------------------------------------------------------- input ----
 
 func _unhandled_input(event: InputEvent) -> void:
-    if not alive or get_tree().paused:
+    if not alive or get_tree().paused or vehicle != null:
         return
     if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
         var s: float = Game.mouse_sensitivity * (0.3 if is_scoped() else (0.6 if aiming else 1.0))
@@ -149,6 +147,15 @@ func _physics_process(delta: float) -> void:
         move_and_slide()
         _update_camera(delta)
         return
+    if vehicle != null:
+        return              # the vehicle moves us and owns the camera
+    if Input.is_action_just_pressed("interact"):
+        var v = level.nearest_vehicle(global_position, 4.5)
+        if v != null:
+            aiming = false
+            sprinting = false
+            v.enter(self)
+            return
     _move(delta)
     _combat(delta)
     _update_camera(delta)
@@ -197,14 +204,16 @@ func _update_camera(delta: float) -> void:
     var w := cur()
     var scoped := is_scoped()
     var target_len := 0.15 if scoped else (1.7 if aiming else 3.4)
-    spring.spring_length = lerpf(spring.spring_length, target_len, minf(1.0, delta * 12.0))
+    cam_len = lerpf(cam_len, target_len, minf(1.0, delta * 12.0))
+    var ex: Array[RID] = [get_rid()]
     var target_fov: float = w["zoom"] if aiming else 70.0
     if sprinting:
         target_fov = 76.0
     camera.fov = lerpf(camera.fov, target_fov, minf(1.0, delta * 12.0))
     pivot.position.y = lerpf(pivot.position.y, 1.05 if crouching else 1.55, minf(1.0, delta * 10.0))
     pivot.rotation.x = pitch
-    model.visible = not (scoped and spring.spring_length < 0.6)
+    rig.update(delta, pivot, camera, cam_len, SHOULDER, ex)
+    model.visible = not (scoped and rig.distance < 0.6)
     shake = move_toward(shake, 0.0, delta * 2.5)
     camera.h_offset = randf_range(-1.0, 1.0) * shake * 0.12
     camera.v_offset = randf_range(-1.0, 1.0) * shake * 0.12
@@ -422,8 +431,8 @@ func _call_drone() -> void:
 # ------------------------------------------------------- damage/pickups ----
 
 func take_damage(amount: float, _source: Vector3, _hit_pos: Vector3, _explosive := false) -> bool:
-    if not alive or invulnerable:
-        return false
+    if not alive or invulnerable or vehicle != null:
+        return false        # the vehicle's armour takes the hits while we're inside
     if armor > 0.0:
         var absorbed := minf(armor, amount * 0.6)
         armor -= absorbed

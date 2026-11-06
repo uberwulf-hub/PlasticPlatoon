@@ -15,6 +15,7 @@ const LevelData = preload("res://scripts/level_data.gd")
 const Fx = preload("res://scripts/fx.gd")
 const UI = preload("res://scripts/ui_util.gd")
 const Barrel = preload("res://scripts/barrel.gd")
+const Vehicle = preload("res://scripts/vehicle.gd")
 
 var level_index := 0
 var info: Dictionary = {}
@@ -23,6 +24,8 @@ var hud
 var objectives: Array = []
 var obj_index := 0
 var enemies: Array = []
+var vehicles: Array = []
+var props: Array = []          # every model placed with prop(): {node, path}
 var hvts: Array = []
 var targets_by_tag := {}
 var extraction: Node3D
@@ -239,14 +242,32 @@ func prop(path: String, pos: Vector3, rot_y := 0.0, fit := Vector3.ZERO, collide
     if tint.a > 0.0:
         _tint(inst, tint)
     if collide:
-        var cs := CollisionShape3D.new()
-        var bs := BoxShape3D.new()
-        var size := ab.size * s
-        bs.size = Vector3(maxf(size.x, 0.1), maxf(size.y, 0.1), maxf(size.z, 0.1))
-        cs.shape = bs
-        cs.position = (ab.get_center() * s) + inst.position
-        root.add_child(cs)
+        _add_mesh_collision(root, inst)
+    props.append({"node": root, "path": path})
     return root
+
+
+## Collision that follows the model's real triangles (with its scale baked in),
+## instead of one bounding box. A box around a tree spans the whole canopy down
+## to the ground, which made invisible walls around trees, lamp posts, cacti,
+## awnings and the water tower's legs.
+func _add_mesh_collision(root: Node3D, inst: Node3D) -> void:
+    var inv := root.global_transform.affine_inverse()
+    var faces := PackedVector3Array()
+    for m in inst.find_children("*", "MeshInstance3D", true, false):
+        var mi := m as MeshInstance3D
+        if mi.mesh == null:
+            continue
+        var xf: Transform3D = inv * mi.global_transform
+        for v in mi.mesh.get_faces():
+            faces.append(xf * v)
+    if faces.is_empty():
+        return
+    var shape := ConcavePolygonShape3D.new()
+    shape.set_faces(faces)
+    var cs := CollisionShape3D.new()
+    cs.shape = shape
+    root.add_child(cs)
 
 
 func _local_aabb(root: Node3D, inst: Node3D) -> AABB:
@@ -316,6 +337,26 @@ func add_target(pos: Vector3, kind: String, tag: String, rot_y := 0.0) -> Node:
         targets_by_tag[tag] = []
     targets_by_tag[tag].append(t)
     return t
+
+
+func add_vehicle(kind: String, pos: Vector3, rot_y := 0.0) -> Node:
+    var v = Vehicle.new()
+    v.setup(self, kind, pos, rot_y)
+    add_child(v)
+    vehicles.append(v)
+    return v
+
+
+func nearest_vehicle(pos: Vector3, max_dist: float) -> Node:
+    var best = null
+    var best_d := max_dist
+    for v in vehicles:
+        if is_instance_valid(v) and v.can_enter():
+            var d: float = v.global_position.distance_to(pos)
+            if d < best_d:
+                best_d = d
+                best = v
+    return best
 
 
 func add_barrel(pos: Vector3) -> void:
@@ -582,7 +623,7 @@ func _pause() -> void:
     vb.add_child(UI.button("Quit to Main Menu", func():
         get_tree().paused = false
         request_menu.emit()))
-    vb.add_child(UI.label("WASD move · Mouse aim · LMB fire · RMB aim/scope\nShift sprint · C crouch · Space jump · R reload\n1-5 / wheel weapons · G frag · F drone strike", 16, Color(0.8, 0.85, 0.75)))
+    vb.add_child(UI.label("WASD move · Mouse aim · LMB fire · RMB aim/scope\nShift sprint · C crouch · Space jump · R reload\n1-5 / wheel weapons · G frag · F drone strike · E jeep/tank", 16, Color(0.8, 0.85, 0.75)))
 
 
 func _resume() -> void:

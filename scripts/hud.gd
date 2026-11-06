@@ -20,6 +20,7 @@ var ord_label: Label
 var obj_label: Label
 var info_label: Label
 var msg_label: Label
+var prompt_label: Label
 var msg_t := 0.0
 var hit_t := 0.0
 var hit_kill := false
@@ -88,6 +89,11 @@ func _ready() -> void:
     UI.place(info_label, Vector2(1, 0), Rect2(-420, 22, 392, 60))
     root.add_child(info_label)
 
+    prompt_label = UI.label("", 22, Color(1, 1, 1), 6)
+    prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    UI.place(prompt_label, Vector2(0.5, 0.5), Rect2(-400, 60, 800, 34))
+    root.add_child(prompt_label)
+
     msg_label = UI.label("", 30, Color(1, 0.95, 0.7), 8)
     msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     UI.place(msg_label, Vector2(0.5, 0.0), Rect2(-700, 140, 1400, 50))
@@ -134,6 +140,10 @@ func _on_damage(amount: float) -> void:
 func _refresh() -> void:
     if player == null:
         return
+    if player.vehicle != null:
+        _refresh_vehicle()
+        return
+    armor_bar.max_value = 100
     hp_bar.value = player.health
     armor_bar.value = player.armor
     hp_label.text = "HEALTH %d    ARMOR %d" % [int(ceil(player.health)), int(ceil(player.armor))]
@@ -153,6 +163,21 @@ func _refresh() -> void:
     ord_label.text = "FRAGS [G] x%d     DRONE [F] x%d" % [player.grenades, player.drones]
 
 
+func _refresh_vehicle() -> void:
+    var v = player.vehicle
+    hp_bar.value = player.health
+    armor_bar.max_value = v.k["hp"]
+    armor_bar.value = v.hp
+    hp_label.text = "HEALTH %d    VEHICLE %d / %d" % [int(ceil(player.health)), int(ceil(v.hp)), int(v.k["hp"])]
+    weapon_label.text = v.k["name"]
+    if v.kind == "tank":
+        ammo_label.text = "CANNON READY" if v.fire_cd <= 0.0 else "LOADING %.1fs" % v.fire_cd
+    else:
+        ammo_label.text = "%d km/h" % int(absf(v.speed) * 3.6)
+    slots_label.text = "LMB fire   %sE exit" % ("RMB coax MG   " if v.kind == "tank" else "")
+    ord_label.text = "%d km/h" % int(absf(v.speed) * 3.6) if v.kind == "tank" else "Ram Tan soldiers to flatten them"
+
+
 func _process(delta: float) -> void:
     if player == null or level == null:
         return
@@ -165,8 +190,14 @@ func _process(delta: float) -> void:
     obj_label.text = level.get_objective_text()
     var secs := int(level.elapsed)
     info_label.text = "TAN FORCES: %d\nTIME %02d:%02d" % [level.enemies_alive(), secs / 60, secs % 60]
-    if player.reload_t > 0.0:
-        ammo_label.text = "RELOADING"
+    if player.vehicle != null:
+        _refresh_vehicle()
+        prompt_label.text = ""
+    else:
+        if player.reload_t > 0.0:
+            ammo_label.text = "RELOADING"
+        var near = level.nearest_vehicle(player.global_position, 4.5) if player.alive else null
+        prompt_label.text = ("Press E to drive the %s" % near.kind.to_upper()) if near != null else ""
     overlay.queue_redraw()
 
 
@@ -179,7 +210,7 @@ func _draw_overlay() -> void:
     # Waypoint
     var pt = level.get_objective_point()
     if pt != null:
-        var cam: Camera3D = player.camera
+        var cam: Camera3D = overlay.get_viewport().get_camera_3d()
         var behind := cam.is_position_behind(pt)
         var sp := cam.unproject_position(pt)
         if behind:
@@ -193,7 +224,7 @@ func _draw_overlay() -> void:
         var dist := int(player.global_position.distance_to(pt))
         overlay.draw_string(font, sp + Vector2(-40, 32), "%dm" % dist, HORIZONTAL_ALIGNMENT_CENTER, 80, 16, col)
     # Scope or crosshair
-    if player.is_scoped():
+    if player.vehicle == null and player.is_scoped():
         var r := minf(size.x, size.y) * 0.42
         var w := size.length()
         overlay.draw_arc(c, r + w * 0.5, 0.0, TAU, 96, Color(0, 0, 0, 1), w)
@@ -202,7 +233,7 @@ func _draw_overlay() -> void:
         overlay.draw_line(c - Vector2(0, r), c + Vector2(0, r), Color(0, 0, 0, 0.9), 1.5)
         overlay.draw_circle(c, 2.0, Color(1, 0.2, 0.1))
     else:
-        var gap: float = 5.0 + player.get_spread() * 7.0
+        var gap: float = 9.0 if player.vehicle != null else 5.0 + player.get_spread() * 7.0
         var col2 := Color(1, 1, 1, 0.9)
         for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
             overlay.draw_line(c + d * gap, c + d * (gap + 10.0), Color(0, 0, 0, 0.6), 4.0)

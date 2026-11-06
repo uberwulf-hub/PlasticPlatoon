@@ -170,7 +170,8 @@ static func _desert(L) -> Dictionary:
     L.box(Vector3(-13, 1.3, 91), Vector3(7, 2.6, 9), Color(0.5, 0.47, 0.36))
     L.box(Vector3(13, 1.3, 91), Vector3(7, 2.6, 9), Color(0.5, 0.47, 0.36))
     container(L, Vector3(15, 0, 78), 0.0, green)
-    vehicle(L, Vector3(-14, 0, 78), 0.2, green)
+    L.add_vehicle("tank", Vector3(-12, 0, 80), 0.0)
+    L.add_vehicle("jeep", Vector3(6, 0, 93), 0.0)
     L.cyl(Vector3(0, 4, 95), 0.08, 8, Color(0.6, 0.6, 0.6), false)
     L.box(Vector3(0.8, 7.3, 95), Vector3(1.5, 0.9, 0.04), Color(0.3, 0.55, 0.2), 0.0, false)
     L.add_pickup(Vector3(-5, 0, 80), "launcher")
@@ -261,7 +262,9 @@ static func _desert(L) -> Dictionary:
             if Vector2(cp.x - a[0].x, cp.z - a[0].z).length() < a[1]:
                 clear = false
         if clear:
-            L.prop("kenney_nature/%s.glb" % ["cactus_tall", "cactus_short"][i % 2], cp, rng.randf() * TAU, Vector3(0, rng.randf_range(2.0, 4.0), 0))
+            var tall := i % 2 == 0
+            L.prop("kenney_nature/%s.glb" % ("cactus_tall" if tall else "cactus_short"), cp, rng.randf() * TAU,
+                Vector3(0, rng.randf_range(2.5, 4.0) if tall else rng.randf_range(1.2, 1.8), 0))
 
     return {
         "spawn": Vector3(0, 0.5, 86), "spawn_yaw": 0.0, "drones": 1,
@@ -348,7 +351,7 @@ static func _urban(L) -> Dictionary:
     ]
     for i in cars.size():
         vehicle(L, cars[i][0], cars[i][1], car_cols[i % car_cols.size()], i % 5 == 2)
-    for p in [Vector3(-4.5, 0, 40), Vector3(0, 0, 40), Vector3(4.5, 0, 40), Vector3(-4.5, 0, -40), Vector3(4.5, 0, -40),
+    for p in [Vector3(-4.5, 0, 40), Vector3(4.5, 0, 40), Vector3(-4.5, 0, -40), Vector3(4.5, 0, -40),
             Vector3(40, 0, -3), Vector3(40, 0, 3), Vector3(-40, 0, 0), Vector3(50, 0, -40), Vector3(-50, 0, 40)]:
         L.box(p + Vector3(0, 0.55, 0), Vector3(3.2, 1.1, 0.7), Color(0.75, 0.74, 0.7))
 
@@ -370,6 +373,8 @@ static func _urban(L) -> Dictionary:
     ]
     for t in troops:
         L.add_enemy(t[0] + Vector3(0, 0.1, 0), t[1])
+    L.add_vehicle("jeep", Vector3(3.5, 0, 80), 0.0)
+    L.add_vehicle("tank", Vector3(-3.5, 0, 72), 0.0)
     L.add_pickup(Vector3(-3, 0, 85), "ammo")
     L.add_pickup(Vector3(3, 0, 85), "armor")
     L.add_pickup(Vector3(0, 0, 50), "lmg")
@@ -493,7 +498,8 @@ static func _tabletop(L) -> Dictionary:
     L.box(Vector3(-25, 0.01, 10), Vector3(7, 0.02, 7), Color(0.98, 0.9, 0.3), 0.2, false)
     L.box(Vector3(-50, 0.01, -5), Vector3(7, 0.02, 7), Color(0.98, 0.5, 0.6), -0.3, false)
 
-    # Giant toy vehicles left on the table
+    # Giant toy vehicles left on the table (plus a drivable jeep)
+    L.add_vehicle("jeep", Vector3(10, 0, 52), 0.0)
     L.prop("kenney_car_kit/race-future.glb", Vector3(-30, 0, 40), 0.15, Vector3(0, 0, 14.0))
     L.prop("kenney_car_kit/firetruck.glb", Vector3(-58, 0, -50), 1.2, Vector3(0, 0, 16.0))
     L.add_barrel(Vector3(-40, 0, 0))

@@ -4,7 +4,7 @@ Double-click PlasticPlatoon.exe to play. No install needed.
 
 Controls: WASD move, mouse aim, left click fire, right click aim/scope,
 Shift sprint, C crouch, Space jump, R reload, 1-5 / mouse wheel switch weapon,
-G frag grenade, F drone strike, Esc pause.
+G frag grenade, F drone strike, E get in/out of a jeep or tank, Esc pause.
 
 If the game won't start or shows a black screen, your graphics driver may not
 support Vulkan. Start it in compatibility mode instead from a command prompt:

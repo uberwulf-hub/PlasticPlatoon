@@ -41,6 +41,7 @@ The project uses the Forward+ renderer. On older GPUs or integrated graphics, sw
 | 1–5 / mouse wheel | Switch weapon |
 | G | Throw frag grenade |
 | F | Call a Reaper drone strike on the crosshair |
+| E | Get in or out of a jeep or tank |
 | Esc / P | Pause |
 
 ## Arsenal
@@ -56,6 +57,17 @@ The project uses the Forward+ renderer. On older GPUs or integrated graphics, sw
 | F | Reaper drone | Marks the target, then a Hellfire strike lands 2.7 s later |
 
 Bullets deal only 30% damage to objective hardware (radar jammers, SAMs and boosters). Use the AT4, grenades or a drone strike on them.
+
+## Vehicles
+
+Walk up to a jeep or tank and press **E**. WASD drives, the mouse aims the mounted gun, and **LMB** fires. Press **E** again to get out.
+
+| Vehicle | Armour | Weapons | Notes |
+|---|---|---|---|
+| Jeep | 320 HP | M2 .50 cal (full-auto) | Fast (about 85 km/h). Ramming Tan soldiers flattens them. |
+| Tank | 1000 HP, shrugs off bullets | 120 mm cannon (LMB, 7 m blast radius) and coax MG (RMB) | Slow, turns in place. The turret follows your aim at its own speed. |
+
+Rockets, grenades and drone strikes still hurt vehicles. If your vehicle is destroyed, you're thrown clear and take some damage.
 
 ## Campaign
 
