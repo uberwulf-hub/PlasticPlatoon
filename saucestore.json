@@ -1,0 +1,162 @@
+{
+  "name": "ArmyMen's Revenge 2026",
+  "category": "Game",
+  "description": "A third-person plastic-soldier shooter. Lead the green army against the Tan Army with modern weapons, frag grenades and drone strikes across a desert outpost, a war-torn city and a giant kitchen table.",
+  "icon": "store/icon.png",
+  "assets": {
+    "windows": "ArmyMensRevenge-windows.zip"
+  },
+  "requirements": [
+    "Windows 10 or 11 (64-bit)",
+    "Graphics card with Vulkan support (or switch to the Compatibility renderer)",
+    "About 250 MB of disk space",
+    "Keyboard and mouse"
+  ],
+  "rightsConfirmed": false,
+  "credits": [
+    {
+      "asset": "Godot Engine 4.3 (runtime in the .exe)",
+      "author": "Juan Linietsky, Ariel Manzur and Godot Engine contributors",
+      "license": "MIT",
+      "source": "https://godotengine.org/license"
+    },
+    {
+      "asset": "Toon Shooter Game Kit (soldier character, guns, environment props)",
+      "author": "Quaternius",
+      "license": "CC0",
+      "source": "https://quaternius.com/packs/toonshootergamekit.html"
+    },
+    {
+      "asset": "Ultimate Gun Pack",
+      "author": "Quaternius",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack"
+    },
+    {
+      "asset": "City Kit (Commercial)",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/city-kit-commercial"
+    },
+    {
+      "asset": "City Kit (Industrial)",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/city-kit-industrial"
+    },
+    {
+      "asset": "City Kit (Suburban)",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/city-kit-suburban"
+    },
+    {
+      "asset": "City Kit (Roads)",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/city-kit-roads"
+    },
+    {
+      "asset": "Car Kit",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/car-kit"
+    },
+    {
+      "asset": "Modular Buildings",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/modular-buildings"
+    },
+    {
+      "asset": "Retro Urban Kit",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/retro-urban-kit"
+    },
+    {
+      "asset": "Nature Kit",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/nature-kit"
+    },
+    {
+      "asset": "Interface Sounds",
+      "author": "Kenney",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/interface-sounds"
+    },
+    {
+      "asset": "Some Militaristic Tune (menu music)",
+      "author": "Spring Spring",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/some-militaristic-tune"
+    },
+    {
+      "asset": "War Theme (music)",
+      "author": "Spring Spring",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/war-theme"
+    },
+    {
+      "asset": "Battle Theme A (music)",
+      "author": "cynicmusic",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/battle-theme-a"
+    },
+    {
+      "asset": "Determined Pursuit (music)",
+      "author": "Emma_MA",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/determined-pursuit-epic-orchestra-loop"
+    },
+    {
+      "asset": "Gunshot Sounds",
+      "author": "Tabasco",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/gunshot-sounds"
+    },
+    {
+      "asset": "War on Water: SNDFX (weapons, radio, helicopter)",
+      "author": "yd",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/war-on-water-sndfx"
+    },
+    {
+      "asset": "Synthesized explosion",
+      "author": "qubodup",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/synthesized-explosion"
+    },
+    {
+      "asset": "Gun reload sounds",
+      "author": "SpringySpringo",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/gun-reload-sounds"
+    },
+    {
+      "asset": "Muffled Distant Explosion",
+      "author": "NenadSimic",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/muffled-distant-explosion"
+    },
+    {
+      "asset": "wind1 (desert ambience)",
+      "author": "Luke.RUSTLTD",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/wind1"
+    },
+    {
+      "asset": "High traffic road sounds (city ambience)",
+      "author": "IgnasD",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/high-traffic-road-sounds"
+    },
+    {
+      "asset": "Ticking clock (tabletop ambience)",
+      "author": "bart",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/ticking-clock"
+    }
+  ]
+}
