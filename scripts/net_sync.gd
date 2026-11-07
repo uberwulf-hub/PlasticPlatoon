@@ -150,37 +150,29 @@ func _apply_vehicles(list: Array, data: PackedFloat32Array) -> void:
 
 # ------------------------------------------------------- shots & effects ----
 
-## A player on this PC fired hitscan rounds. segs = [from0, to0, from1, to1...].
-func send_shot(segs: PackedVector3Array, dmgs: PackedFloat32Array, color: Color, sound: String, noise: float) -> void:
-    srv_shot.rpc_id(1, segs, dmgs, color, sound, noise)
+## A player on this PC fired hitscan rounds. segs = [from0, end0, from1, end1...]
+## where each end is where the round stopped *on the shooter's screen*, and
+## refs[i] names what it hit there (level.ref_of) or [] for a miss.
+## Co-op uses "what you see is what you hit": the shooter's PC decides hits,
+## because a client sees moving enemies ~0.1 s behind the host.
+func send_shot(segs: PackedVector3Array, dmgs: PackedFloat32Array, refs: Array, color: Color, sound: String, noise: float) -> void:
+    srv_shot.rpc_id(1, segs, dmgs, refs, color, sound, noise)
 
 
 @rpc("any_peer", "reliable")
-func srv_shot(segs: PackedVector3Array, dmgs: PackedFloat32Array, color: Color, sound: String, noise: float) -> void:
+func srv_shot(segs: PackedVector3Array, dmgs: PackedFloat32Array, refs: Array, color: Color, sound: String, noise: float) -> void:
     var from_peer := multiplayer.get_remote_sender_id()
-    var shooter = level.remotes.get(from_peer)
-    var ex: Array[RID] = []
-    if shooter:
-        ex.append(shooter.get_rid())
-        if shooter.vehicle:
-            ex.append(shooter.vehicle.get_rid())
     var any_hit := false
     var killed := false
     for i in range(0, segs.size() - 1, 2):
         var a := segs[i]
-        var b := segs[i + 1]
-        var hit := Fx.ray(level, a, b, 1 | 4, ex)
-        var end := b
-        if not hit.is_empty():
-            end = hit["position"]
-            var col = hit["collider"]
-            var recv = col if col != null and col.has_method("take_damage") else null
-            if recv == null and col != null and col.get_parent() and col.get_parent().has_method("take_damage"):
-                recv = col.get_parent()
-            if recv != null:
-                if recv.take_damage(dmgs[i / 2], a, end, false):
-                    killed = true
-                any_hit = true
+        var end := segs[i + 1]
+        var ref: Array = refs[i / 2] if i / 2 < refs.size() else []
+        var recv = level.node_of(ref)
+        if recv != null and recv.get("alive") != false:
+            if recv.take_damage(dmgs[i / 2], a, end, false):
+                killed = true
+            any_hit = true
         if i == 0 or randf() < 0.3:
             _fx_shot_except(from_peer, a, end, color, sound if i == 0 else "")
     if segs.size() >= 2:

@@ -11,6 +11,7 @@ var mouse_sensitivity := 0.0025
 var invert_y := false
 var show_news := true
 var player_name := "Soldier"
+var narration := true           # PNN anchors read their lines with the speech voices on this PC
 var difficulty := 1
 var unlocked_level := 0
 var current_level: Node = null
@@ -128,6 +129,7 @@ func save() -> void:
     cfg.set_value("settings", "difficulty", difficulty)
     cfg.set_value("settings", "show_news", show_news)
     cfg.set_value("settings", "player_name", player_name)
+    cfg.set_value("settings", "narration", narration)
     cfg.set_value("settings", "music_volume", music_volume)
     cfg.set_value("settings", "sfx_volume", sfx_volume)
     cfg.set_value("progress", "unlocked_level", unlocked_level)
@@ -143,6 +145,7 @@ func _load() -> void:
     difficulty = clampi(cfg.get_value("settings", "difficulty", difficulty), 0, 2)
     show_news = cfg.get_value("settings", "show_news", show_news)
     player_name = cfg.get_value("settings", "player_name", player_name)
+    narration = cfg.get_value("settings", "narration", narration)
     music_volume = cfg.get_value("settings", "music_volume", music_volume)
     sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
     unlocked_level = clampi(cfg.get_value("progress", "unlocked_level", 0), 0, LEVEL_COUNT - 1)

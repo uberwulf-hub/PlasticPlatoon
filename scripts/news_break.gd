@@ -53,6 +53,17 @@ var ticker_w := 0.0
 var voice: AudioStreamPlayer
 var _blip_t := 0.0
 
+# ---- Narration: the PC's own text-to-speech voices read each line ----
+# Male / female name hints for the common Windows voices (SAPI and OneCore).
+const MALE_HINTS := ["David", "Mark", "Guy", "Christopher", "Eric", "Davis", "Ryan", "George", "James", "Richard", "Sean", "Roger", "Steffan", "Andrew", "Brian"]
+const FEMALE_HINTS := ["Zira", "Aria", "Jenny", "Hazel", "Susan", "Michelle", "Heera", "Catherine", "Linda", "Emma", "Ava", "Sonia", "Libby", "Natasha"]
+# pitch (1.0 = normal), rate (1.0 = normal) per character
+const TTS_STYLE := {"chip": [0.85, 1.0], "brenda": [1.05, 1.0], "gary": [1.15, 1.15], "both": [0.9, 1.0]}
+var narrate := false
+var tts_voice := {}             # who -> voice id
+var _utter := 0
+var _speak_wait := 0.0          # safety timeout while a line is being read
+
 
 func play(d: Dictionary) -> void:
     data = d
@@ -71,6 +82,7 @@ func _ready() -> void:
     voice.bus = "SFX"
     voice.volume_db = -10.0
     add_child(voice)
+    _setup_narration()
     Game.play_ui("news_sting", -4.0)
     _next()
 
@@ -133,20 +145,21 @@ func _build_world() -> void:
     logo.position = Vector3(-4.6, 3.6, -5.6)
     vp.add_child(logo)
     # desk
-    _box(Vector3(0, 0.55, 0), Vector3(6.2, 1.1, 1.6), Color(0.92, 0.93, 0.96), 0.2)
-    _glow(Vector3(0, 0.55, 0.81), Vector3(6.2, 0.25, 0.02), PNN_ORANGE, 1.5)
+    _box(Vector3(0, 0.55, 0), Vector3(6.2, 1.1, 1.2), Color(0.92, 0.93, 0.96), 0.2)
+    _glow(Vector3(0, 0.55, 0.61), Vector3(6.2, 0.25, 0.02), PNN_ORANGE, 1.5)
     var desk_logo := Label3D.new()
     desk_logo.text = "PNN"
     desk_logo.font_size = 120
     desk_logo.pixel_size = 0.004
     desk_logo.modulate = NAVY
-    desk_logo.position = Vector3(0, 0.88, 0.82)
+    desk_logo.position = Vector3(0, 0.88, 0.62)
     vp.add_child(desk_logo)
-    _box(Vector3(0, 0.2, -1.0), Vector3(5.6, 0.4, 1.4), NAVY)                     # riser behind the desk
-    chip = _person(Vector3(-1.35, 0.4, -0.8), Color(0.22, 0.32, 0.6))
-    brenda = _person(Vector3(1.35, 0.4, -0.8), Color(0.6, 0.22, 0.3))
-    _box(Vector3(-1.35, 1.12, 0.3), Vector3(0.7, 0.04, 0.5), Color(1, 1, 1))     # papers
-    _box(Vector3(1.35, 1.16, 0.3), Vector3(0.18, 0.12, 0.18), Color(0.9, 0.3, 0.2))  # mug
+    # Anchors stand on a riser *behind* the desk (their arms reach ~0.55 m forward).
+    _box(Vector3(0, 0.2, -1.5), Vector3(5.6, 0.4, 1.2), NAVY)
+    chip = _person(Vector3(-1.35, 0.4, -1.35), Color(0.22, 0.32, 0.6))
+    brenda = _person(Vector3(1.35, 0.4, -1.35), Color(0.6, 0.22, 0.3))
+    _box(Vector3(-1.35, 1.12, 0.05), Vector3(0.7, 0.04, 0.5), Color(1, 1, 1))    # papers
+    _box(Vector3(1.35, 1.16, 0.05), Vector3(0.18, 0.12, 0.18), Color(0.9, 0.3, 0.2))  # mug
 
     # --- the field set, themed to the operation ---
     var o := Vector3(FIELD_X, 0, 0)
@@ -372,6 +385,7 @@ func _next() -> void:
     name_label.text = nm[0]
     title_label.text = nm[1]
     _cut_to(who)
+    _speak(who, subtitle.text)
     var speaker = {"chip": chip, "brenda": brenda, "gary": gary}.get(who)
     if speaker != null:
         var g: String = b.get("gesture", "")
@@ -389,10 +403,10 @@ func _cut_to(who: String) -> void:
     match who:
         "chip":
             cam_from = Vector3(-0.55, 2.2, 3.0)
-            cam_look = Vector3(-1.35, 1.85, -0.8)
+            cam_look = Vector3(-1.35, 1.85, -1.35)
         "brenda":
             cam_from = Vector3(0.55, 2.2, 3.0)
-            cam_look = Vector3(1.35, 1.85, -0.8)
+            cam_look = Vector3(1.35, 1.85, -1.35)
         "gary":
             cam_from = Vector3(FIELD_X + 1.3, 1.9, 4.6)
             cam_look = Vector3(FIELD_X + 0.4, 1.25, 0)
@@ -422,7 +436,7 @@ func _process(delta: float) -> void:
         typed += CHARS_PER_SEC * delta
         subtitle.visible_characters = int(typed)
         _blip_t -= delta
-        if _blip_t <= 0.0 and voice.stream != null:
+        if not narrate and _blip_t <= 0.0 and voice.stream != null:
             _blip_t = 0.075
             var who: String = beats[idx].get("who", "both")
             voice.pitch_scale = VOICE.get(who, 1.0) * randf_range(0.85, 1.2)
@@ -430,7 +444,8 @@ func _process(delta: float) -> void:
     else:
         subtitle.visible_characters = -1
         hold += delta
-        if auto_advance and hold > 1.4 + total * 0.025:
+        var speaking := narrate and DisplayServer.tts_is_speaking() and hold < _speak_wait
+        if auto_advance and not speaking and hold > (0.6 if narrate else 1.4 + total * 0.025):
             _next()
 
 
@@ -460,6 +475,40 @@ func skip_line() -> void:
 func _finish() -> void:
     if done:
         return
+    if narrate:
+        DisplayServer.tts_stop()
     done = true
     finished.emit()
     queue_free()
+
+
+# ------------------------------------------------------------- narration ----
+
+func _setup_narration() -> void:
+    if not Game.narration or DisplayServer.get_name() == "headless":
+        return
+    var voices: Array = DisplayServer.tts_get_voices()
+    var english: Array = voices.filter(func(v): return str(v.get("language", "")).begins_with("en"))
+    if english.is_empty():
+        english = voices
+    if english.is_empty():
+        return              # no speech voices on this PC: keep the cartoon blips
+    var males := english.filter(func(v): return MALE_HINTS.any(func(h): return h in str(v["name"])))
+    var females := english.filter(func(v): return FEMALE_HINTS.any(func(h): return h in str(v["name"])))
+    var any_voice: String = english[0]["id"]
+    var chip_v: String = males[0]["id"] if males.size() > 0 else any_voice
+    var brenda_v: String = females[0]["id"] if females.size() > 0 else any_voice
+    var gary_v: String = males[1]["id"] if males.size() > 1 else chip_v
+    tts_voice = {"chip": chip_v, "brenda": brenda_v, "gary": gary_v, "both": chip_v}
+    narrate = true
+
+
+func _speak(who: String, text: String) -> void:
+    if not narrate:
+        return
+    var style: Array = TTS_STYLE.get(who, [1.0, 1.0])
+    var vol := int(clampf(Game.sfx_volume, 0.0, 1.0) * 100.0)
+    _utter += 1
+    # A generous safety net in case the speech engine never reports "done".
+    _speak_wait = 2.0 + text.length() * 0.09
+    DisplayServer.tts_speak(text, tts_voice.get(who, tts_voice["chip"]), vol, style[0], style[1], _utter, true)

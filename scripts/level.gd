@@ -123,6 +123,27 @@ func _setup_net() -> void:
     hud.show_team = true
 
 
+## Names a hittable thing the same way on every PC: [list, index].
+func ref_of(n) -> Array:
+    if n == null:
+        return []
+    for pair in [["e", enemies], ["ev", enemy_vehicles], ["v", vehicles], ["t", targets], ["b", barrels]]:
+        var i: int = pair[1].find(n)
+        if i >= 0:
+            return [pair[0], i]
+    return []
+
+
+func node_of(ref: Array):
+    if ref.size() != 2:
+        return null
+    var list: Array = {"e": enemies, "ev": enemy_vehicles, "v": vehicles, "t": targets, "b": barrels}.get(ref[0], [])
+    var i: int = ref[1]
+    if i < 0 or i >= list.size() or not is_instance_valid(list[i]):
+        return null
+    return list[i]
+
+
 func net_go() -> void:
     if multiplayer.is_server():
         for e in enemies + enemy_vehicles:

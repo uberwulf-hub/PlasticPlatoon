@@ -152,7 +152,7 @@ func _run_client() -> void:
     p.hit_confirmed.connect(func(_k): hits[0] += 1)
     var chest: Vector3 = e.global_position + Vector3(0, 1.1, 0)
     var from: Vector3 = chest + Vector3(0, 0.2, 3.0)
-    L.net.send_shot(PackedVector3Array([from, chest + (chest - from).normalized()]), PackedFloat32Array([999.0]), Color.WHITE, "rifle", 40.0)
+    L.net.send_shot(PackedVector3Array([from, chest]), PackedFloat32Array([999.0]), [L.ref_of(e)], Color.WHITE, "rifle", 40.0)
     await _at(7.0)
     _check(not e.alive, "Tan soldier 0 melted on the client")
     _check(hits[0] > 0, "client got the hit marker from the host")

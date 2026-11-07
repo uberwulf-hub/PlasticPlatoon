@@ -536,14 +536,16 @@ func _bullet(from: Vector3, damage: float, spread_deg: float, sound: String) -> 
     var end := to
     if level.net != null and not multiplayer.is_server():
         # LAN client driving: draw it here, let the host decide what it hit.
+        var ref: Array = []
         if not hit.is_empty():
             end = hit["position"]
+            ref = level.ref_of(hit["collider"])
         if driver:
             driver.shots_fired += 1
         Fx.tracer(level, from, end, Color(1.0, 0.75, 0.35))
         Fx.muzzle_flash(level, from)
         Game.play_sfx(sound, from, 0.0)
-        level.net.send_shot(PackedVector3Array([from, to]), PackedFloat32Array([damage]), Color(1.0, 0.75, 0.35), sound, 60.0)
+        level.net.send_shot(PackedVector3Array([from, end]), PackedFloat32Array([damage]), [ref], Color(1.0, 0.75, 0.35), sound, 60.0)
         return
     if not hit.is_empty():
         end = hit["position"]

@@ -307,6 +307,7 @@ func _fire(w: Dictionary) -> void:
         var ex: Array[RID] = [get_rid()]
         var net_segs := PackedVector3Array()
         var net_dmgs := PackedFloat32Array()
+        var net_refs: Array = []
         for i in int(w["pellets"]):
             var dir := _spread_dir(fwd, cam_b, spread)
             var target := _aim_point(dir, cam_pos, w["range"])
@@ -315,10 +316,15 @@ func _fire(w: Dictionary) -> void:
             var end_point := to
             if _net_client():
                 # LAN client: show the shot now, let the host decide what it hit.
+                var ref: Array = []
                 if not hit.is_empty():
                     end_point = hit["position"]
-                net_segs.append_array([muzzle_pos, to])
+                    ref = level.ref_of(_receiver(hit["collider"]))
+                    if ref.is_empty():
+                        Fx.impact(level, end_point, hit["normal"])
+                net_segs.append_array([muzzle_pos, end_point])
                 net_dmgs.append(w["damage"] * _falloff(w, muzzle_pos.distance_to(end_point)))
+                net_refs.append(ref)
                 if i == 0 or randf() < 0.3:
                     Fx.tracer(level, muzzle_pos, end_point, w["tracer"])
                 continue
@@ -338,7 +344,7 @@ func _fire(w: Dictionary) -> void:
                 if level.net:
                     level.net._fx_shot_except(1, muzzle_pos, end_point, w["tracer"], w["sound"] if i == 0 else "", 0.0)
         if net_segs.size() > 0:
-            level.net.send_shot(net_segs, net_dmgs, w["tracer"], w["sound"], w["noise"])
+            level.net.send_shot(net_segs, net_dmgs, net_refs, w["tracer"], w["sound"], w["noise"])
         if any_hit:
             shots_hit += 1
             hit_confirmed.emit(killed)

@@ -198,6 +198,11 @@ func show_settings() -> void:
     nb.button_pressed = Game.show_news
     nb.toggled.connect(func(on): Game.show_news = on)
     vb.add_child(nb)
+    var narr := CheckBox.new()
+    narr.text = "Narrator voices (reads the news aloud with Windows speech)"
+    narr.button_pressed = Game.narration
+    narr.toggled.connect(func(on): Game.narration = on)
+    vb.add_child(narr)
     var inv := CheckBox.new()
     inv.text = "Invert mouse Y"
     inv.button_pressed = Game.invert_y
