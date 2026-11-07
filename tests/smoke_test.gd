@@ -93,6 +93,8 @@ func _play_level(i: int) -> void:
     await _frames(240)
     _check(p.shots_fired > 0, "L%d weapons fired (%d shots)" % [i, p.shots_fired])
     _safe_zone_test(i, L, p)
+    if i == 0:
+        await _vehicle_zone_test(L)
     _one_gun_test(i, L, p)
     _invisible_wall_test(i, L)
     if i == 0:
@@ -104,7 +106,7 @@ func _play_level(i: int) -> void:
     # Teleport near an enemy and let it engage.
     var e = null
     for x in L.enemies:
-        if x.alive and x.s["speed"] > 0.0:
+        if is_instance_valid(x) and x.alive and x.s["speed"] > 0.0:
             e = x
             break
     if e:
@@ -286,8 +288,11 @@ func _enemy_vehicle_test(i: int, L, p) -> void:
         p.global_position = spot
         var hp0: float = p.health
         v.hear(p.global_position)      # it would notice you anyway; this keeps the test fast
-        await _frames(540)
-        _check(v.ai_alert > 0.0, "L%d tan %s spotted the player" % [i, v.kind])
+        var spotted := false
+        for f in 540:
+            await get_tree().physics_frame
+            spotted = spotted or v.ai_alert > 0.0
+        _check(spotted, "L%d tan %s spotted the player" % [i, v.kind])
         _check(v.ai_shots > shots0, "L%d tan %s opened fire (%d shots)%s" % [i, v.kind, v.ai_shots - shots0, "" if v.ai_shots > shots0 else " [alert=%.1f los=%s react=%.2f player_d=%.1f spot=%s]" % [v.ai_alert, v._ai_los, v._ai_react, v.global_position.distance_to(p.global_position), spot]])
         var drove: float = v.ai_travelled - travelled0
         _check(drove > 5.0 or v.kind == "tank", "L%d tan %s drove %.1fm%s" % [i, v.kind, drove, "" if drove > 5.0 or v.kind == "tank" else " [alert=%.1f los=%s charge=%.1f stuck=%d speed=%.1f home_d=%.1f pos=%s player_d=%.1f]" % [v.ai_alert, v._ai_los, v._ai_charge_t, v._ai_stuck_count, v.speed, v.global_position.distance_to(v.home), v.global_position.snapped(Vector3.ONE), v.global_position.distance_to(p.global_position)]])
@@ -425,6 +430,29 @@ func _one_gun_test(i: int, L, p) -> void:
 ## The start point is a safe zone: no Tan units start inside it, players
 ## there can't be hurt or targeted, firing exposes you briefly, and stepping
 ## out makes you a target again.
+## Regression: a Tan jeep chasing someone at the zone's edge used to drive in
+## and park inside (found by CI).
+func _vehicle_zone_test(L) -> void:
+    var j = null
+    for v in L.enemy_vehicles:
+        if v.alive and v.kind == "jeep":
+            j = v
+            break
+    var out_dir := Vector3(1, 0, 0)
+    j.global_position = L.safe_center + out_dir * (L.safe_radius + 45.0) + Vector3(0, 0.5, 0)
+    j.rotation.y = atan2(out_dir.x, out_dir.z)       # facing the zone
+    j.speed = 22.0                                   # arriving flat out
+    var worst := 999.0
+    for f in 420:
+        j.ai_alert = 6.0
+        j.ai_last_seen = L.safe_center + Vector3(0, 1, 0)
+        j._ai_charge_t = 4.0                           # charge straight at it
+        await get_tree().physics_frame
+        var d: float = Vector2(j.global_position.x - L.safe_center.x, j.global_position.z - L.safe_center.z).length()
+        worst = minf(worst, d)
+    _check(worst > L.safe_radius + 1.0, "L0 a charging Tan jeep stops short of the safe zone (closest %.1fm, zone %.0fm)" % [worst, L.safe_radius])
+
+
 func _safe_zone_test(i: int, L, p) -> void:
     var inside := []
     for e in L.enemies + L.enemy_vehicles:

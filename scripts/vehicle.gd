@@ -769,6 +769,19 @@ func _ai_update(delta: float) -> Vector2:
     else:
         _ai_stuck_t = 0.0
 
+    # Never drive into the safe zone: the destination is kept outside it, but
+    # chasing or circling can still cut across. At the edge, turn away (or back
+    # out if we're facing in).
+    if level.safe_radius > 0.0:
+        var fwd := -global_transform.basis.z
+        var ahead: Vector3 = global_position + fwd * (absf(speed) * 0.8 + k["size"].z)
+        if level.in_safe_zone(ahead) or level.in_safe_zone(global_position):
+            var out: Vector3 = global_position - level.safe_center
+            out.y = 0.0
+            var diff3 := wrapf(atan2(-out.x, -out.z) - rotation.y, -PI, PI)
+            steer = clampf(diff3 * 2.0, -1.0, 1.0)
+            throttle = 0.6 if absf(diff3) < 1.2 else -0.6
+
     _ai_shoot(delta, tgt, tpos, dist)
     return Vector2(throttle, steer)
 
