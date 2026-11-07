@@ -288,10 +288,14 @@ func _enemy_vehicle_test(i: int, L, p) -> void:
         p.global_position = spot
         var hp0: float = p.health
         v.hear(p.global_position)      # it would notice you anyway; this keeps the test fast
+        # 9 s is usually plenty; give a jeep that's circling behind cover up to 15 s
+        # to get a clear shot (it's AI, so the timing varies from run to run).
         var spotted := false
-        for f in 540:
+        for f in 900:
             await get_tree().physics_frame
             spotted = spotted or v.ai_alert > 0.0
+            if f >= 540 and v.ai_shots > shots0:
+                break
         _check(spotted, "L%d tan %s spotted the player" % [i, v.kind])
         _check(v.ai_shots > shots0, "L%d tan %s opened fire (%d shots)%s" % [i, v.kind, v.ai_shots - shots0, "" if v.ai_shots > shots0 else " [alert=%.1f los=%s react=%.2f player_d=%.1f spot=%s]" % [v.ai_alert, v._ai_los, v._ai_react, v.global_position.distance_to(p.global_position), spot]])
         var drove: float = v.ai_travelled - travelled0

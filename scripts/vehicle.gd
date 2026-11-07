@@ -94,6 +94,8 @@ var _ai_ram_cd := 0.0
 var _ai_charge_t := 0.0          # >0: give up circling and drive straight at the target
 var _ai_stuck_count := 0
 var _ai_stuck_decay := 0.0
+var _ai_flank = null             # detour point around cover (Vector3) while it's fresh
+var _ai_flank_t := 0.0
 var ai_shots := 0
 var ai_travelled := 0.0
 
@@ -796,15 +798,17 @@ func _ai_update(delta: float) -> Vector2:
         var to_t := ai_last_seen - global_position
         to_t.y = 0.0
         var d := to_t.length()
-        if kind == "tank":
-            if d > pref + 10.0 or not _ai_los:
+        if not _ai_los:
+            dest = _ai_hunt_point(delta)
+        elif kind == "tank":
+            if d > pref + 10.0:
                 dest = ai_last_seen
             elif d < pref - 15.0:
                 dest = global_position - to_t.normalized() * 12.0
             else:
                 hold = true
         else:
-            if d > pref + 12.0 or not _ai_los or _ai_charge_t > 0.0:
+            if d > pref + 12.0 or _ai_charge_t > 0.0:
                 dest = ai_last_seen
             else:
                 # Circle the target at roughly the preferred distance, but keep the
@@ -882,6 +886,46 @@ func _ai_update(delta: float) -> Vector2:
 
     _ai_shoot(delta, tgt, tpos, dist)
     return Vector2(throttle, steer)
+
+
+## Where to drive to get a shot at a target we can't see. Straight at its
+## last known position when the way is clear; otherwise a flanking point near
+## it that has a view of it and a clear drive from here (no navmesh, so this is
+## how vehicles get around buildings instead of grinding against them).
+func _ai_hunt_point(delta: float) -> Vector3:
+    _ai_flank_t -= delta
+    if _ai_flank != null and _ai_flank_t > 0.0 and global_position.distance_to(_ai_flank) > 4.0:
+        return _ai_flank
+    _ai_flank = null
+    var ex: Array[RID] = [get_rid()]
+    var eye := Vector3(0, 1.2, 0)
+    if Fx.ray(self, global_position + eye, ai_last_seen + eye, 1, ex).is_empty():
+        return ai_last_seen
+    var best = null
+    var best_d := INF
+    var pref: float = AI[kind]["pref_dist"]
+    for r in [pref, pref * 0.6, pref * 1.5]:
+        for i in 12:
+            var a := i * TAU / 12.0
+            var c: Vector3 = ai_last_seen + Vector3(cos(a), 0, sin(a)) * r
+            c.y = global_position.y
+            if level.in_safe_zone(c):
+                continue
+            if not Fx.ray(self, c + eye, ai_last_seen + eye, 1, ex).is_empty():
+                continue          # no view of the target from there
+            if not Fx.ray(self, global_position + eye, c + eye, 1, ex).is_empty():
+                continue          # can't drive straight there
+            var dd := global_position.distance_to(c)
+            if dd < best_d:
+                best_d = dd
+                best = c
+        if best != null:
+            break
+    if best == null:
+        return ai_last_seen
+    _ai_flank = best
+    _ai_flank_t = 3.0
+    return best
 
 
 ## Pulls `want` back toward `from` if there's a wall in between.
