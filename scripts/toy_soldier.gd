@@ -23,6 +23,10 @@ func notify_shot() -> void:
     pass
 
 
+func gesture(_a: String) -> void:
+    pass
+
+
 func build(c: Color, kind := "rifle") -> void:
     body_color = c
     mat = _plastic(c)

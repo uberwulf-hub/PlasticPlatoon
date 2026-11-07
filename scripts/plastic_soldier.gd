@@ -61,10 +61,12 @@ func build(c: Color, kind := "rifle") -> void:
         if anim.has_animation(a):
             anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
     _recolor()
-    for gname in GUN_FOR.values():
-        var g := rig.find_child(gname, true, false)
-        if g is MeshInstance3D:
-            guns[gname] = g
+    # Each gun is a MeshInstance3D inside a same-named BoneAttachment3D, so look
+    # the meshes up by type; find_child(name) would return the attachment.
+    var gun_names: Array = GUN_FOR.values()
+    for mi in rig.find_children("*", "MeshInstance3D", true, false):
+        if gun_names.has(String(mi.name)):
+            guns[String(mi.name)] = mi
     # Hide hand-held props we don't use (knives, shovel, pistols...).
     for pname in HIDDEN_PROPS:
         var p := rig.find_child(pname, true, false)
@@ -105,7 +107,7 @@ func _recolor() -> void:
 
 func set_weapon(kind: String) -> void:
     weapon_kind = kind
-    var want: String = GUN_FOR.get(kind, "AK")
+    var want: String = "" if kind == "none" else GUN_FOR.get(kind, "AK")
     for gname in guns:
         guns[gname].visible = gname == want
     _current_gun = guns.get(want)
@@ -158,6 +160,23 @@ func animate(delta: float, speed: float, crouch: bool) -> void:
         if _flash_t <= 0.0:
             for m in mats:
                 m.emission_enabled = false
+
+
+## One-off gesture (Wave / Yes / No / ...) that returns to Idle when done.
+## Used by the PNN news cutscenes.
+func gesture(a: String) -> void:
+    if _dead or not anim.has_animation(a):
+        return
+    _anim_name = a
+    anim.play(a, 0.2)
+    if not anim.animation_finished.is_connected(_on_gesture_done):
+        anim.animation_finished.connect(_on_gesture_done)
+
+
+func _on_gesture_done(_name: StringName) -> void:
+    if not _dead and not LOOPING.has(String(_name)):
+        _anim_name = ""
+        _play("Idle")
 
 
 func _play(a: String) -> void:

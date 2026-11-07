@@ -5,6 +5,8 @@ extends Node
 const Level = preload("res://scripts/level.gd")
 const LevelData = preload("res://scripts/level_data.gd")
 const UI = preload("res://scripts/ui_util.gd")
+const NewsBreak = preload("res://scripts/news_break.gd")
+const NewsScripts = preload("res://scripts/news_scripts.gd")
 const Soldier = preload("res://scripts/plastic_soldier.gd")
 const Fx = preload("res://scripts/fx.gd")
 
@@ -69,6 +71,7 @@ func _clear_diorama() -> void:
 # ---------------------------------------------------------------- menus ----
 
 func show_main_menu() -> void:
+    _cancel_news()
     _clear_level()
     get_tree().paused = false
     Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -107,7 +110,7 @@ func show_campaign() -> void:
     for i in LevelData.META.size():
         var m: Dictionary = LevelData.META[i]
         var locked: bool = i > Game.unlocked_level
-        var b := UI.button(("%d.  %s" % [i + 1, m["name"]]) + ("   [LOCKED]" if locked else ""), func(): show_briefing(i), 560)
+        var b := UI.button(("%d.  %s" % [i + 1, m["name"]]) + ("   [LOCKED]" if locked else ""), func(): _news(NewsScripts.intro(i), func(): show_briefing(i)), 560)
         b.disabled = locked
         vb.add_child(b)
     vb.add_child(UI.button("Back", show_main_menu, 560))
@@ -172,6 +175,11 @@ func show_settings() -> void:
             Game.set(prop, v)
             Game.apply_volumes())
         vb.add_child(vs)
+    var nb := CheckBox.new()
+    nb.text = "PNN news breaks between operations"
+    nb.button_pressed = Game.show_news
+    nb.toggled.connect(func(on): Game.show_news = on)
+    vb.add_child(nb)
     var inv := CheckBox.new()
     inv.text = "Invert mouse Y"
     inv.button_pressed = Game.invert_y
@@ -206,6 +214,7 @@ func show_controls() -> void:
 # ------------------------------------------------------------ gameplay ----
 
 func start_level(i: int) -> void:
+    _cancel_news()
     _clear_diorama()
     _clear_level()
     if ui:
@@ -220,12 +229,45 @@ func start_level(i: int) -> void:
     add_child(level)
 
 
+## Plays a PNN news break (unless turned off in Settings), then calls `then`.
+var news: CanvasLayer = null
+
+
+func _cancel_news() -> void:
+    if news != null and is_instance_valid(news):
+        news.done = true          # silently stop; don't run its follow-up
+        news.queue_free()
+    news = null
+
+
+func _news(d: Dictionary, then: Callable) -> void:
+    _cancel_news()
+    if not Game.show_news:
+        then.call()
+        return
+    news = NewsBreak.new()
+    news.play(d)
+    news.finished.connect(func():
+        news = null
+        then.call())
+    add_child(news)
+
+
 func _on_level_finished(success: bool, stats: Dictionary) -> void:
     var i: int = stats["level"]
     if success:
         Game.unlock(i + 1)
         Game.play_ui("ui_confirm", -2.0)
     get_tree().paused = true
+    Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+    if ui:
+        ui.queue_free()
+        ui = null
+    _news(NewsScripts.outro(i, success, stats), func(): _show_debrief(success, stats))
+
+
+func _show_debrief(success: bool, stats: Dictionary) -> void:
+    var i: int = stats["level"]
     Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
     var root := _new_ui(0.6)
     var vb := UI.centered_panel(root, 600)
@@ -261,7 +303,7 @@ func show_briefing_from_game(i: int) -> void:
     _clear_level()
     get_tree().paused = false
     _build_diorama()
-    show_briefing(i)
+    _news(NewsScripts.intro(i), func(): show_briefing(i))
 
 
 # -------------------------------------------------------------- diorama ----

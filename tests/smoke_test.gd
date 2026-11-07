@@ -14,6 +14,7 @@ func _ready() -> void:
     _audio_checks()
     var PS = load("res://scripts/plastic_soldier.gd")
     _check(PS.available(), "plastic soldier model loads")
+    await _news_tests()
     main.show_campaign()
     await _frames(5)
     main.show_settings()
@@ -88,6 +89,7 @@ func _play_level(i: int) -> void:
     p._call_drone()
     await _frames(240)
     _check(p.shots_fired > 0, "L%d weapons fired (%d shots)" % [i, p.shots_fired])
+    _one_gun_test(i, L, p)
     _invisible_wall_test(i, L)
     if i == 0:
         await _camera_wall_test(L, p)
@@ -279,7 +281,8 @@ func _enemy_vehicle_test(i: int, L, p) -> void:
             continue
         p.global_position = spot
         var hp0: float = p.health
-        await _frames(420)
+        v.hear(p.global_position)      # it would notice you anyway; this keeps the test fast
+        await _frames(540)
         _check(v.ai_alert > 0.0, "L%d tan %s spotted the player" % [i, v.kind])
         _check(v.ai_shots > shots0, "L%d tan %s opened fire (%d shots)%s" % [i, v.kind, v.ai_shots - shots0, "" if v.ai_shots > shots0 else " [alert=%.1f los=%s react=%.2f player_d=%.1f spot=%s]" % [v.ai_alert, v._ai_los, v._ai_react, v.global_position.distance_to(p.global_position), spot]])
         var drove: float = v.ai_travelled - travelled0
@@ -335,3 +338,78 @@ func _tan_near(L, pos: Vector3) -> String:
         if t.global_position.distance_to(pos) < 12.0:
             out.append("%s %.1fm" % [t.kind, t.global_position.distance_to(pos)])
     return str(out)
+
+
+
+## Every PNN script plays start to finish, fills its placeholders, and the
+## campaign flow goes menu -> news -> briefing.
+func _news_tests() -> void:
+    var NS = load("res://scripts/news_scripts.gd")
+    var NB = load("res://scripts/news_break.gd")
+    var stat_sets := [
+        {"time": 245.0, "kills": 31, "total": 34, "headshots": 9, "accuracy": 41.0, "level": 0},
+        {"time": 610.0, "kills": 12, "total": 30, "headshots": 1, "accuracy": 18.0, "level": 0},
+        {"time": 400.0, "kills": 25, "total": 30, "headshots": 2, "accuracy": 72.0, "level": 0},
+    ]
+    var scripts := []
+    for op in 3:
+        scripts.append(NS.intro(op))
+        for st in stat_sets:
+            scripts.append(NS.outro(op, true, st))
+        scripts.append(NS.outro(op, false, stat_sets[0]))
+    var unfilled := 0
+    var played := 0
+    for d in scripts:
+        for b in d["beats"]:
+            if "{" in b.get("line", "") or "{" in b.get("headline", ""):
+                unfilled += 1
+        var n = NB.new()
+        n.play(d)
+        var got := [false]
+        n.finished.connect(func(): got[0] = true)
+        add_child(n)
+        await _frames(2)
+        var guard := 0
+        while not got[0] and guard < 40:
+            n.skip_line()
+            await _frames(1)
+            guard += 1
+        if got[0]:
+            played += 1
+    _check(unfilled == 0, "PNN: all placeholders filled (%d unfilled)" % unfilled)
+    _check(played == scripts.size(), "PNN: %d/%d news breaks play to the end" % [played, scripts.size()])
+    # Menu -> Campaign -> Operation 1 shows the news, then the briefing.
+    main.show_campaign()
+    await _frames(2)
+    var btn: Button = null
+    for c in main.ui.find_children("*", "Button", true, false):
+        if c.text.begins_with("1."):
+            btn = c
+    btn.pressed.emit()
+    await _frames(3)
+    _check(main.news != null, "PNN: news break plays before Operation 1")
+    main.news._finish()
+    await _frames(3)
+    var deploy := false
+    for c in main.ui.find_children("*", "Button", true, false):
+        if c.text == "DEPLOY":
+            deploy = true
+    _check(deploy, "PNN: briefing appears after the news")
+
+
+
+## Regression: the soldier model used to show all six of its guns at once.
+func _one_gun_test(i: int, L, p) -> void:
+    var GUNS := ["AK", "RocketLauncher", "ShortCannon", "Shotgun", "SMG", "Sniper", "Sniper_2", "Pistol", "Knife_1", "Knife_2", "Shovel", "Revolver", "Revolver_Small", "GrenadeLauncher"]
+    var bad := []
+    for who in [p] + L.enemies:
+        var m = who.model
+        if m.get("rig") == null:
+            continue
+        var n := 0
+        for mi in m.rig.find_children("*", "MeshInstance3D", true, false):
+            if mi.is_visible_in_tree() and GUNS.has(String(mi.name)):
+                n += 1
+        if n != 1:
+            bad.append("%s:%d" % [who.name, n])
+    _check(bad.is_empty(), "L%d every soldier holds exactly one gun %s" % [i, str(bad.slice(0, 3)) if not bad.is_empty() else ""])

@@ -85,6 +85,18 @@ How they behave:
 
 **How to kill them:** tank armour shrugs off rifle fire, so use the AT4, frags, a drone strike or your own tank. Each one destroyed counts toward Tan forces and the "clear the table" objective.
 
+## PNN: the Plastic News Network
+
+Before and after each operation, the Plastic News Network breaks in with the headlines. It's parody news: silly for kids, with a dry grown-up undertone. Everything in it is made up: no real people, places or events.
+
+- **Chip Plasterson**, the anchor, "molded since 1962"
+- **Brenda Mold**, the co-anchor, unimpressed
+- **Gary**, the field reporter, who has sand in everything
+
+The after-action report reacts to how you played. Lots of headshots, spraying everywhere, a speed run and failing each get their own segment.
+
+Space or click skips ahead a line, and Esc skips the whole segment. You can turn news breaks off in Settings. The scripts live in `scripts/news_scripts.gd` if you want to write more.
+
 ## Campaign
 
 1. **Operation Dust Lid**: desert FOB, a mud-brick village and a fortified Tan compound with watchtower snipers. Destroy 3 radar jammers, then extract.

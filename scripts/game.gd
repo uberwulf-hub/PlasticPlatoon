@@ -9,6 +9,7 @@ const RATE := 22050
 
 var mouse_sensitivity := 0.0025
 var invert_y := false
+var show_news := true
 var difficulty := 1
 var unlocked_level := 0
 var current_level: Node = null
@@ -124,6 +125,7 @@ func save() -> void:
     cfg.set_value("settings", "mouse_sensitivity", mouse_sensitivity)
     cfg.set_value("settings", "invert_y", invert_y)
     cfg.set_value("settings", "difficulty", difficulty)
+    cfg.set_value("settings", "show_news", show_news)
     cfg.set_value("settings", "music_volume", music_volume)
     cfg.set_value("settings", "sfx_volume", sfx_volume)
     cfg.set_value("progress", "unlocked_level", unlocked_level)
@@ -137,6 +139,7 @@ func _load() -> void:
     mouse_sensitivity = cfg.get_value("settings", "mouse_sensitivity", mouse_sensitivity)
     invert_y = cfg.get_value("settings", "invert_y", invert_y)
     difficulty = clampi(cfg.get_value("settings", "difficulty", difficulty), 0, 2)
+    show_news = cfg.get_value("settings", "show_news", show_news)
     music_volume = cfg.get_value("settings", "music_volume", music_volume)
     sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
     unlocked_level = clampi(cfg.get_value("progress", "unlocked_level", 0), 0, LEVEL_COUNT - 1)
@@ -262,6 +265,8 @@ func _build_sfx() -> void:
     sfx["beep"] = _tones([1200.0, 0.0, 1200.0, 0.0, 1200.0], 0.09)
     sfx["fail"] = _tones([392.0, 330.0, 262.0], 0.2)
     sfx["engine"] = _engine_loop()
+    sfx["blip"] = _tones([540.0], 0.045)
+    sfx["news_sting"] = _tones([784.0, 988.0, 1175.0, 0.0, 1568.0], 0.09)
 
 
 func _to_wav(samples: PackedFloat32Array, gain: float) -> AudioStreamWAV:
