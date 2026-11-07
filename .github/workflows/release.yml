@@ -33,6 +33,21 @@ jobs:
           unzip -q -j Godot_v4.3-stable_export_templates.tpz templates/version.txt templates/windows_release_x86_64.exe templates/windows_debug_x86_64.exe -d $T
           rm Godot_v4.3-stable_export_templates.tpz
 
+      - name: Put our icon and version info into the Windows template
+        # Godot 4.3 needs the Windows-only rcedit to do this at export time, so
+        # patch the template itself (pure-JS resedit works on Linux); Godot then
+        # appends the game data to an exe that already has the right icon.
+        run: |
+          V="${{ inputs.version }}"; V="${V#v}"
+          while [ "$(echo "$V" | tr -cd . | wc -c)" -lt 3 ]; do V="$V.0"; done
+          T=~/.local/share/godot/export_templates/4.3.stable/windows_release_x86_64.exe
+          npx --yes resedit-cli@2 --in "$T" --out "$T.new" \
+            --icon GODOT_ICON,store/icon.ico \
+            --product-name "Plastic Platoon: Revenge 2026" --file-description "Plastic Platoon: Revenge 2026" \
+            --company-name "uberwulf-hub" --original-filename "PlasticPlatoon.exe" --internal-name "PlasticPlatoon" \
+            --product-version "$V" --file-version "$V"
+          mv "$T.new" "$T"
+
       - name: Import assets
         run: $GODOT --headless --editor --quit || true
 
