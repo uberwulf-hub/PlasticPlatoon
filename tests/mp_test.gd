@@ -78,6 +78,7 @@ func _run_host() -> void:
     await _at(2.5)
     _check(L.remotes.has(cid), "host sees the client's soldier")
     var start_pos: Vector3 = L.remotes[cid].global_position if L.remotes.has(cid) else Vector3.ZERO
+    var crate_id := _pickup_id(L, "armor")      # the map's crate, before any random drops
 
     await _at(4.5)
     if L.remotes.has(cid):
@@ -98,8 +99,7 @@ func _run_host() -> void:
 
     # t=12 client grabs the armor crate.
     await _at(14.5)
-    var armor_id := _pickup_id(L, "armor")
-    _check(armor_id == -1, "client's pickup was removed on the host")
+    _check(crate_id >= 0 and not L.pickups.has(crate_id), "client's pickup was removed on the host")
 
     # t=14 client takes the jeep (vehicle 1), drives t=16..18.
     await _at(16.0)
