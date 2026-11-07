@@ -8,6 +8,10 @@ const KINDS := {
     "jammer": {"name": "RADAR JAMMER", "hp": 260.0},
     "sam": {"name": "MOBILE SAM", "hp": 340.0},
     "booster": {"name": "SIGNAL BOOSTER", "hp": 380.0},
+    "radar": {"name": "RADAR DISH", "hp": 300.0},
+    "bunker": {"name": "TAN BUNKER", "hp": 420.0},
+    "fuel": {"name": "FUEL DEPOT", "hp": 200.0},
+    "antenna": {"name": "TV ANTENNA", "hp": 360.0},
 }
 
 var level: Node
@@ -45,6 +49,14 @@ func _ready() -> void:
             _build_sam()
         "booster":
             _build_booster()
+        "radar":
+            _build_radar()
+        "bunker":
+            _build_bunker()
+        "fuel":
+            _build_fuel()
+        "antenna":
+            _build_antenna()
         _:
             _build_jammer()
     label = Label3D.new()
@@ -65,6 +77,14 @@ func _label_height() -> float:
             return 8.5
         "sam":
             return 5.5
+        "radar":
+            return 10.5
+        "bunker":
+            return 4.5
+        "fuel":
+            return 5.0
+        "antenna":
+            return 13.0
     return 8.0
 
 
@@ -194,6 +214,55 @@ func _build_booster() -> void:
     # Tan Army sandbag nest around their prize.
     _box(Vector3(0, 0.45, -4.2), Vector3(5.0, 0.9, 1.0), tan)
     _box(Vector3(-4.6, 0.45, 0), Vector3(1.0, 0.9, 5.0), tan)
+
+
+func _build_radar() -> void:
+    var white := _mat(Color(0.88, 0.88, 0.85))
+    var tan := _mat(Color(0.74, 0.63, 0.42))
+    var dark := _mat(Color(0.25, 0.25, 0.22))
+    _box(Vector3(0, 1.2, 0), Vector3(4.0, 2.4, 4.0), tan)
+    _cyl(Vector3(0, 3.6, 0), 0.5, 2.4, dark)
+    var dish := _cyl(Vector3(0, 6.6, -0.4), 3.0, 0.3, white, true, Vector3(deg_to_rad(55), 0, 0))
+    dish.name = "Dish"
+    _cyl(Vector3(0, 7.4, -1.6), 0.08, 2.4, dark, false, Vector3(deg_to_rad(55), 0, 0))
+    _light_bulb(Vector3(0, 9.2, 0), Color(1.0, 0.1, 0.05))
+
+
+func _build_bunker() -> void:
+    var concrete := _mat(Color(0.66, 0.6, 0.48))
+    var dark := _mat(Color(0.12, 0.11, 0.1))
+    _box(Vector3(0, 1.4, 0), Vector3(6.5, 2.8, 5.0), concrete)
+    _box(Vector3(0, 2.95, 0), Vector3(7.1, 0.3, 5.6), concrete)
+    _box(Vector3(0, 1.9, 2.52), Vector3(4.0, 0.5, 0.06), dark, false)       # gun slit
+    _cyl(Vector3(1.0, 1.9, 3.0), 0.09, 1.2, dark, false, Vector3(PI / 2, 0, 0))
+    _light_bulb(Vector3(-2.6, 3.3, 2.0), Color(1.0, 0.1, 0.05))
+
+
+func _build_fuel() -> void:
+    var tank := _mat(Color(0.72, 0.6, 0.36))
+    var red := _mat(Color(0.75, 0.12, 0.08))
+    var dark := _mat(Color(0.2, 0.2, 0.2))
+    for x in [-1.6, 1.6]:
+        _cyl(Vector3(x, 1.6, 0), 1.4, 3.2, tank)
+        _cyl(Vector3(x, 2.4, 0), 1.42, 0.35, red, false)
+        _cyl(Vector3(x, 3.3, 0), 0.25, 0.2, dark, false)
+    _cyl(Vector3(0, 0.6, 0), 0.15, 3.2, dark, false, Vector3(0, 0, PI / 2))
+    _light_bulb(Vector3(0, 3.6, 0), Color(1.0, 0.5, 0.05))
+
+
+func _build_antenna() -> void:
+    var metal := _mat(Color(0.7, 0.7, 0.72))
+    var tan := _mat(Color(0.74, 0.63, 0.42))
+    _box(Vector3(0, 0.6, 0), Vector3(3.5, 1.2, 3.5), tan)
+    _cyl(Vector3(0, 6.0, 0), 0.18, 10.0, metal)
+    for i in 4:
+        var y := 7.0 + i * 1.3
+        var w := 5.0 - i * 0.9
+        _cyl(Vector3(0, y, 0), 0.07, w, metal, false, Vector3(0, 0, PI / 2))
+    # rabbit ears
+    _cyl(Vector3(-1.0, 12.2, 0), 0.06, 3.0, metal, false, Vector3(0, 0, deg_to_rad(35)))
+    _cyl(Vector3(1.0, 12.2, 0), 0.06, 3.0, metal, false, Vector3(0, 0, deg_to_rad(-35)))
+    _light_bulb(Vector3(0, 11.2, 0), Color(1.0, 0.1, 0.05))
 
 
 # --------------------------------------------------------------- damage ----

@@ -132,6 +132,18 @@ The anchors **read their lines aloud** using the speech voices built into Window
 1. **Operation Dust Lid**: desert FOB, a mud-brick village and a fortified Tan compound with watchtower snipers. Destroy 3 radar jammers, then extract.
 2. **Operation Concrete Jungle**: a city grid with rooftop snipers and checkpoints. Eliminate Colonel Khaki, destroy 2 mobile SAMs, then extract.
 3. **Operation Tabletop**: a giant kitchen table covered with a laptop, smartphone, energy drinks and a game controller. Destroy 3 Wi-Fi signal boosters, then clear the table.
+4. **Operation Snow Globe**: an arctic radar station in falling snow, with a frozen lake and pine forest. Destroy 3 radar dishes, then extract. A new Tan commander, General Beige, is behind it.
+5. **Operation Green Hell**: a jungle river and a stepped stone temple. Free 4 Green POWs from bamboo cages, then extract.
+6. **Operation Bath Time**: the upstairs bathroom, with a porcelain-cliff bathtub, giant rubber ducks and a shampoo-bottle sniper perch. Blow 3 fuel depots and sink Admiral Ecru.
+7. **Operation Beachhead**: storm a beach past steel hedgehogs. Knock out 4 dune bunkers, then take out Major Fawn in the village.
+8. **Operation Sandbox**: the backyard, with a sand-castle fort, a garden hose, a gnome and a doghouse. Recover 3 pieces of intel, then extract.
+9. **Operation Night Shift**: a container port at night under floodlights and crane-top snipers. Blow 3 fuel depots, then extract.
+10. **Operation Bunk Bed**: a kid's bedroom. Reach the toy fort on the rug, hold it for 75 seconds against waves from under the bed, then clear the room.
+11. **Operation Mountain Pass**: a snowy canyon with snipers on rock pillars and a bridge over a frozen river. Destroy 2 SAM sites and take out Brigadier Biscuit.
+12. **Operation Garage Sale**: a garage with a parked SUV, a workbench and shelves you can climb by ramp. Destroy the gas-can depots, then find 3 pieces of the map.
+13. **Operation Beige Dawn**: the living room. General Beige has turned the couch into a fortress and is broadcasting his plan through TV antennas. Destroy them, defeat the General, then extract.
+
+Each operation gets its own PNN news break before and after, telling the story from the kitchen table to the couch.
 
 Finishing an operation unlocks the next one. There are three difficulty levels (Recruit, Regular and Veteran), which change enemy damage, accuracy and reaction time.
 
@@ -144,7 +156,7 @@ scripts/
   game.gd                Autoload: input map, settings/save, difficulty, synthesized SFX
   main.gd                Title diorama, menus, briefing, debrief
   level.gd               Level runtime: builder API, objectives, pause, explosions
-  level_data.gd          The three maps + briefing text  <- add new maps here
+  level_data.gd          The 13 maps + briefing text  <- add new maps here
   plastic_soldier.gd     CC0 animated soldier recolored to green/tan plastic
   barrel.gd              Explosive barrels (chain reactions)
   player.gd              Third-person controller, weapons, grenades, drone
@@ -165,7 +177,17 @@ tests/
 
 ### Adding a map
 
-Add an entry to `META` in `level_data.gd`, write a `static func _yourmap(L) -> Dictionary` that uses the helpers (`L.prop` for any model in `assets/packs`, `L.box`, `L.cyl`, `L.wall`, `L.add_enemy`, `L.add_target`, `L.add_pickup`, `L.add_barrel`, …), and route to it from `build()`. Objective types are `destroy`, `kill_hvt`, `kill_all` and `extract`.
+Add an entry to `META` in `level_data.gd`, write a `static func _yourmap(L) -> Dictionary` that uses the helpers (`L.prop` for any model in `assets/packs`, `L.box`, `L.cyl`, `L.wall`, `L.add_enemy`, `L.add_target`, `L.add_pickup`, `L.add_barrel`, …), and route to it from `build()`. The objective types are:
+
+- `destroy`: tag
+- `kill_hvt`
+- `kill_all`
+- `extract`: pos
+- `reach`: pos, radius
+- `collect`: kind `intel` or `pow`; add the items with `L.add_pickup`
+- `defend`: pos, radius, time; troops placed with `L.add_reserve` attack the point when it starts
+
+For night or indoor maps, `L.lamp(pos, color, range)` adds lights and `L.water(pos, size)` adds puddles you can wade through. Set `"snow": true` in a map's settings for falling snow.
 
 ### Tests
 
@@ -176,6 +198,8 @@ godot --headless --path . res://tests/smoke_test.tscn
 ```
 
 It plays through every operation (spawning, firing, grenades, drone strikes, AI engagement, objectives, extraction, pause/restart and death) and exits non-zero on failure.
+
+`tests/campaign_test.tscn` builds all 13 operations, checks that no soldier, pickup or player spawns inside the scenery, plays every objective chain to MISSION ACCOMPLISHED, and plays every PNN segment. To check a single map, pass its range, for example `-- 9 9`. `tests/mp_test.tscn` is the two-process LAN co-op test.
 
 ## Ideas for next steps
 

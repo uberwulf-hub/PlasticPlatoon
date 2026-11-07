@@ -54,6 +54,9 @@ jobs:
       - name: Smoke test (plays through every operation)
         run: $GODOT --headless --path . res://tests/smoke_test.tscn
 
+      - name: Campaign test (all 13 operations, objectives + news)
+        run: $GODOT --headless --path . res://tests/campaign_test.tscn
+
       - name: Export Windows build
         run: |
           mkdir -p build/windows

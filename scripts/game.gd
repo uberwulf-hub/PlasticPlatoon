@@ -3,7 +3,7 @@ extends Node
 ## difficulty helpers and procedurally synthesized sound effects.
 
 const SAVE_PATH := "user://plastic_platoon.cfg"
-const LEVEL_COUNT := 3
+const LEVEL_COUNT := 13
 const DIFFICULTY_NAMES := ["Recruit", "Regular", "Veteran"]
 const RATE := 22050
 

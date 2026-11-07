@@ -22,9 +22,21 @@ const GARY_TITLES := {
     "desert": "Field Reporter. Has sand in everything.",
     "city": "Field Reporter. Lost on Khaki Street.",
     "table": "Field Reporter. Heart rate: concerning.",
+    "snow": "Field Reporter. Hand frozen to microphone.",
+    "jungle": "Field Reporter. Clipboard is soup.",
+    "bath": "Field Reporter. Being watched by a duck.",
+    "beach": "Field Reporter. Not on vacation.",
+    "yard": "Field Reporter. Suspicious of gnome.",
+    "port": "Field Reporter. Best friends with a forklift.",
+    "bedroom": "Field Reporter. Stepped on a Lego.",
+    "mountain": "Field Reporter. Wearing three coats.",
+    "garage": "Field Reporter. Microphone: a banana.",
+    "couch": "Field Reporter. Has never been so scared.",
 }
 const VOICE := {"chip": 0.75, "brenda": 1.3, "gary": 1.05, "both": 1.0}
-const SCREEN_TEXT := {"desert": "JAMMED?!", "city": "KHAKI ST.", "table": "WI-FI?!"}
+const SCREEN_TEXT := {"desert": "JAMMED?!", "city": "KHAKI ST.", "table": "WI-FI?!", "snow": "BRRR!", "jungle": "POWS!",
+    "bath": "DUCK?!", "beach": "SURF'S UP", "yard": "GNOME?!", "port": "NIGHT OPS", "bedroom": "BEDTIME!",
+    "mountain": "BISCUIT?", "garage": "25 CENTS", "couch": "BEIGE?!"}
 
 var data: Dictionary
 var beats: Array = []
@@ -170,6 +182,60 @@ func _build_world() -> void:
             _box(o + Vector3(3, 7, -9), Vector3(7, 14, 4), Color(0.55, 0.38, 0.32))
             _box(o + Vector3(-2.5, 0.7, -3.5), Vector3(4.2, 1.2, 2.0), Color(0.75, 0.62, 0.4))   # parked tan jeep-ish
             _box(o + Vector3(0, 0.02, -1.5), Vector3(0.3, 0.02, 3.0), Color(0.85, 0.75, 0.2))
+        "snow", "mountain":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.9, 0.92, 0.96))
+            _box(o + Vector3(-5, 4, -9), Vector3(8, 8, 4), Color(0.45, 0.47, 0.52))
+            _box(o + Vector3(-5, 8.2, -9), Vector3(8.4, 0.5, 4.4), Color(0.95, 0.96, 1.0))
+            _cyl(o + Vector3(4.0, 2.5, -6.0), 1.2, 5.0, Color(0.2, 0.35, 0.25))
+            _cyl(o + Vector3(-1.5, 3.0, -5.0), 0.12, 6.0, Color(0.3, 0.3, 0.3))
+            _cyl(o + Vector3(-1.5, 6.0, -5.3), 1.6, 0.2, Color(0.85, 0.85, 0.82))      # radar dish
+        "jungle":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.24, 0.36, 0.18))
+            _box(o + Vector3(0, 0.0, -4.0), Vector3(30, 0.05, 3.0), Color(0.25, 0.4, 0.3))   # river
+            _cyl(o + Vector3(-5.0, 3.0, -7.0), 0.3, 6.0, Color(0.4, 0.3, 0.2))
+            _box(o + Vector3(-5.0, 6.0, -7.0), Vector3(4.0, 0.1, 1.0), Color(0.2, 0.45, 0.15))
+            _box(o + Vector3(4.0, 1.5, -8.0), Vector3(6.0, 3.0, 4.0), Color(0.55, 0.55, 0.48))  # temple step
+            _box(o + Vector3(4.0, 3.5, -8.5), Vector3(4.0, 1.5, 3.0), Color(0.5, 0.5, 0.44))
+        "bath":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.88, 0.9, 0.92))
+            _box(o + Vector3(0, 3.0, -9.0), Vector3(20, 6, 4), Color(0.97, 0.97, 0.95))       # tub
+            _cyl(o + Vector3(-3.0, 0.9, -4.5), 1.0, 1.8, Color(1.0, 0.85, 0.1))             # duck
+            _cyl(o + Vector3(-2.6, 2.2, -4.5), 0.6, 0.9, Color(1.0, 0.85, 0.1))
+            _cyl(o + Vector3(4.0, 1.5, -5.0), 0.8, 3.0, Color(0.2, 0.55, 0.85))             # shampoo
+        "beach":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.86, 0.78, 0.58))
+            _box(o + Vector3(0, 0.0, -10.0), Vector3(30, 0.05, 8.0), Color(0.3, 0.6, 0.7))  # surf
+            _box(o + Vector3(3.5, 1.2, -5.0), Vector3(4.0, 2.4, 3.0), Color(0.62, 0.6, 0.55))  # bunker
+            _cyl(o + Vector3(-5.0, 3.0, -6.0), 0.25, 6.0, Color(0.45, 0.35, 0.22))
+            _box(o + Vector3(-5.0, 6.1, -6.0), Vector3(3.5, 0.1, 0.8), Color(0.3, 0.5, 0.2))
+        "yard":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.3, 0.52, 0.2))
+            _box(o + Vector3(0, 6.0, -12.0), Vector3(30, 12, 0.5), Color(0.8, 0.72, 0.6))     # fence
+            _cyl(o + Vector3(-4.0, 1.5, -5.0), 1.2, 3.0, Color(0.2, 0.3, 0.75))             # gnome
+            _cyl(o + Vector3(-4.0, 3.8, -5.0), 0.1, 2.0, Color(0.85, 0.15, 0.15))
+            _box(o + Vector3(4.0, 0.6, -5.0), Vector3(7.0, 1.2, 4.0), Color(0.9, 0.8, 0.55))  # sandbox
+        "port":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.25, 0.25, 0.28))
+            _box(o + Vector3(-4.0, 1.3, -6.0), Vector3(6.1, 2.6, 2.5), Color(0.6, 0.2, 0.15))
+            _box(o + Vector3(-4.0, 3.9, -6.0), Vector3(6.1, 2.6, 2.5), Color(0.15, 0.35, 0.55))
+            _box(o + Vector3(4.0, 1.3, -7.0), Vector3(6.1, 2.6, 2.5), Color(0.2, 0.45, 0.25))
+            _box(o + Vector3(2.0, 8.0, -10.0), Vector3(0.6, 16, 0.6), Color(0.85, 0.55, 0.1))
+        "bedroom":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.35, 0.45, 0.7))
+            _box(o + Vector3(-4.0, 1.0, -6.0), Vector3(2, 2, 2), Color(0.9, 0.2, 0.2))       # toy block
+            _box(o + Vector3(-2.5, 0.75, -4.5), Vector3(1.5, 1.5, 1.5), Color(0.2, 0.5, 0.9))
+            _box(o + Vector3(4.0, 1.0, -7.0), Vector3(6, 2, 0.5), Color(0.55, 0.4, 0.25))     # fort wall
+            _box(o + Vector3(0, 8.0, -12.0), Vector3(30, 16, 0.5), Color(0.85, 0.82, 0.6))
+        "garage":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.55, 0.55, 0.55))
+            _box(o + Vector3(-4.0, 1.5, -6.0), Vector3(3, 3, 3), Color(0.7, 0.55, 0.35))     # cardboard
+            _box(o + Vector3(4.0, 2.5, -8.0), Vector3(4, 5, 2), Color(0.8, 0.12, 0.1))       # tool chest
+            _box(o + Vector3(0, 8.0, -12.0), Vector3(30, 16, 0.5), Color(0.75, 0.72, 0.66))
+        "couch":
+            _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.55, 0.38, 0.24))
+            _box(o + Vector3(0, 2.0, -9.0), Vector3(16, 4, 5), Color(0.8, 0.72, 0.58))       # couch
+            _box(o + Vector3(0, 5.5, -11.0), Vector3(16, 5, 1.5), Color(0.76, 0.68, 0.55))
+            _box(o + Vector3(6.0, 4.0, -5.0), Vector3(0.4, 5, 7), Color(0.05, 0.05, 0.06))   # TV
         "table":
             _box(o + Vector3(0, -0.1, 0), Vector3(30, 0.2, 30), Color(0.56, 0.37, 0.22), 0.45)
             _cyl(o + Vector3(-3.0, 5.0, -5.0), 2.2, 10.0, Color(0.2, 0.85, 0.3))

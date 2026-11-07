@@ -543,6 +543,8 @@ func give_pickup(kind: String) -> bool:
             if drones >= MAX_DRONES:
                 return false
             drones += 1
+        "intel", "pow":
+            pass            # mission items: always taken
         _:
             if not Weapons.DATA.has(kind):
                 return false

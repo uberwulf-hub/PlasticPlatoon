@@ -8,6 +8,7 @@ var finished_result = null
 
 
 func _ready() -> void:
+    Game.show_news = true          # other tests may have saved it off
     main = load("res://scenes/main.tscn").instantiate()
     add_child(main)
     await _frames(30)

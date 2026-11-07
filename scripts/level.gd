@@ -46,7 +46,10 @@ var safe_center := Vector3.ZERO
 var safe_radius := 0.0
 var _respawn_t := 0.0
 var hvts: Array = []
+var reserves: Array = []       # Tan troops held back until a "defend" objective starts
 var targets_by_tag := {}
+var _obj_start := 0.0          # elapsed time when the current objective began
+var _rally_t := 0.0
 var extraction: Node3D
 var elapsed := 0.0
 var kills := 0
@@ -79,6 +82,8 @@ func _ready() -> void:
     player.drones = info.get("drones", 1)
     add_child(player)
     player.died.connect(_on_player_died)
+    if info.get("snow", false):
+        _add_snowfall()
     hud = HUD.new()
     add_child(hud)
     hud.bind(player, self)
@@ -626,6 +631,47 @@ func add_enemy(pos: Vector3, type := "rifleman", hvt := false) -> Node:
     return e
 
 
+## A Tan soldier who waits out of the fight until a "defend" objective sends
+## every reserve at the defended point.
+func add_reserve(pos: Vector3, type := "rifleman") -> Node:
+    var e = add_enemy(pos, type)
+    reserves.append(e)
+    return e
+
+
+## A point light (lamps at night, glowing toys indoors).
+func lamp(pos: Vector3, color: Color, rng := 14.0, energy := 2.0, bulb := true) -> OmniLight3D:
+    var l := OmniLight3D.new()
+    l.position = pos
+    l.light_color = color
+    l.light_energy = energy
+    l.omni_range = rng
+    l.shadow_enabled = false
+    add_child(l)
+    if bulb:
+        sphere(pos, 0.25, color, Vector3.ONE, glow_mat(color, 3.0))
+    return l
+
+
+## Shallow water / puddles: a glossy plane you can wade through.
+func water(pos: Vector3, size: Vector2, color := Color(0.18, 0.4, 0.55, 0.8)) -> void:
+    var m := StandardMaterial3D.new()
+    m.albedo_color = color
+    m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    m.roughness = 0.05
+    m.metallic = 0.3
+    box(pos, Vector3(size.x, 0.04, size.y), color, 0.0, false, m)
+
+
+func pickups_of(kind: String) -> int:
+    var n := 0
+    for id in pickups:
+        var pk = pickups[id]
+        if is_instance_valid(pk) and not pk.is_queued_for_deletion() and pk.kind == kind:
+            n += 1
+    return n
+
+
 func add_target(pos: Vector3, kind: String, tag: String, rot_y := 0.0) -> Node:
     var t = Target.new()
     t.setup(self, kind, tag, pos, rot_y)
@@ -814,8 +860,14 @@ func _begin_objective(i: int) -> void:
         _complete()
         return
     var o: Dictionary = objectives[i]
+    _obj_start = elapsed
+    _rally_t = 0.0
     if o["type"] == "extract":
         extraction = add_helipad(o["pos"])
+    if o["type"] == "collect" and not o.has("total"):
+        o["total"] = maxi(1, pickups_of(o["kind"]))
+    if o["type"] == "defend" or o["type"] == "reach":
+        _build_defend_marker(o["pos"], o.get("radius", 12.0))
     if i > 0:
         notify("NEW OBJECTIVE: " + o["text"], 3.5)
         Game.play_ui("radio", -6.0)
@@ -848,6 +900,21 @@ func _process(delta: float) -> void:
             for t in ai_targets():
                 if t.global_position.distance_to(o["pos"]) < 5.5:
                     done = true
+        "collect":
+            done = pickups_of(o["kind"]) == 0
+        "reach":
+            for t in ai_targets():
+                if t.global_position.distance_to(o["pos"]) < o.get("radius", 6.0):
+                    done = true
+        "defend":
+            _rally_t -= delta
+            if _rally_t <= 0.0:
+                _rally_t = 3.0
+                for e in reserves:
+                    if is_instance_valid(e) and e.alive:
+                        e.home = o["pos"]
+                        e.hear(o["pos"] + Vector3(randf_range(-4, 4), 0, randf_range(-4, 4)))
+            done = elapsed - _obj_start >= o["time"]
     if done:
         Game.play_ui("objective")
         _begin_objective(obj_index + 1)
@@ -863,6 +930,11 @@ func get_objective_text() -> String:
             return "%s  (%d/%d)" % [o["text"], arr.size() - _alive_count(arr), arr.size()]
         "kill_all":
             return "%s  (%d left)" % [o["text"], enemies_alive()]
+        "collect":
+            var total: int = o.get("total", 1)
+            return "%s  (%d/%d)" % [o["text"], total - pickups_of(o["kind"]), total]
+        "defend":
+            return "%s  (%d s)" % [o["text"], int(ceil(maxf(0.0, o["time"] - (elapsed - _obj_start))))]
     return o["text"]
 
 
@@ -880,8 +952,21 @@ func get_objective_point() -> Variant:
             if enemies_alive() > 6:
                 return null
             candidates = enemies + enemy_vehicles
-        "extract":
+        "extract", "defend", "reach":
             return o["pos"] + Vector3(0, 1.0, 0)
+        "collect":
+            for id in pickups:
+                var pk = pickups[id]
+                if is_instance_valid(pk) and pk.kind == o["kind"]:
+                    candidates.append(pk)
+            var best_p = null
+            var bd := INF
+            for c in candidates:
+                var d: float = c.global_position.distance_to(player.global_position)
+                if d < bd:
+                    bd = d
+                    best_p = c.global_position + Vector3(0, 1.6, 0)
+            return best_p
     var best = null
     var best_d := INF
     for c in candidates:
@@ -891,6 +976,45 @@ func get_objective_point() -> Variant:
                 best_d = d
                 best = c.global_position + Vector3(0, 2.2, 0)
     return best
+
+
+func _add_snowfall() -> void:
+    var p := CPUParticles3D.new()
+    p.amount = 900
+    p.lifetime = 6.0
+    p.preprocess = 6.0
+    p.local_coords = false
+    p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+    p.emission_box_extents = Vector3(35, 1, 35)
+    p.position = Vector3(0, 16, 0)
+    p.direction = Vector3(0.2, -1, 0.1)
+    p.spread = 15.0
+    p.gravity = Vector3(0.4, -1.2, 0)
+    p.initial_velocity_min = 2.0
+    p.initial_velocity_max = 3.5
+    var qm := QuadMesh.new()
+    qm.size = Vector2(0.09, 0.09)
+    var m := StandardMaterial3D.new()
+    m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+    m.albedo_color = Color(1, 1, 1, 0.9)
+    m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    qm.material = m
+    p.mesh = qm
+    player.add_child(p)
+
+
+func _build_defend_marker(pos: Vector3, radius: float) -> void:
+    var ring := MeshInstance3D.new()
+    var tm := TorusMesh.new()
+    tm.inner_radius = radius - 0.25
+    tm.outer_radius = radius
+    tm.rings = 48
+    ring.mesh = tm
+    ring.material_override = Fx.unlit(Color(0.35, 1.0, 0.45, 0.5))
+    ring.position = pos + Vector3(0, 0.1, 0)
+    ring.scale = Vector3(1, 0.1, 1)
+    add_child(ring)
 
 
 func _stats() -> Dictionary:

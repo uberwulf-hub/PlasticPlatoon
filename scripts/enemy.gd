@@ -21,6 +21,8 @@ const TYPES := {
         "sight": 95.0, "speed": 0.0, "spread": 0.9, "model": "sniper", "kind": "hitscan", "sound": "sniper"},
     "officer": {"hp": 320.0, "damage": 8.0, "interval": 0.12, "burst": 4, "pause": 1.1, "range": 60.0,
         "sight": 50.0, "speed": 3.2, "spread": 2.5, "model": "rifle", "kind": "hitscan", "sound": "enemy_rifle"},
+    "general": {"hp": 900.0, "damage": 6.0, "interval": 0.08, "burst": 10, "pause": 1.4, "range": 60.0,
+        "sight": 55.0, "speed": 2.4, "spread": 3.5, "model": "lmg", "kind": "hitscan", "sound": "lmg"},
 }
 
 enum { PATROL, INVESTIGATE, COMBAT }
@@ -83,7 +85,7 @@ func _ready() -> void:
     add_child(model)
     model.build(OFFICER_TAN if is_hvt else TAN, s["model"])
     if is_hvt:
-        model.scale = Vector3.ONE * 1.12
+        model.scale = Vector3.ONE * (1.4 if type == "general" else 1.12)
         var cap_mi := MeshInstance3D.new()
         var cm := CylinderMesh.new()
         cm.top_radius = 0.22

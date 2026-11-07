@@ -122,16 +122,23 @@ func show_main_menu() -> void:
 
 func show_campaign() -> void:
     var root := _new_ui(0.4)
-    var vb := UI.centered_panel(root, 640)
+    var vb := UI.centered_panel(root, 900)
     vb.add_child(UI.label("CAMPAIGN", 40, UI.ACCENT))
-    vb.add_child(UI.label("Select an operation", 18))
+    vb.add_child(UI.label("Select an operation  -  %d / %d unlocked" % [mini(Game.unlocked_level + 1, LevelData.META.size()), LevelData.META.size()], 18))
+    var grid := GridContainer.new()
+    grid.columns = 2
+    grid.add_theme_constant_override("h_separation", 12)
+    grid.add_theme_constant_override("v_separation", 6)
     for i in LevelData.META.size():
         var m: Dictionary = LevelData.META[i]
         var locked: bool = i > Game.unlocked_level
-        var b := UI.button(("%d.  %s" % [i + 1, m["name"]]) + ("   [LOCKED]" if locked else ""), func(): _news(NewsScripts.intro(i), func(): show_briefing(i)), 560)
+        var title: String = m["name"].trim_prefix("Operation ")
+        var b := UI.button(("%d.  %s" % [i + 1, title]) + ("   [LOCKED]" if locked else ""), func(): _news(NewsScripts.intro(i), func(): show_briefing(i)), 420)
         b.disabled = locked
-        vb.add_child(b)
-    vb.add_child(UI.button("Back", show_main_menu, 560))
+        b.tooltip_text = m["location"]
+        grid.add_child(b)
+    vb.add_child(grid)
+    vb.add_child(UI.button("Back", show_main_menu, 420))
 
 
 func show_briefing(i: int) -> void:
@@ -302,7 +309,7 @@ func _show_debrief(success: bool, stats: Dictionary) -> void:
     if success:
         vb.add_child(UI.label("MISSION ACCOMPLISHED", 40, UI.ACCENT))
         if last:
-            vb.add_child(UI.label("The table is ours. The Tan Army is a puddle.\nCampaign complete - thanks for playing!", 19))
+            vb.add_child(UI.label("General Beige is a puddle. The house keeps its colours.\nCampaign complete - thanks for playing!", 19))
     else:
         vb.add_child(UI.label("MISSION FAILED", 40, Color(0.95, 0.35, 0.25)))
         vb.add_child(UI.label("You were melted down. Regroup and try again.", 19))
