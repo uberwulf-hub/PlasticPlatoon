@@ -9,6 +9,7 @@ var finished_result = null
 
 func _ready() -> void:
     Game.show_news = true          # other tests may have saved it off
+    Game.squad_size = 0            # the AI squad has its own test (squad_test)
     main = load("res://scenes/main.tscn").instantiate()
     add_child(main)
     await _frames(30)

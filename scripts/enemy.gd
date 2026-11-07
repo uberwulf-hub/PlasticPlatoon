@@ -109,7 +109,7 @@ func _ready() -> void:
 func _player():
     if level == null:
         return null
-    var p = level.nearest_ai_target(global_position) if level.net != null else level.player
+    var p = level.nearest_ai_target(global_position)
     if p == null or not is_instance_valid(p) or not p.alive:
         return null
     if level.is_protected(p.vehicle if p.vehicle != null else p):
@@ -336,7 +336,7 @@ func _shoot(p) -> void:
     if not hit.is_empty():
         end = hit["position"]
         var col = hit["collider"]
-        var is_player_side: bool = col != null and (col.is_in_group("player") or (col.is_in_group("vehicles") and not col.ai))
+        var is_player_side: bool = col != null and (col.is_in_group("player") or col.is_in_group("squad") or (col.is_in_group("vehicles") and not col.ai))
         if is_player_side:
             col.take_damage(s["damage"] * Game.enemy_damage_mult(), global_position, end, false)
         else:

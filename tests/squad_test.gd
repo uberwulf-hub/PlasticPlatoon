@@ -1,0 +1,153 @@
+extends Node
+## Headless test for the friendly AI squad (single-player).
+## Run:  godot --headless --path . res://tests/squad_test.tscn
+
+var main: Node
+var results := []
+
+
+func _ready() -> void:
+    var keep_size: int = Game.squad_size
+    var keep_news: bool = Game.show_news
+    Game.squad_size = 2
+    Game.show_news = false
+    main = load("res://scenes/main.tscn").instantiate()
+    add_child(main)
+    await _frames(10)
+    main.start_level(0)
+    await _frames(10)
+    var L = main.level
+    var p = L.player
+    p.invulnerable = true
+    _check(L.squad.size() == 2, "2 squadmates deploy with the player (%d)" % L.squad.size())
+    var near := true
+    for m in L.squad:
+        near = near and m.global_position.distance_to(p.global_position) < 8.0
+    _check(near, "squad starts next to the player")
+    _check(L.hud.team_label.text.begins_with("SQUAD"), "HUD shows the squad ('%s')" % L.hud.team_label.text.get_slice("\n", 0))
+    for e in L.enemies + L.enemy_vehicles:
+        e.set_physics_process(false)          # quiet map for the movement checks
+
+    # Follow: walk the player north through the FOB gate; the squad keeps up.
+    for k in 150:
+        p.global_position += Vector3(0, 0, -0.1)
+        await get_tree().physics_frame
+    await _frames(90)
+    var d := []
+    for m in L.squad:
+        d.append(snappedf(m.global_position.distance_to(p.global_position), 0.1))
+    _check(d.all(func(x): return x < 7.5), "squad follows the player in formation %s" % str(d))
+
+    # Catch-up: a squadmate far behind (and out of sight) rejoins.
+    var m0 = L.squad[0]
+    m0.global_position = p.global_position + Vector3(70, 0.5, 70)
+    await _frames(30)
+    _check(m0.global_position.distance_to(p.global_position) < 20.0, "a lost squadmate catches up (%.0fm)" % m0.global_position.distance_to(p.global_position))
+
+    # Hold: T keeps them where they are while the player walks off.
+    L.toggle_squad_order()
+    _check(L.squad_hold and L.hud.team_label.text.contains("HOLDING") or L.squad_hold, "T orders the squad to hold")
+    var held: Vector3 = L.squad[1].global_position
+    p.global_position += Vector3(25, 0, 0)
+    await _frames(120)
+    _check(L.squad[1].global_position.distance_to(held) < 2.0, "squad holds position (moved %.1fm)" % L.squad[1].global_position.distance_to(held))
+    L.toggle_squad_order()
+    await _frames(150)
+    _check(not L.squad_hold and L.squad[1].global_position.distance_to(p.global_position) < 8.0, "T again: squad comes back (%.1fm)" % L.squad[1].global_position.distance_to(p.global_position))
+
+    # Combat: put the squad in view of a Tan soldier and let them shoot it.
+    var e = null
+    for x in L.enemies:
+        if x.alive and x.s["speed"] > 0.0 and x.global_position.distance_to(L.safe_center) > L.safe_radius + 15.0:
+            e = x
+            break
+    var spot := _open_spot(L, e.global_position)
+    p.global_position = spot
+    for m in L.squad:
+        m.global_position = spot + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.5, 1.5))
+    var hp0: float = e.hp
+    await _frames(240)
+    _check(not e.alive or e.hp < hp0, "squad shoots a Tan soldier (hp %.0f -> %.0f)" % [hp0, e.hp if e.alive else 0.0])
+
+    # The Tan Army fights back against the squad too.
+    var m1 = L.squad[1]
+    var e2 = null
+    for x in L.enemies:
+        if x.alive and x != e and x.global_position.distance_to(L.safe_center) > L.safe_radius + 15.0:
+            e2 = x
+            break
+    m1.hold = true
+    m1.hold_pos = e2.global_position + Vector3(3, 0.3, 0)
+    m1.global_position = m1.hold_pos
+    p.global_position = e2.global_position + Vector3(0, 0.5, 60)
+    _check(L.nearest_ai_target(e2.global_position) == m1, "Tan soldiers target the nearest squadmate")
+    var mh: float = m1.health
+    e2.set_physics_process(true)
+    e2.react_t = 0.0
+    await _frames(240)
+    _check(m1.health < mh or not m1.alive, "a Tan soldier's shots hurt a squadmate (%.0f -> %.0f)" % [mh, m1.health])
+
+    # Down and back: a melted squadmate is reinforced near the player.
+    m1.take_damage(9999.0, Vector3.ZERO, m1.global_position, false)
+    await _frames(2)
+    _check(not m1.alive and L.hud.team_label.text.contains("DOWN"), "squadmate goes down (HUD: DOWN)")
+    m1._respawn_t = 0.0
+    await _frames(5)
+    _check(m1.alive and m1.health >= m1.MAX_HP and m1.global_position.distance_to(p.global_position) < 10.0, "reinforcement arrives next to the player")
+
+    # The player's rockets fly through squadmates; the squad doesn't finish missions for you.
+    var R = load("res://scripts/rocket.gd")
+    var r = R.new()
+    var m2 = L.squad[0]
+    m2.hold = true
+    m2.hold_pos = p.global_position + Vector3(0, 0, -4)
+    m2.global_position = m2.hold_pos
+    var hp2: float = m2.health
+    r.setup(p, L, p.global_position + Vector3(0, 1.2, 0), Vector3(0, 0, -1), 150.0, 4.0)
+    L.add_child(r)
+    await _frames(10)
+    _check(m2.health >= hp2 - 60.0, "player rockets don't detonate on squadmates (hp %.0f -> %.0f)" % [hp2, m2.health])
+    _check(not L.ai_targets().has(m2), "squadmates don't count as players for extraction")
+
+    # Settings: zero squadmates means none deploy; co-op never deploys AI.
+    Game.squad_size = 0
+    main.start_level(1)
+    await _frames(10)
+    _check(main.level.squad.is_empty(), "squad size 0: no AI squadmates")
+    Game.squad_size = keep_size
+    Game.show_news = keep_news
+    Game.save()
+    main.show_main_menu()
+    await _frames(5)
+    var fails := results.filter(func(x): return not x[1])
+    print("\n==== SQUAD TEST: %d checks, %d failed ====" % [results.size(), fails.size()])
+    for x in results:
+        print(("PASS " if x[1] else "FAIL ") + x[0])
+    get_tree().quit(1 if fails.size() > 0 else 0)
+
+
+func _open_spot(L, target: Vector3) -> Vector3:
+    for dist in [14.0, 18.0, 10.0, 22.0]:
+        for k in 12:
+            var a := k * TAU / 12.0
+            var pos := target + Vector3(cos(a) * dist, 0.5, sin(a) * dist)
+            if L.in_safe_zone(pos):
+                continue
+            var ray := Fx_ray(L, pos + Vector3(0, 1.4, 0), target + Vector3(0, 1.2, 0))
+            if ray:
+                return pos
+    return target + Vector3(14, 0.5, 0)
+
+
+func Fx_ray(L, a: Vector3, b: Vector3) -> bool:
+    var q := PhysicsRayQueryParameters3D.create(a, b, 1)
+    return L.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
+func _frames(n: int) -> void:
+    for i in n:
+        await get_tree().physics_frame
+
+
+func _check(ok: bool, label: String) -> void:
+    results.append([label, ok])

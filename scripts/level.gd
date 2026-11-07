@@ -18,6 +18,7 @@ const Barrel = preload("res://scripts/barrel.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
 const NetSync = preload("res://scripts/net_sync.gd")
 const RemotePlayer = preload("res://scripts/remote_player.gd")
+const Squadmate = preload("res://scripts/squadmate.gd")
 const Rocket = preload("res://scripts/rocket.gd")
 const Grenade = preload("res://scripts/grenade.gd")
 const DroneStrike = preload("res://scripts/drone_strike.gd")
@@ -39,6 +40,8 @@ var pickups := {}              # id -> Pickup
 var _next_pickup_id := 0
 var net = null                 # NetSync in a LAN game, else null
 var remotes := {}              # peer id -> RemotePlayer (teammates)
+var squad: Array = []          # friendly AI squadmates (single-player)
+var squad_hold := false
 var spawn_point := Vector3.ZERO
 # Safe zone around the start: Tan forces won't target, hurt or enter it.
 const SAFE_EXPOSE_MS := 3000      # firing from inside exposes you for this long
@@ -91,6 +94,8 @@ func _ready() -> void:
     Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
     if Net.active:
         _setup_net()
+    else:
+        _spawn_squad(Game.squad_size)
     _begin_objective(0)
     notify(info["name"].to_upper(), 3.5)
     Game.play_music(info.get("music", ""), -8.0)
@@ -245,11 +250,35 @@ func _build_safe_zone() -> void:
     root.add_child(lbl)
 
 
+func _spawn_squad(n: int) -> void:
+    for i in clampi(n, 0, Squadmate.SLOTS.size()):
+        var m = Squadmate.new()
+        var off: Vector3 = Squadmate.SLOTS[i].rotated(Vector3.UP, info.get("spawn_yaw", 0.0))
+        m.setup(self, i, spawn_point + off)
+        add_child(m)
+        squad.append(m)
+
+
+## T: squad holds where they stand, or comes back to follow you.
+func toggle_squad_order() -> void:
+    if squad.is_empty() or not is_playing():
+        return
+    squad_hold = not squad_hold
+    for m in squad:
+        m.set_hold(squad_hold)
+    notify("SQUAD: HOLD THIS POSITION" if squad_hold else "SQUAD: ON ME", 1.8)
+    Game.play_ui("radio", -8.0)
+
+
 func nearest_ai_target(pos: Vector3):
     # (ai_targets already leaves out anyone protected by the safe zone)
     var best = null
     var best_d := INF
-    for t in ai_targets():
+    var cands := ai_targets()
+    for m in squad:
+        if m.alive and not is_protected(m):
+            cands.append(m)
+    for t in cands:
         var d: float = t.global_position.distance_to(pos)
         if d < best_d:
             best_d = d

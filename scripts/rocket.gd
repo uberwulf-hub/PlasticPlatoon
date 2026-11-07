@@ -64,6 +64,10 @@ func _physics_process(delta: float) -> void:
     var ex: Array[RID] = []
     if is_instance_valid(shooter) and shooter is CollisionObject3D:
         ex.append(shooter.get_rid())
+        # Green rockets fly past our own squadmates.
+        if not shooter.is_in_group("enemies") and not shooter.get("ai"):
+            for m in shooter.get_tree().get_nodes_in_group("squad"):
+                ex.append(m.get_rid())
     var hit := Fx.ray(self, global_position, global_position + step, 1 | 2 | 4, ex)
     if not hit.is_empty():
         _explode(hit["position"] - dir * 0.2)

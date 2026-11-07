@@ -42,6 +42,7 @@ The project uses the Forward+ renderer. On older GPUs or integrated graphics, sw
 | G | Throw frag grenade |
 | F | Call a Reaper drone strike on the crosshair |
 | E | Get in or out of a jeep or tank |
+| T | Squad: hold position / follow me |
 | Esc / P | Pause |
 
 ## Arsenal
@@ -66,6 +67,19 @@ Each operation starts inside a **safe zone**, shown as a faint green ring with a
 - Firing from inside leaves you exposed for 3 seconds, so you can't snipe safely from the zone.
 
 The HUD shows when you're protected. In co-op everyone respawns here too, so nobody gets spawn-camped.
+
+## AI squadmates
+
+In single-player, **Pvt. Sprue** and **Cpl. Rivets** deploy with you, and **Pvt. Pickles** joins if you set the squad to 3. You can pick 0 to 3 squadmates in Settings.
+
+- They follow you in formation, on foot or behind your jeep or tank. If one falls far behind out of sight, they catch up.
+- They shoot any Tan soldier they can see, and the Tan Army shoots back at them.
+- Press **T** to have them **hold** where they're standing, and press it again to bring them back to **follow** you.
+- A squadmate who melts is replaced by a reinforcement next to you 20 seconds later.
+- They heal slowly when they're out of the fight. Their plastic is tough enough to shrug off most of your own grenade blasts, and your rockets fly past them.
+- The HUD (top right) shows each squadmate's health and the current order.
+
+They still can't drive, pick up crates, rescue POWs or extract for you; those are your job. In LAN co-op your teammates are your squad, so no AI squadmates deploy.
 
 ## Vehicles
 
@@ -204,7 +218,6 @@ It plays through every operation (spawning, firing, grenades, drone strikes, AI 
 ## Ideas for next steps
 
 - Vehicles: a drivable JLTV, a Tan APC and an attack helicopter
-- Friendly AI squadmates
 - More recorded SFX from the Sonniss GDC bundle (see docs/ASSET_RESEARCH.md)
 - Navmesh pathfinding (the current AI uses steering and line of sight)
 - Split-screen or online co-op

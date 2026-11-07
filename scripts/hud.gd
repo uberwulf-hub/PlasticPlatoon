@@ -214,6 +214,11 @@ func _process(delta: float) -> void:
             var r = level.remotes[id]
             lines.append("%s  %s" % [Net.player_name(id), ("%d HP" % int(ceil(r.health))) if r.alive else "DOWN"])
         team_label.text = "\n".join(lines)
+    elif not level.squad.is_empty():
+        var lines := ["SQUAD  -  %s  [T]" % ("HOLDING" if level.squad_hold else "FOLLOWING")]
+        for m in level.squad:
+            lines.append("%s  %s" % [m.display_name(), ("%d HP" % int(ceil(m.health))) if m.alive else "DOWN"])
+        team_label.text = "\n".join(lines)
     var secs := int(level.elapsed)
     info_label.text = "TAN FORCES: %d\nTIME %02d:%02d" % [level.enemies_alive(), secs / 60, secs % 60]
     if player.vehicle != null:

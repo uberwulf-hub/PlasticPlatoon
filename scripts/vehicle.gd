@@ -555,7 +555,7 @@ func _bullet(from: Vector3, damage: float, spread_deg: float, sound: String) -> 
     if not hit.is_empty():
         end = hit["position"]
         var col = hit["collider"]
-        if ai and col != null and not (col.is_in_group("player") or col.is_in_group("vehicles")):
+        if ai and col != null and not (col.is_in_group("player") or col.is_in_group("squad") or col.is_in_group("vehicles")):
             col = null      # Tan gunners only hurt the green side
         if col != null and col.has_method("take_damage"):
             var killed: bool = col.take_damage(damage, global_position, end, false)
@@ -651,7 +651,7 @@ func hear(pos: Vector3) -> void:
 
 ## Whatever the AI should shoot: the player on foot, or the vehicle they drive.
 func _ai_target() -> Node3D:
-    var p = (level.nearest_ai_target(global_position) if level.net != null else level.player) if level else null
+    var p = level.nearest_ai_target(global_position) if level else null
     if p == null or not is_instance_valid(p) or not p.alive:
         return null
     if level.is_protected(p.vehicle if p.vehicle != null else p):

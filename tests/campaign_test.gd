@@ -12,7 +12,9 @@ var finished_result = null
 
 func _ready() -> void:
     var news_was: bool = Game.show_news
+    var squad_was: int = Game.squad_size
     Game.show_news = false
+    Game.squad_size = 2
     main = load("res://scenes/main.tscn").instantiate()
     add_child(main)
     await _frames(10)
@@ -32,6 +34,7 @@ func _ready() -> void:
     main.show_main_menu()
     await _frames(5)
     Game.show_news = news_was
+    Game.squad_size = squad_was
     Game.save()
     var fails := results.filter(func(r): return not r[1])
     print("\n==== CAMPAIGN TEST: %d checks, %d failed ====" % [results.size(), fails.size()])
@@ -141,6 +144,8 @@ func _play(i: int) -> void:
         if e.global_position.y < -3.0:
             fallen += 1
     _check(fallen == 0, "%s no soldiers fell through the floor (%d)" % [tag, fallen])
+    for m in L.squad:
+        _check(m.global_position.distance_to(p.global_position) < 12.0 and m.global_position.y > -1.0, "%s %s deployed beside the player" % [tag, m.display_name()])
     for v in L.vehicles + L.enemy_vehicles:
         if v.global_position.y < -2.0 or v.global_position.y > 4.0:
             _check(false, "%s vehicle %s sits at a sane height (%s)" % [tag, v.kind, v.global_position])

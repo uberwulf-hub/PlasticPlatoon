@@ -12,6 +12,7 @@ var invert_y := false
 var show_news := true
 var player_name := "Soldier"
 var narration := true           # PNN anchors read their lines with the speech voices on this PC
+var squad_size := 2             # friendly AI squadmates in single-player (0-3)
 var difficulty := 1
 var unlocked_level := 0
 var current_level: Node = null
@@ -65,6 +66,7 @@ func _setup_inputs() -> void:
     _keys("grenade", [KEY_G])
     _keys("drone", [KEY_F])
     _keys("interact", [KEY_E])
+    _keys("squad_order", [KEY_T])
     _keys("pause", [KEY_ESCAPE, KEY_P])
     for i in 5:
         _keys("weapon_%d" % (i + 1), [KEY_1 + i])
@@ -97,6 +99,8 @@ func _unhandled_input(event: InputEvent) -> void:
     if event.is_action_pressed("pause"):
         current_level.toggle_pause()
         get_viewport().set_input_as_handled()
+    elif event.is_action_pressed("squad_order") and not get_tree().paused:
+        current_level.toggle_squad_order()
     elif event is InputEventMouseButton and event.pressed and not get_tree().paused:
         if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and current_level.is_playing():
             Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -130,6 +134,7 @@ func save() -> void:
     cfg.set_value("settings", "show_news", show_news)
     cfg.set_value("settings", "player_name", player_name)
     cfg.set_value("settings", "narration", narration)
+    cfg.set_value("settings", "squad_size", squad_size)
     cfg.set_value("settings", "music_volume", music_volume)
     cfg.set_value("settings", "sfx_volume", sfx_volume)
     cfg.set_value("progress", "unlocked_level", unlocked_level)
@@ -146,6 +151,7 @@ func _load() -> void:
     show_news = cfg.get_value("settings", "show_news", show_news)
     player_name = cfg.get_value("settings", "player_name", player_name)
     narration = cfg.get_value("settings", "narration", narration)
+    squad_size = clampi(cfg.get_value("settings", "squad_size", squad_size), 0, 3)
     music_volume = cfg.get_value("settings", "music_volume", music_volume)
     sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
     unlocked_level = clampi(cfg.get_value("progress", "unlocked_level", 0), 0, LEVEL_COUNT - 1)

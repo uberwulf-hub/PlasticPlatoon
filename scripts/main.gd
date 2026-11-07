@@ -210,6 +210,17 @@ func show_settings() -> void:
     narr.button_pressed = Game.narration
     narr.toggled.connect(func(on): Game.narration = on)
     vb.add_child(narr)
+    vb.add_child(UI.label("AI squadmates (single-player)", 18))
+    var sq := HBoxContainer.new()
+    for k in 4:
+        var sb := UI.button(("> %d" if k == Game.squad_size else "%d") % k, func():
+            Game.squad_size = k
+            Game.save()
+            show_settings(), 110)
+        if k == Game.squad_size:
+            sb.add_theme_color_override("font_color", UI.ACCENT)
+        sq.add_child(sb)
+    vb.add_child(sq)
     var inv := CheckBox.new()
     inv.text = "Invert mouse Y"
     inv.button_pressed = Game.invert_y
@@ -228,7 +239,7 @@ func show_controls() -> void:
         ["W A S D", "Move"], ["Mouse", "Look / aim"], ["Left click", "Fire"],
         ["Right click", "Aim down sights / scope"], ["Shift", "Sprint"], ["C / Ctrl", "Crouch (harder to spot)"],
         ["Space", "Jump"], ["R", "Reload"], ["1 - 5 / Wheel", "Switch weapon"],
-        ["G", "Throw frag grenade"], ["E", "Get in / out of a jeep or tank"], ["F", "Call Reaper drone strike at crosshair"], ["Esc / P", "Pause"], ["In vehicles", "WASD drive, mouse aims the gun, LMB fire, RMB tank coax MG"],
+        ["G", "Throw frag grenade"], ["E", "Get in / out of a jeep or tank"], ["T", "Squad: hold position / follow me"], ["F", "Call Reaper drone strike at crosshair"], ["Esc / P", "Pause"], ["In vehicles", "WASD drive, mouse aims the gun, LMB fire, RMB tank coax MG"],
     ]
     var grid := GridContainer.new()
     grid.columns = 2
