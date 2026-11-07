@@ -77,15 +77,22 @@ func _ready() -> void:
             e2 = x
             break
     m1.hold = true
-    m1.hold_pos = e2.global_position + Vector3(3, 0.3, 0)
+    m1.hold_pos = _open_spot(L, e2.global_position, [8.0, 10.0, 12.0])   # clear line of sight to the Tan soldier
     m1.global_position = m1.hold_pos
     p.global_position = e2.global_position + Vector3(0, 0.5, 60)
+    for other in L.squad:
+        if other != m1:                                    # everyone else stays back with the player
+            other.hold = true
+            other.hold_pos = p.global_position + Vector3(2, 0, 0)
+            other.global_position = other.hold_pos
     _check(L.nearest_ai_target(e2.global_position) == m1, "Tan soldiers target the nearest squadmate")
     var mh: float = m1.health
     e2.set_physics_process(true)
-    e2.react_t = 0.0
-    await _frames(240)
-    _check(m1.health < mh or not m1.alive, "a Tan soldier's shots hurt a squadmate (%.0f -> %.0f)" % [mh, m1.health])
+    e2.hp = 5000.0                                         # so the squadmate can't drop him first
+    e2.hear(m1.hold_pos)                                   # turn toward him
+    await _frames(360)
+    _check(m1.health < mh or not m1.alive, "a Tan soldier's shots hurt a squadmate (%.0f -> %.0f)%s" % [mh, m1.health,
+        "" if m1.health < mh else " [e2 alive=%s state=%d los=%s d=%.1f target=%s]" % [e2.alive, e2.state, e2.has_los, e2.global_position.distance_to(m1.global_position), e2._player()]])
 
     # Down and back: a melted squadmate is reinforced near the player.
     m1.take_damage(9999.0, Vector3.ZERO, m1.global_position, false)
@@ -110,6 +117,7 @@ func _ready() -> void:
     _check(not L.ai_targets().has(m2), "squadmates don't count as players for extraction")
 
     await _ride_tests(L, p)
+    await _heli_tests(L, p)
 
     # Settings: zero squadmates means none deploy; co-op never deploys AI.
     Game.squad_size = 0
@@ -205,8 +213,100 @@ func _ride_tests(L, p) -> void:
     _check(p.vehicle == null, "player bails out too")
 
 
-func _open_spot(L, target: Vector3) -> Vector3:
-    for dist in [14.0, 18.0, 10.0, 22.0]:
+## The helicopter: squad boards, it climbs, flies, won't let you jump out
+## in mid-air, fires rockets, lands, and if shot down everyone falls clear.
+func _heli_tests(L, p) -> void:
+    var h = null
+    for v in L.vehicles:
+        if v.kind == "heli" and v.alive:
+            h = v
+    _check(h != null, "Operation 1 has a helicopter")
+    if h == null:
+        return
+    for m in L.squad:
+        if m.ride != null:
+            m.dismount(false)
+        m.hold = false
+    L.squad_hold = false
+    p.global_position = h.global_position - h.global_transform.basis.x * 2.6 + Vector3(0, 0.3, 0)
+    for i in L.squad.size():
+        L.squad[i].global_position = p.global_position + Vector3(-2.0 - i * 1.5, 0.2, 1.5)
+    await _frames(5)
+    h.enter(p)
+    var t0 := Time.get_ticks_msec()
+    while not L.squad.all(func(m): return m.ride == h) and Time.get_ticks_msec() - t0 < 6000:
+        await get_tree().physics_frame
+    _check(L.squad.all(func(m): return m.ride == h), "squad climbs into the helicopter")
+    var ground_y: float = h.global_position.y
+    h.fly_input = 1.0
+    await _frames(180)
+    h.fly_input = 0.0
+    var alt: float = h.altitude()
+    _check(alt > 15.0, "helicopter takes off (altitude %.1fm)" % alt)
+    var off := 0.0
+    for m in L.squad:
+        off = maxf(off, m.global_position.distance_to(h.seat_transform(m.seat).origin))
+    _check(off < 0.6 and L.squad[0].global_position.y > ground_y + 14.0, "door gunners ride up with it (worst seat offset %.2fm)" % off)
+    # Can't bail out in mid-air with E.
+    L.last_notice = ""
+    await _press("interact")
+    _check(p.vehicle == h and L.last_notice.begins_with("LAND FIRST"), "E in mid-air says 'land first' instead of dropping you out ('%s')" % L.last_notice)
+    # Forward flight + rockets.
+    var start: Vector3 = h.global_position
+    h.drive_input = Vector2(0, -1)
+    await _frames(120)
+    h.drive_input = Vector2.ZERO
+    var flat := Vector2(h.global_position.x - start.x, h.global_position.z - start.z).length()
+    _check(flat > 15.0 and h.altitude() > 12.0, "flies forward at altitude (%.0fm, alt %.0fm)" % [flat, h.altitude()])
+    var shots: int = p.shots_fired
+    h.fire2_cd = 0.0
+    h.fire_secondary()
+    await _frames(3)
+    _check(p.shots_fired > shots, "rocket pods fire")
+    # Ceiling.
+    h.fly_input = 1.0
+    await _frames(420)
+    h.fly_input = 0.0
+    _check(h.altitude() < h.k["ceiling"] + 4.0, "altitude ceiling holds (%.0fm, ceiling %.0fm)" % [h.altitude(), h.k["ceiling"]])
+    # Land and get out with E; the squad hops off on the ground.
+    h.fly_input = -1.0
+    t0 = Time.get_ticks_msec()
+    while h.altitude() > 0.6 and Time.get_ticks_msec() - t0 < 12000:
+        await get_tree().physics_frame
+    await _frames(20)
+    h.fly_input = 0.0
+    _check(h.altitude() < 1.0, "helicopter lands (altitude %.2fm)" % h.altitude())
+    await _press("interact")
+    await _frames(8)
+    _check(p.vehicle == null, "E after landing gets you out")
+    _check(L.squad.all(func(m): return m.ride == null and absf(m.global_position.y - h.global_position.y) < 2.0), "squad hops off onto the ground")
+    # Shot down with everyone aboard: they fall clear and survive.
+    h.enter(p)
+    t0 = Time.get_ticks_msec()
+    while not L.squad.all(func(m): return m.ride == h) and Time.get_ticks_msec() - t0 < 6000:
+        await get_tree().physics_frame
+    h.fly_input = 1.0
+    await _frames(90)
+    h.fly_input = 0.0
+    p.invulnerable = true
+    h._destroy()
+    await _frames(240)
+    _check(not h.alive and p.vehicle == null and p.is_on_floor(), "shot down: the pilot falls clear")
+    _check(h.is_on_floor() or h.altitude() < 1.0, "the wreck falls to the ground (alt %.1fm)" % h.altitude())
+    _check(L.squad.all(func(m): return m.ride == null and m.alive and m.is_on_floor()), "shot down: door gunners land alive")
+
+
+func _press(action: String) -> void:
+    for down in [true, false]:
+        var ev := InputEventAction.new()
+        ev.action = action
+        ev.pressed = down
+        Input.parse_input_event(ev)
+        await _frames(2)
+
+
+func _open_spot(L, target: Vector3, dists := [14.0, 18.0, 10.0, 22.0]) -> Vector3:
+    for dist in dists:
         for k in 12:
             var a := k * TAU / 12.0
             var pos := target + Vector3(cos(a) * dist, 0.5, sin(a) * dist)

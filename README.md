@@ -86,12 +86,27 @@ In single-player, **Pvt. Sprue** and **Cpl. Rivets** deploy with you, and **Pvt.
 | Troop carrier | 4 seats in the open-top bay |
 | Jeep | Front passenger plus 2 in the back |
 | Tank | 3 riders hang on to the rear deck |
+| Helicopter | 4 door gunners, two in each open doorway |
 
 They still can't drive, pick up crates, rescue POWs or extract for you; those are your job. In LAN co-op your teammates are your squad, so no AI squadmates deploy.
 
 ## Vehicles
 
 The **troop carrier** is an eight-wheeled, open-top APC with a .50 cal on the cab roof and four seats in the back for your squad. It's tougher than the jeep, faster than the tank, and parked at the start of Dust Lid, Concrete Jungle, Snow Globe, Green Hell, Beachhead, Night Shift and Mountain Pass.
+
+The **helicopter** has a nose minigun, two rocket pods and an open-door cabin with four seats for your squad, who fire from the doorways. It's parked at the start of Dust Lid, Snow Globe, Green Hell, Beachhead, Night Shift and Mountain Pass.
+
+| Key | Action |
+|---|---|
+| W / S | Fly forward / back |
+| A / D | Strafe |
+| Mouse | Turn the nose and aim |
+| Space / C | Climb / descend |
+| LMB | Minigun |
+| RMB | Rockets |
+| E | Get out (only once you've landed; it says "LAND FIRST" otherwise) |
+
+It flies up to 45 m above the ground. If it's shot down, everyone aboard falls clear. Riders take a knock but survive.
 
 Walk up to a jeep or tank and press **E**. WASD drives, the mouse aims the mounted gun, and **LMB** fires. Press **E** again to get out.
 

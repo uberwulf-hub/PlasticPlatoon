@@ -2,6 +2,8 @@ extends CharacterBody3D
 ## Drivable plastic toy vehicles: a jeep with a mounted .50 cal, a tank with a
 ## turret cannon + coaxial MG, and an open-top troop carrier. Press E
 ## (interact) near one to get in or out. AI squadmates ride in the seats.
+## The helicopter flies: WASD + mouse to steer, Space/C to climb and descend,
+## and you can only get out once it's landed.
 ## Arcade handling on a CharacterBody3D: no wheel physics, just throttle/steer.
 
 const Fx = preload("res://scripts/fx.gd")
@@ -27,6 +29,16 @@ const KINDS := {
         "size": Vector3(2.7, 2.5, 6.0), "cam_height": 3.0, "cam_dist": 9.0,
         "primary": "mg", "primary_interval": 0.09, "primary_damage": 30.0,
         "seats": [Vector3(-0.72, 1.82, 0.1), Vector3(0.72, 1.82, 0.1), Vector3(-0.72, 1.82, 1.8), Vector3(0.72, 1.82, 1.8)],
+    },
+    "heli": {
+        "name": "HELICOPTER (MINIGUN + ROCKETS)", "hp": 520.0, "bullet_armor": 0.45,
+        "max_speed": 24.0, "reverse": 11.0, "accel": 11.0, "turn": 2.2, "pivot_turn": true,
+        "size": Vector3(2.4, 2.4, 6.0), "cam_height": 3.2, "cam_dist": 12.0,
+        "primary": "mg", "primary_interval": 0.06, "primary_damage": 24.0,
+        "secondary_interval": 0.45, "secondary_damage": 130.0,
+        "flies": true, "climb": 9.0, "ceiling": 45.0,
+        # Door gunners: two each side, sitting in the open doorways.
+        "seats": [Vector3(-0.62, 0.93, -0.35), Vector3(0.62, 0.93, -0.35), Vector3(-0.62, 0.93, 0.95), Vector3(0.62, 0.93, 0.95)],
     },
     "tank": {
         "name": "TANK (120MM + COAX MG)", "hp": 1000.0, "bullet_armor": 0.15,
@@ -64,6 +76,14 @@ var fire2_cd := 0.0
 var engine: AudioStreamPlayer3D
 var _enter_cd := 0.0
 var passengers: Array = []       # one entry per seat: a squadmate or null
+# ---- helicopter ----
+var visual: Node3D                # tilts with the flight (helicopter)
+var rotor: Node3D
+var tail_rotor: Node3D
+var rocket_pods: Array[Node3D] = []
+var _pod_i := 0
+var fly_input = null              # tests: climb (+1) / descend (-1) without a keyboard
+var _rotor_spin := 0.0
 
 # ---- Tan Army AI (enemy vehicles) ----
 const AI := {
@@ -144,6 +164,9 @@ func _ready() -> void:
             _build_tank()
         "apc":
             _build_apc()
+        "heli":
+            _build_heli()
+            floor_snap_length = 0.0
         _:
             _build_jeep()
     passengers.resize(k.get("seats", []).size())
@@ -306,6 +329,134 @@ func _build_apc() -> void:
     barrel.add_child(muzzle)
 
 
+func _build_heli() -> void:
+    visual = Node3D.new()
+    add_child(visual)
+    var body := _mat(body_color)
+    var dark := _mat(body_color.darkened(0.3))
+    var glass := _mat(Color(0.25, 0.4, 0.45))
+    var v := visual
+    # Cabin: floor, roof, back wall and pillars, with open doors on both sides.
+    _box(v, Vector3(0, 0.85, 0.3), Vector3(2.2, 0.16, 3.4), body)
+    _box(v, Vector3(0, 2.55, 0.3), Vector3(2.2, 0.18, 3.4), body)
+    _box(v, Vector3(0, 1.7, 1.95), Vector3(2.2, 1.85, 0.16), body)
+    for x in [-1.05, 1.05]:
+        for z in [-1.35, 1.9]:
+            _box(v, Vector3(x, 1.7, z), Vector3(0.12, 1.75, 0.12), dark)
+    # Nose + canopy
+    _box(v, Vector3(0, 1.35, -2.1), Vector3(2.1, 1.1, 1.5), body)
+    _box(v, Vector3(0, 2.15, -1.9), Vector3(1.9, 0.6, 1.1), glass, Vector3(deg_to_rad(-25), 0, 0))
+    _box(v, Vector3(0, 1.1, -2.95), Vector3(1.4, 0.6, 0.4), body)
+    # Tail boom, fin and tail rotor
+    _cyl(v, Vector3(0, 2.1, 4.3), 0.28, 4.8, body, Vector3(PI / 2, 0, 0))
+    _box(v, Vector3(0, 2.9, 6.5), Vector3(0.12, 1.6, 0.9), body, Vector3(deg_to_rad(-15), 0, 0))
+    _box(v, Vector3(0, 2.2, 6.4), Vector3(1.6, 0.1, 0.6), body)
+    tail_rotor = Node3D.new()
+    tail_rotor.position = Vector3(0.2, 2.9, 6.6)
+    v.add_child(tail_rotor)
+    _box(tail_rotor, Vector3.ZERO, Vector3(0.05, 1.8, 0.18), dark)
+    # Skids
+    for x in [-1.05, 1.05]:
+        _box(v, Vector3(x, 0.12, 0.2), Vector3(0.14, 0.12, 4.6), dark)
+        for z in [-1.0, 1.4]:
+            _box(v, Vector3(x * 0.95, 0.5, z), Vector3(0.1, 0.75, 0.1), dark)
+    # Stub wings with rocket pods
+    for x in [-1.0, 1.0]:
+        _box(v, Vector3(x * 1.45, 1.55, -0.6), Vector3(0.9, 0.1, 0.7), body)
+        _cyl(v, Vector3(x * 1.75, 1.3, -0.6), 0.22, 1.3, dark, Vector3(PI / 2, 0, 0))
+        var pod := Node3D.new()
+        pod.position = Vector3(x * 1.75, 1.3, -1.35)
+        v.add_child(pod)
+        rocket_pods.append(pod)
+    # Main rotor
+    _cyl(v, Vector3(0, 2.9, 0.2), 0.14, 0.6, dark)
+    rotor = Node3D.new()
+    rotor.position = Vector3(0, 3.25, 0.2)
+    v.add_child(rotor)
+    for a in [0.0, PI / 2]:
+        _box(rotor, Vector3.ZERO, Vector3(11.5, 0.06, 0.4), dark, Vector3(0, a, 0))
+    _cyl(rotor, Vector3.ZERO, 0.25, 0.2, dark)
+    # Nose minigun
+    turret = Node3D.new()
+    turret.position = Vector3(0, 0.75, -2.75)
+    v.add_child(turret)
+    barrel = Node3D.new()
+    turret.add_child(barrel)
+    _box(barrel, Vector3(0, 0, -0.1), Vector3(0.3, 0.3, 0.5), dark)
+    _cyl(barrel, Vector3(0, 0, -0.65), 0.1, 0.9, dark, Vector3(PI / 2, 0, 0))
+    muzzle = Node3D.new()
+    muzzle.position = Vector3(0, 0, -1.15)
+    barrel.add_child(muzzle)
+    coax_muzzle = rocket_pods[0]
+
+
+## Height of the skids above whatever is below.
+func altitude() -> float:
+    var ex: Array[RID] = [get_rid()]
+    var hit := Fx.ray(self, global_position + Vector3(0, 0.3, 0), global_position + Vector3(0, -300, 0), 1, ex)
+    return 999.0 if hit.is_empty() else global_position.y - hit["position"].y
+
+
+func _fly(delta: float, throttle: float, steer: float) -> void:
+    var powered := driver != null and alive
+    if powered:
+        var up := 0.0
+        if fly_input != null:
+            up = fly_input
+        elif drive_input == null:
+            up = (1.0 if Input.is_action_pressed("jump") else 0.0) - (1.0 if Input.is_action_pressed("crouch") else 0.0)
+        # The nose follows the mouse; WASD moves forward/back and strafes.
+        rotation.y = move_toward_angle(rotation.y, cam_yaw, k["turn"] * delta)
+        var fwd := -global_transform.basis.z
+        var right := global_transform.basis.x
+        var want: Vector3 = fwd * throttle * (k["max_speed"] if throttle > 0.0 else k["reverse"]) - right * steer * k["reverse"]
+        velocity.x = move_toward(velocity.x, want.x, k["accel"] * delta)
+        velocity.z = move_toward(velocity.z, want.z, k["accel"] * delta)
+        var vy: float = up * k["climb"]
+        if vy > 0.0 and altitude() > k["ceiling"]:
+            vy = 0.0
+        velocity.y = move_toward(velocity.y, vy, 14.0 * delta)
+        _rotor_spin = move_toward(_rotor_spin, 1.0, delta * 0.8)
+    else:
+        velocity.x = move_toward(velocity.x, 0.0, 6.0 * delta)
+        velocity.z = move_toward(velocity.z, 0.0, 6.0 * delta)
+        velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
+        _rotor_spin = move_toward(_rotor_spin, 0.0, delta * 0.3)
+    move_and_slide()
+    var local_v := global_transform.basis.inverse() * velocity
+    speed = -local_v.z
+    # Lean into the direction of travel.
+    visual.rotation.x = lerpf(visual.rotation.x, clampf(local_v.z / k["max_speed"], -1.0, 1.0) * 0.22, minf(1.0, delta * 4.0))
+    visual.rotation.z = lerpf(visual.rotation.z, clampf(-local_v.x / k["reverse"], -1.0, 1.0) * 0.2, minf(1.0, delta * 4.0))
+    _spin_rotors(delta)
+
+
+func _spin_rotors(delta: float) -> void:
+    if rotor:
+        rotor.rotation.y += _rotor_spin * 22.0 * delta
+        tail_rotor.rotation.x += _rotor_spin * 30.0 * delta
+
+
+func _fire_rocket() -> void:
+    var pod: Node3D = rocket_pods[_pod_i % rocket_pods.size()]
+    _pod_i += 1
+    var m := pod.global_position
+    var dir := (_aim_point() - m).normalized()
+    var dmg: float = k["secondary_damage"]
+    var r = Rocket.new()
+    r.setup(self, level, m, dir, dmg, 5.0)
+    r.speed = 70.0
+    r.visual_only = level.net != null and not multiplayer.is_server()
+    level.add_child(r)
+    if level.net:
+        level.net.send_projectile("rocket", m, dir, dmg, 5.0, 70.0)
+    Fx.muzzle_flash(level, m)
+    Game.play_sfx("rocket", m, 0.0)
+    level.make_noise(m, 70.0)
+    if driver:
+        driver.shots_fired += 1
+
+
 # ------------------------------------------------------------- passengers ----
 
 ## Takes the first free seat for `m`; returns the seat index or -1.
@@ -372,7 +523,8 @@ func enter(p) -> void:
     _enter_cd = 0.3
     engine.play()
     Game.play_ui("ui_confirm", -6.0)
-    level.notify("%s  -  WASD drive, mouse aim, LMB fire%s, E to exit%s" % [k["name"], ", RMB coax MG" if kind == "tank" else "",
+    var extra := ", RMB coax MG" if kind == "tank" else (", RMB rockets, Space/C climb/descend" if kind == "heli" else "")
+    level.notify("%s  -  %s, mouse aim, LMB fire%s, E to exit%s" % [k["name"], "WASD fly" if kind == "heli" else "WASD drive", extra,
         "  (squad climbs aboard)" if not level.squad.is_empty() and not passengers.is_empty() else ""], 3.0)
 
 
@@ -384,6 +536,8 @@ func exit_vehicle() -> void:
     if level.net != null and occupant_peer == multiplayer.get_unique_id():
         level.net.release_vehicle(level.vehicles.find(self))
     p.vehicle = null
+    if p.get("enter_cd") != null:
+        p.enter_cd = 0.3          # the E that got us out mustn't put us straight back in
     collision_layer = 1
     engine.stop()
     var side := global_transform.basis.x.normalized()
@@ -411,7 +565,7 @@ func _unhandled_input(event: InputEvent) -> void:
         var s: float = Game.mouse_sensitivity
         cam_yaw -= event.relative.x * s
         cam_pitch -= event.relative.y * s * (-1.0 if Game.invert_y else 1.0)
-        cam_pitch = clampf(cam_pitch, -0.9, 0.35)
+        cam_pitch = clampf(cam_pitch, -1.3 if k.get("flies", false) else -0.9, 0.35)
 
 
 ## Host snapshot (non-host PCs): position, turret, health and who's driving.
@@ -454,6 +608,9 @@ func _physics_process(delta: float) -> void:
                 turret.rotation.y = lerp_angle(turret.rotation.y, _net_turret, k2)
                 barrel.rotation.x = lerpf(barrel.rotation.x, _net_barrel, k2)
             velocity = Vector3.ZERO
+        if rotor:
+            _rotor_spin = move_toward(_rotor_spin, 1.0 if occupant_peer != 0 else 0.0, delta * 0.5)
+            _spin_rotors(delta)
         return
     fire_cd = maxf(0.0, fire_cd - delta)
     fire2_cd = maxf(0.0, fire2_cd - delta)
@@ -469,13 +626,38 @@ func _physics_process(delta: float) -> void:
         throttle = -inp.y
         steer = -inp.x
         if _enter_cd <= 0.0 and Input.is_action_just_pressed("interact"):
-            exit_vehicle()
+            if k.get("flies", false) and altitude() > 2.5:
+                level.notify("LAND FIRST  -  hold C to descend", 1.5)
+            else:
+                exit_vehicle()
         elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
             if Input.is_action_pressed("fire"):
                 fire_primary()
             if Input.is_action_pressed("aim"):
                 fire_secondary()
 
+    var max_fwd: float = k["max_speed"] * (AI[kind]["speed_scale"] if ai else 1.0)
+    if k.get("flies", false):
+        _fly(delta, throttle, steer)
+    else:
+        _drive(delta, throttle, steer)
+
+    if driver != null:
+        driver.global_position = global_position + Vector3(0, 0.6, 0)
+        driver.velocity = velocity
+        _aim_turret(delta)
+        _update_camera(delta)
+        engine.pitch_scale = 0.6 + absf(speed) / max_fwd * 0.9
+    elif ai and alive:
+        _aim_turret(delta)
+        if ai_alert > 0.0 and not engine.playing:
+            engine.play()
+        engine.pitch_scale = 0.6 + absf(speed) / max_fwd * 0.9
+    elif turret:
+        turret.rotation.y = lerp_angle(turret.rotation.y, 0.0, delta)
+
+
+func _drive(delta: float, throttle: float, steer: float) -> void:
     var max_fwd: float = k["max_speed"] * (AI[kind]["speed_scale"] if ai else 1.0)
     var max_rev: float = k["reverse"]
     if throttle > 0.0:
@@ -501,20 +683,6 @@ func _physics_process(delta: float) -> void:
     _handle_collisions(delta, before)
     if ai:
         ai_travelled += (global_position - before).length()
-
-    if driver != null:
-        driver.global_position = global_position + Vector3(0, 0.6, 0)
-        driver.velocity = velocity
-        _aim_turret(delta)
-        _update_camera(delta)
-        engine.pitch_scale = 0.6 + absf(speed) / max_fwd * 0.9
-    elif ai and alive:
-        _aim_turret(delta)
-        if ai_alert > 0.0 and not engine.playing:
-            engine.play()
-        engine.pitch_scale = 0.6 + absf(speed) / max_fwd * 0.9
-    elif turret:
-        turret.rotation.y = lerp_angle(turret.rotation.y, 0.0, delta)
 
 
 func _handle_collisions(delta: float, before: Vector3) -> void:
@@ -542,7 +710,8 @@ func _aim_turret(delta: float) -> void:
     var target_yaw := wrapf(cam_yaw - rotation.y, -PI, PI)
     var rate := 1.6 if kind == "tank" else 8.0
     turret.rotation.y = move_toward_angle(turret.rotation.y, target_yaw, rate * delta)
-    barrel.rotation.x = lerpf(barrel.rotation.x, clampf(cam_pitch + 0.18, -0.15, 0.35), minf(1.0, delta * 8.0))
+    var low := -1.2 if k.get("flies", false) else -0.15
+    barrel.rotation.x = lerpf(barrel.rotation.x, clampf(cam_pitch + 0.18, low, 0.35), minf(1.0, delta * 8.0))
 
 
 static func move_toward_angle(from: float, to: float, step: float) -> float:
@@ -621,6 +790,9 @@ func fire_secondary() -> void:
     if not ai and driver:
         driver.last_fire_ms = Time.get_ticks_msec()
     fire2_cd = k["secondary_interval"]
+    if kind == "heli":
+        _fire_rocket()
+        return
     _bullet(coax_muzzle.global_position, k["secondary_damage"], 2.5, "lmg")
 
 

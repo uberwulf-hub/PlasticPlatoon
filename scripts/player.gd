@@ -43,6 +43,7 @@ var pivot: Node3D
 var rig = CameraRig.new()
 var cam_len := 3.4
 var vehicle: Node = null      # set while driving a jeep/tank
+var enter_cd := 0.0            # just got out: ignore E for a moment (same key press)
 var camera: Camera3D
 
 var pitch := -0.12
@@ -141,6 +142,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
     fire_cd = maxf(0.0, fire_cd - delta)
     grenade_cd = maxf(0.0, grenade_cd - delta)
+    enter_cd = maxf(0.0, enter_cd - delta)
     bloom = move_toward(bloom, 0.0, delta * 3.5)
     if not alive:
         velocity.x = 0.0
@@ -151,7 +153,7 @@ func _physics_process(delta: float) -> void:
         return
     if vehicle != null:
         return              # the vehicle moves us and owns the camera
-    if Input.is_action_just_pressed("interact"):
+    if Input.is_action_just_pressed("interact") and enter_cd <= 0.0:
         var v = level.nearest_vehicle(global_position, 4.5)
         if v != null:
             aiming = false

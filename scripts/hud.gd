@@ -189,6 +189,10 @@ func _refresh_vehicle() -> void:
         ammo_label.text = "%d km/h" % int(absf(v.speed) * 3.6)
     slots_label.text = "LMB fire   %sE exit" % ("RMB coax MG   " if v.kind == "tank" else "")
     ord_label.text = "%d km/h" % int(absf(v.speed) * 3.6) if v.kind == "tank" else "Ram Tan soldiers to flatten them"
+    if v.kind == "heli":
+        var alt: float = v.altitude()
+        slots_label.text = "LMB gun   RMB rockets   SPACE up   C down   E exit"
+        ord_label.text = "ALT %d m" % int(alt) if alt < 900.0 else "ALT ---"
     if not level.squad.is_empty() and not v.passengers.is_empty():
         ord_label.text += "     SQUAD ABOARD %d/%d" % [v.passengers.size() - v.free_seats(), mini(level.squad.size(), v.passengers.size())]
 

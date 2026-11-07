@@ -51,6 +51,7 @@ var _respawn_t := 0.0
 var hvts: Array = []
 var reserves: Array = []       # Tan troops held back until a "defend" objective starts
 var targets_by_tag := {}
+var last_notice := ""            # most recent on-screen message (tests read it)
 var _obj_start := 0.0          # elapsed time when the current objective began
 var _rally_t := 0.0
 var extraction: Node3D
@@ -826,6 +827,7 @@ func add_helipad(pos: Vector3) -> Node3D:
 # ------------------------------------------------------------ gameplay ----
 
 func notify(text: String, dur := 2.5) -> void:
+    last_notice = text
     if hud:
         hud.show_message(text, dur)
 
