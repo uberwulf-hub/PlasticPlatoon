@@ -79,9 +79,19 @@ In single-player, **Pvt. Sprue** and **Cpl. Rivets** deploy with you, and **Pvt.
 - They heal slowly when they're out of the fight. Their plastic is tough enough to shrug off most of your own grenade blasts, and your rockets fly past them.
 - The HUD (top right) shows each squadmate's health and the current order.
 
+- **They ride with you.** When you get into a vehicle, squadmates within about 40 m run over and climb aboard, and anyone further away (out of sight) catches the ride. Riders duck down in their seats, stand up to shoot at Tan soldiers they can see, and hop off when you get out. If the vehicle is destroyed, they bail out hurt but alive. A squad on hold stays put.
+
+| Vehicle | Seats |
+|---|---|
+| Troop carrier | 4 seats in the open-top bay |
+| Jeep | Front passenger plus 2 in the back |
+| Tank | 3 riders hang on to the rear deck |
+
 They still can't drive, pick up crates, rescue POWs or extract for you; those are your job. In LAN co-op your teammates are your squad, so no AI squadmates deploy.
 
 ## Vehicles
+
+The **troop carrier** is an eight-wheeled, open-top APC with a .50 cal on the cab roof and four seats in the back for your squad. It's tougher than the jeep, faster than the tank, and parked at the start of Dust Lid, Concrete Jungle, Snow Globe, Green Hell, Beachhead, Night Shift and Mountain Pass.
 
 Walk up to a jeep or tank and press **E**. WASD drives, the mouse aims the mounted gun, and **LMB** fires. Press **E** again to get out.
 

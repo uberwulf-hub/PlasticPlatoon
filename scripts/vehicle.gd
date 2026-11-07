@@ -1,6 +1,7 @@
 extends CharacterBody3D
-## Drivable plastic toy vehicles: a jeep with a mounted .50 cal and a tank with a
-## turret cannon + coaxial MG. Press E (interact) near one to get in or out.
+## Drivable plastic toy vehicles: a jeep with a mounted .50 cal, a tank with a
+## turret cannon + coaxial MG, and an open-top troop carrier. Press E
+## (interact) near one to get in or out. AI squadmates ride in the seats.
 ## Arcade handling on a CharacterBody3D: no wheel physics, just throttle/steer.
 
 const Fx = preload("res://scripts/fx.gd")
@@ -17,6 +18,15 @@ const KINDS := {
         "max_speed": 24.0, "reverse": 9.0, "accel": 14.0, "turn": 2.1, "pivot_turn": false,
         "size": Vector3(2.1, 1.6, 4.2), "cam_height": 2.3, "cam_dist": 7.0,
         "primary": "mg", "primary_interval": 0.09, "primary_damage": 30.0,
+        # Where passengers stand (local, at their feet): front passenger + two in the back.
+        "seats": [Vector3(0.45, 1.08, 0.05), Vector3(-0.55, 1.08, 1.6), Vector3(0.55, 1.08, 1.6)],
+    },
+    "apc": {
+        "name": "TROOP CARRIER (.50 CAL, 4 SEATS)", "hp": 700.0, "bullet_armor": 0.3,
+        "max_speed": 17.0, "reverse": 7.0, "accel": 9.0, "turn": 1.5, "pivot_turn": false,
+        "size": Vector3(2.7, 2.5, 6.0), "cam_height": 3.0, "cam_dist": 9.0,
+        "primary": "mg", "primary_interval": 0.09, "primary_damage": 30.0,
+        "seats": [Vector3(-0.72, 1.82, 0.1), Vector3(0.72, 1.82, 0.1), Vector3(-0.72, 1.82, 1.8), Vector3(0.72, 1.82, 1.8)],
     },
     "tank": {
         "name": "TANK (120MM + COAX MG)", "hp": 1000.0, "bullet_armor": 0.15,
@@ -24,6 +34,8 @@ const KINDS := {
         "size": Vector3(3.6, 2.3, 6.4), "cam_height": 3.2, "cam_dist": 10.0,
         "primary": "cannon", "primary_interval": 2.2, "primary_damage": 280.0,
         "secondary_interval": 0.08, "secondary_damage": 16.0,
+        # Tank riders hang on to the rear deck.
+        "seats": [Vector3(-0.85, 1.5, 2.45), Vector3(0.85, 1.5, 2.45), Vector3(0, 1.5, 2.8)],
     },
 }
 
@@ -51,6 +63,7 @@ var fire_cd := 0.0
 var fire2_cd := 0.0
 var engine: AudioStreamPlayer3D
 var _enter_cd := 0.0
+var passengers: Array = []       # one entry per seat: a squadmate or null
 
 # ---- Tan Army AI (enemy vehicles) ----
 const AI := {
@@ -124,10 +137,14 @@ func _ready() -> void:
     cs.shape = bs
     cs.position.y = size.y * 0.5
     add_child(cs)
-    if kind == "tank":
-        _build_tank()
-    else:
-        _build_jeep()
+    match kind:
+        "tank":
+            _build_tank()
+        "apc":
+            _build_apc()
+        _:
+            _build_jeep()
+    passengers.resize(k.get("seats", []).size())
 
     cam_pivot = Node3D.new()
     cam_pivot.top_level = true
@@ -254,6 +271,83 @@ func _build_tank() -> void:
     barrel.add_child(coax_muzzle)
 
 
+func _build_apc() -> void:
+    var body := _mat(body_color)
+    var dark := _mat(body_color.darkened(0.25))
+    var tire := _mat(body_color.darkened(0.5))
+    var glass := _mat(Color(0.2, 0.28, 0.3))
+    _box(self, Vector3(0, 1.2, 0), Vector3(2.6, 1.2, 5.8), body)                # hull
+    _box(self, Vector3(0, 1.3, -3.05), Vector3(2.6, 0.8, 0.6), body, Vector3(deg_to_rad(-40), 0, 0))
+    _box(self, Vector3(0, 2.25, -1.95), Vector3(2.5, 0.9, 1.9), body)           # cab
+    _box(self, Vector3(0, 2.35, -2.92), Vector3(2.1, 0.45, 0.05), glass)        # windscreen
+    for x in [-1.26, 1.26]:
+        _box(self, Vector3(x, 2.35, -1.95), Vector3(0.05, 0.4, 1.2), glass)
+        _box(self, Vector3(x, 2.15, 0.95), Vector3(0.14, 0.7, 3.9), body)       # troop bay walls
+        _box(self, Vector3(x * 0.62, 1.95, 0.95), Vector3(0.45, 0.3, 3.6), dark) # benches
+        for z in [-2.1, -0.7, 0.7, 2.1]:
+            _cyl(self, Vector3(x * 0.98, 0.5, z), 0.5, 0.42, tire, Vector3(0, 0, PI / 2))
+    _box(self, Vector3(0, 2.15, 2.88), Vector3(2.6, 0.7, 0.14), body)           # tailgate
+    _box(self, Vector3(0, 1.82, 0.95), Vector3(2.3, 0.04, 3.8), dark)           # bay floor
+    _box(self, Vector3(0, 1.4, 3.0), Vector3(1.4, 0.12, 0.3), dark)             # step
+    # .50 cal ring mount on the cab roof.
+    _cyl(self, Vector3(0, 2.8, -1.9), 0.42, 0.18, dark)
+    turret = Node3D.new()
+    turret.position = Vector3(0, 3.05, -1.9)
+    add_child(turret)
+    barrel = Node3D.new()
+    turret.add_child(barrel)
+    _box(barrel, Vector3(0, 0, -0.1), Vector3(0.22, 0.25, 0.8), dark)
+    _cyl(barrel, Vector3(0, 0.02, -0.95), 0.05, 1.1, dark, Vector3(PI / 2, 0, 0))
+    _box(barrel, Vector3(0, -0.05, 0.35), Vector3(0.6, 0.4, 0.06), dark)
+    muzzle = Node3D.new()
+    muzzle.position = Vector3(0, 0.02, -1.55)
+    barrel.add_child(muzzle)
+
+
+# ------------------------------------------------------------- passengers ----
+
+## Takes the first free seat for `m`; returns the seat index or -1.
+func board(m) -> int:
+    if not alive or ai:
+        return -1
+    for i in passengers.size():
+        if passengers[i] == null or not is_instance_valid(passengers[i]):
+            passengers[i] = m
+            return i
+    return -1
+
+
+func unboard(m) -> void:
+    var i := passengers.find(m)
+    if i >= 0:
+        passengers[i] = null
+
+
+func free_seats() -> int:
+    var n := 0
+    for p in passengers:
+        if p == null or not is_instance_valid(p):
+            n += 1
+    return n
+
+
+func seat_transform(i: int) -> Transform3D:
+    return global_transform * Transform3D(Basis(), k["seats"][i])
+
+
+## A clear spot beside the vehicle for someone climbing off seat `i`.
+func dismount_point(i: int) -> Vector3:
+    var side := 1.0 if i % 2 == 1 else -1.0
+    var local := Vector3(side * (k["size"].x * 0.5 + 1.1), 0.3, -1.0 + floorf(i / 2.0) * 1.8)
+    var spot: Vector3 = global_transform * local
+    var ex: Array[RID] = [get_rid()]
+    if not Fx.ray(self, global_position + Vector3(0, 1, 0), spot + Vector3(0, 0.7, 0), 1, ex).is_empty():
+        spot = global_transform * Vector3(-local.x, local.y, local.z)
+        if not Fx.ray(self, global_position + Vector3(0, 1, 0), spot + Vector3(0, 0.7, 0), 1, ex).is_empty():
+            spot = global_transform * Vector3(0, 0.3, k["size"].z * 0.5 + 1.2)
+    return spot
+
+
 # ------------------------------------------------------------ enter/exit ----
 
 func can_enter() -> bool:
@@ -276,7 +370,8 @@ func enter(p) -> void:
     _enter_cd = 0.3
     engine.play()
     Game.play_ui("ui_confirm", -6.0)
-    level.notify("%s  -  WASD drive, mouse aim, LMB fire%s, E to exit" % [k["name"], ", RMB coax MG" if kind == "tank" else ""], 3.0)
+    level.notify("%s  -  WASD drive, mouse aim, LMB fire%s, E to exit%s" % [k["name"], ", RMB coax MG" if kind == "tank" else "",
+        "  (squad climbs aboard)" if not level.squad.is_empty() and not passengers.is_empty() else ""], 3.0)
 
 
 func exit_vehicle() -> void:
@@ -618,6 +713,9 @@ func _destroy() -> void:
     if d != null:
         d.take_damage(35.0, p, d.global_position, true)
         level.notify("VEHICLE DESTROYED - BAIL OUT!", 2.0)
+    for m in passengers.duplicate():
+        if m != null and is_instance_valid(m):
+            m.dismount(true)
 
 
 ## Non-host PCs: the host says this vehicle was destroyed.

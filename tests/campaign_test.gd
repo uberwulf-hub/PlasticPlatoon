@@ -147,6 +147,19 @@ func _play(i: int) -> void:
     for m in L.squad:
         _check(m.global_position.distance_to(p.global_position) < 12.0 and m.global_position.y > -1.0, "%s %s deployed beside the player" % [tag, m.display_name()])
     for v in L.vehicles + L.enemy_vehicles:
+        var bs := BoxShape3D.new()
+        bs.size = v.k["size"] - Vector3(0.3, 0.6, 0.3)
+        var q := PhysicsShapeQueryParameters3D.new()
+        q.shape = bs
+        q.transform = Transform3D(v.global_transform.basis, v.global_position + Vector3(0, v.k["size"].y * 0.5 + 0.3, 0))
+        q.collision_mask = 1
+        q.exclude = [v.get_rid()]
+        var hits := []
+        for h in L.get_world_3d().direct_space_state.intersect_shape(q, 4):
+            if h["collider"] is StaticBody3D and h["collider"].get_script() == null:
+                hits.append(h["collider"])
+        if not hits.is_empty():
+            _check(false, "%s %s %s starts clear of scenery at %s" % [tag, v.team, v.kind, v.global_position.snapped(Vector3.ONE)])
         if v.global_position.y < -2.0 or v.global_position.y > 4.0:
             _check(false, "%s vehicle %s sits at a sane height (%s)" % [tag, v.kind, v.global_position])
 

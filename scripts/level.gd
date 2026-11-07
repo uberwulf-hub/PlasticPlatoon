@@ -276,7 +276,7 @@ func nearest_ai_target(pos: Vector3):
     var best_d := INF
     var cands := ai_targets()
     for m in squad:
-        if m.alive and not is_protected(m):
+        if m.alive and m.ride == null and not is_protected(m):
             cands.append(m)
     for t in cands:
         var d: float = t.global_position.distance_to(pos)

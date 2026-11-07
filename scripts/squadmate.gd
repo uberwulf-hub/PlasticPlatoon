@@ -3,6 +3,8 @@ extends CharacterBody3D
 ## Tan soldiers it can see, and is a target for the Tan Army like the player.
 ## Orders (T): FOLLOW the player, or HOLD the spot where the order was given.
 ## When melted it comes back as a reinforcement near the player.
+## When the player drives, squadmates climb into the vehicle's seats, shoot
+## from there, and hop off when the player gets out.
 
 const Soldier = preload("res://scripts/plastic_soldier.gd")
 const Fx = preload("res://scripts/fx.gd")
@@ -18,6 +20,8 @@ const SIGHT := 48.0
 const DAMAGE := 7.0
 const MAX_HP := 120.0
 const RESPAWN := 20.0
+const BOARD_RANGE := 4.5          # close enough to climb aboard
+const RUN_TO_RIDE := 40.0         # run over to a vehicle the player is driving within this range
 
 var level: Node
 var slot := 0
@@ -40,6 +44,8 @@ var _side_t := 0.0
 var _hurt_t := 0.0
 var _respawn_t := 0.0
 var kills := 0
+var ride = null                   # vehicle we're sitting in
+var seat := -1
 
 
 func setup(lvl: Node, i: int, pos: Vector3) -> void:
@@ -55,6 +61,7 @@ func _ready() -> void:
     collision_layer = 2           # the "green side" layer: Tan rays and rockets hit it
     collision_mask = 1 | 4
     floor_snap_length = 0.4
+    process_physics_priority = 10     # after vehicles move, so riders don't lag a frame
     var cap := CapsuleShape3D.new()
     cap.radius = 0.35
     cap.height = 1.8
@@ -100,6 +107,9 @@ func _goal() -> Vector3:
     if hold:
         return hold_pos
     var p = level.player
+    var car = p.vehicle
+    if car != null and car.alive and car.free_seats() > 0 and global_position.distance_to(car.global_position) < RUN_TO_RIDE:
+        return car.global_position          # run to the vehicle and climb in
     var leader: Node3D = p.vehicle if p.vehicle != null else p
     var s: Vector3 = SLOTS[slot % SLOTS.size()]
     if p.vehicle != null:
@@ -116,6 +126,17 @@ func _physics_process(delta: float) -> void:
     var p = level.player
     if p == null or not is_instance_valid(p):
         return
+    if ride != null:
+        _ride(delta, p)
+        return
+    # The player is driving: head for a seat (or board straight away if we're
+    # far off and nobody's watching).
+    var car = p.vehicle
+    if car != null and not hold and car.alive and car.free_seats() > 0:
+        var dcar: float = global_position.distance_to(car.global_position)
+        if dcar < BOARD_RANGE + car.k["size"].z * 0.5 or (dcar > RUN_TO_RIDE and not _player_can_see(global_position)):
+            _board(car)
+            return
     if not is_on_floor():
         velocity.y -= GRAVITY * delta
     else:
@@ -274,8 +295,63 @@ func _shoot(e) -> void:
     level.make_noise(global_position, 30.0)
 
 
+# ---------------------------------------------------------------- riding ----
+
+func _board(car) -> void:
+    var i: int = car.board(self)
+    if i < 0:
+        return
+    ride = car
+    seat = i
+    target = null
+    velocity = Vector3.ZERO
+    collision_layer = 0           # the vehicle's armour takes the hits now
+    collision_mask = 0
+    global_transform = car.seat_transform(i)
+
+
+func _ride(delta: float, p) -> void:
+    var car = ride
+    if not is_instance_valid(car) or not car.alive or car.driver != p or hold:
+        dismount(false)
+        return
+    var t: Transform3D = car.seat_transform(seat)
+    global_position = t.origin
+    _scan_t -= delta
+    if _scan_t <= 0.0:
+        _scan_t = randf_range(0.25, 0.4)
+        target = _find_target()
+    var face: Vector3 = -t.basis.z
+    if target != null:
+        face = target.global_position - global_position
+    rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), minf(1.0, delta * 8.0))
+    if target != null:
+        _fight(delta)
+    model.animate(delta, 0.0, target == null)    # duck while riding, stand up to shoot
+
+
+## Climb (or get thrown) off the vehicle.
+func dismount(thrown: bool) -> void:
+    var car = ride
+    if car == null:
+        return
+    var spot: Vector3 = car.dismount_point(seat) if is_instance_valid(car) else global_position
+    if is_instance_valid(car):
+        car.unboard(self)
+    ride = null
+    seat = -1
+    collision_layer = 2
+    collision_mask = 1 | 4
+    if not _clear(spot):
+        spot = global_position + Vector3(0, 0.5, 0)
+    global_position = spot
+    velocity = Vector3.ZERO
+    if thrown and alive:
+        take_damage(35.0, spot, global_position, true)
+
+
 func take_damage(amount: float, _source: Vector3, hit_pos: Vector3, explosive := false) -> bool:
-    if not alive or level.is_protected(self):
+    if not alive or ride != null or level.is_protected(self):
         return false
     if explosive:
         amount *= 0.35            # also keeps your own grenades from flattening them
@@ -290,6 +366,8 @@ func take_damage(amount: float, _source: Vector3, hit_pos: Vector3, explosive :=
 
 
 func _go_down() -> void:
+    if ride != null:
+        dismount(false)
     alive = false
     target = null
     collision_layer = 0

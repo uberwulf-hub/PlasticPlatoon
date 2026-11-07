@@ -109,6 +109,8 @@ func _ready() -> void:
     _check(m2.health >= hp2 - 60.0, "player rockets don't detonate on squadmates (hp %.0f -> %.0f)" % [hp2, m2.health])
     _check(not L.ai_targets().has(m2), "squadmates don't count as players for extraction")
 
+    await _ride_tests(L, p)
+
     # Settings: zero squadmates means none deploy; co-op never deploys AI.
     Game.squad_size = 0
     main.start_level(1)
@@ -124,6 +126,83 @@ func _ready() -> void:
     for x in results:
         print(("PASS " if x[1] else "FAIL ") + x[0])
     get_tree().quit(1 if fails.size() > 0 else 0)
+
+
+## Squadmates climb into the player's vehicle, ride along, shoot from their
+## seats, hop off when the player gets out, and bail out if it's destroyed.
+func _ride_tests(L, p) -> void:
+    var apc = null
+    for v in L.vehicles:
+        if v.kind == "apc" and v.alive:
+            apc = v
+    _check(apc != null, "Operation 1 has a troop carrier")
+    if apc == null:
+        return
+    for m in L.squad:
+        m.hold = false
+    L.squad_hold = false
+    p.global_position = apc.global_position - apc.global_transform.basis.x * 2.6 + Vector3(0, 0.3, 0)
+    for i in L.squad.size():
+        L.squad[i].global_position = p.global_position + Vector3(-3.0 - i * 1.5, 0.2, 2.0)
+    await _frames(5)
+    apc.enter(p)
+    var aboard: Callable = func(): return L.squad.all(func(m): return m.ride == apc)
+    var t0 := Time.get_ticks_msec()
+    while not aboard.call() and Time.get_ticks_msec() - t0 < 6000:
+        await get_tree().physics_frame
+    _check(aboard.call(), "squad climbs into the troop carrier (%.1fs)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+    _check(apc.free_seats() == apc.passengers.size() - L.squad.size(), "carrier seats taken (%d free)" % apc.free_seats())
+    await _frames(2)
+    _check(L.hud.ord_label.text.contains("SQUAD ABOARD 2/2"), "HUD shows the squad aboard ('%s')" % L.hud.ord_label.text)
+    _check(L.nearest_ai_target(apc.global_position) != L.squad[0], "Tan troops don't target riders directly")
+    # Drive off: the riders stay in their seats.
+    var start: Vector3 = apc.global_position
+    apc.drive_input = Vector2(0, -1)
+    await _frames(90)
+    apc.drive_input = Vector2.ZERO
+    var off := 0.0
+    for m in L.squad:
+        off = maxf(off, m.global_position.distance_to(apc.seat_transform(m.seat).origin))
+    _check(apc.global_position.distance_to(start) > 5.0 and off < 0.6, "riders move with the carrier (drove %.0fm, worst seat offset %.2fm)" % [apc.global_position.distance_to(start), off])
+    # Riders shoot at Tan soldiers they can see.
+    var e = null
+    for x in L.enemies:
+        if is_instance_valid(x) and x.alive and x.s["speed"] > 0.0:
+            e = x
+            break
+    if e != null:
+        e.set_physics_process(false)
+        e.global_position = apc.global_position + apc.global_transform.basis.x * 16.0 + Vector3(0, 0.2, 0)
+        var hp0: float = e.hp
+        await _frames(150)
+        _check(not e.alive or e.hp < hp0, "riders shoot from their seats (Tan hp %.0f -> %.0f)" % [hp0, e.hp if e.alive else 0.0])
+    # Get out: everyone hops off onto the ground.
+    apc.exit_vehicle()
+    await _frames(10)
+    var off_ok: bool = L.squad.all(func(m): return m.ride == null and m.collision_layer == 2 and absf(m.global_position.y - apc.global_position.y) < 1.5)
+    _check(off_ok and apc.free_seats() == apc.passengers.size(), "squad hops off when the player gets out")
+    # Hold order: nobody boards.
+    L.toggle_squad_order()
+    apc.enter(p)
+    await _frames(90)
+    _check(L.squad.all(func(m): return m.ride == null), "squad on HOLD stays put when you drive off")
+    L.toggle_squad_order()
+    # A squadmate far away (out of sight) gets a seat straight away.
+    var far = L.squad[0]
+    far.global_position = apc.global_position + Vector3(0, 0.5, 120)
+    p.vehicle.cam_yaw = apc.rotation.y
+    t0 = Time.get_ticks_msec()
+    while far.ride == null and Time.get_ticks_msec() - t0 < 4000:
+        await get_tree().physics_frame
+    _check(far.ride == apc, "a far-off squadmate catches the ride")
+    await _frames(120)
+    # Destroyed with riders aboard: they bail out and survive.
+    p.invulnerable = true
+    var riders: Array = L.squad.filter(func(m): return m.ride == apc)
+    apc._destroy()          # (it is still inside the start safe zone, which blocks damage)
+    await _frames(5)
+    _check(not riders.is_empty() and riders.all(func(m): return m.ride == null and m.alive and m.health < m.MAX_HP), "riders bail out of a destroyed carrier, hurt but alive (%d)" % riders.size())
+    _check(p.vehicle == null, "player bails out too")
 
 
 func _open_spot(L, target: Vector3) -> Vector3:
