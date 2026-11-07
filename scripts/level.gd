@@ -40,6 +40,10 @@ var _next_pickup_id := 0
 var net = null                 # NetSync in a LAN game, else null
 var remotes := {}              # peer id -> RemotePlayer (teammates)
 var spawn_point := Vector3.ZERO
+# Safe zone around the start: Tan forces won't target, hurt or enter it.
+const SAFE_EXPOSE_MS := 3000      # firing from inside exposes you for this long
+var safe_center := Vector3.ZERO
+var safe_radius := 0.0
 var _respawn_t := 0.0
 var hvts: Array = []
 var targets_by_tag := {}
@@ -61,6 +65,9 @@ func _ready() -> void:
     player = Player.new()
     player.level = self
     spawn_point = info["spawn"]
+    safe_center = info["spawn"]
+    safe_radius = info.get("safe_radius", 22.0)
+    _build_safe_zone()
     if Net.active:
         # Spread the squad out a little at the start point.
         spawn_point += Vector3(2.5 * (Net.my_slot() - 1.5), 0, 0).rotated(Vector3.UP, info.get("spawn_yaw", 0.0))
@@ -151,18 +158,90 @@ func net_go() -> void:
                 e.set_physics_process(true)
 
 
-## Everyone the Tan Army can shoot at (host only): us plus living teammates.
+## Everyone the Tan Army can shoot at (host only): us plus living teammates
+## who aren't sheltering in the safe zone.
 func ai_targets() -> Array:
     var out: Array = []
-    if player != null and is_instance_valid(player) and player.alive:
+    if player != null and is_instance_valid(player) and player.alive and not is_protected(player):
         out.append(player)
     for r in remotes.values():
-        if r.alive:
+        if r.alive and not is_protected(r):
             out.append(r)
     return out
 
 
+func in_safe_zone(pos: Vector3) -> bool:
+    return safe_radius > 0.0 and Vector2(pos.x - safe_center.x, pos.z - safe_center.z).length() < safe_radius
+
+
+## Inside the safe zone and hasn't fired in the last few seconds.
+func is_protected(n) -> bool:
+    if n == null or not is_instance_valid(n):
+        return false
+    var who = n
+    if n.get("driver") != null:
+        who = n.driver
+    var last: int = who.get("last_fire_ms") if who.get("last_fire_ms") != null else -100000
+    return in_safe_zone(n.global_position) and Time.get_ticks_msec() - last > SAFE_EXPOSE_MS
+
+
+## Keeps a Tan destination out of the safe zone (moves it to just outside the edge).
+func outside_safe_zone(dest: Vector3, from: Vector3) -> Vector3:
+    if not in_safe_zone(dest):
+        return dest
+    var d := dest - safe_center
+    d.y = 0.0
+    if d.length() < 0.5:
+        d = from - safe_center
+        d.y = 0.0
+    return safe_center + d.normalized() * (safe_radius + 6.0) + Vector3(0, dest.y - safe_center.y, 0)
+
+
+func _build_safe_zone() -> void:
+    if safe_radius <= 0.0:
+        return
+    var root := Node3D.new()
+    root.name = "SafeZone"
+    root.position = Vector3(safe_center.x, 0.0, safe_center.z)
+    add_child(root)
+    var ring := MeshInstance3D.new()
+    var tm := TorusMesh.new()
+    tm.inner_radius = safe_radius - 0.25
+    tm.outer_radius = safe_radius
+    tm.rings = 96
+    ring.mesh = tm
+    ring.material_override = Fx.unlit(Color(0.4, 1.0, 0.45, 0.55))
+    ring.position.y = 0.08
+    root.add_child(ring)
+    var wall := MeshInstance3D.new()
+    var cm := CylinderMesh.new()
+    cm.top_radius = safe_radius
+    cm.bottom_radius = safe_radius
+    cm.height = 2.2
+    cm.cap_top = false
+    cm.cap_bottom = false
+    cm.radial_segments = 96
+    wall.mesh = cm
+    var wm := Fx.unlit(Color(0.4, 1.0, 0.45, 0.07))
+    wm.cull_mode = BaseMaterial3D.CULL_DISABLED
+    wall.material_override = wm
+    wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    wall.position.y = 1.1
+    root.add_child(wall)
+    var lbl := Label3D.new()
+    lbl.text = "SAFE ZONE"
+    lbl.font_size = 72
+    lbl.pixel_size = 0.01
+    lbl.outline_size = 12
+    lbl.modulate = Color(0.55, 1.0, 0.55, 0.85)
+    lbl.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+    var fwd := Vector3(0, 0, -1).rotated(Vector3.UP, info.get("spawn_yaw", 0.0))
+    lbl.position = fwd * safe_radius + Vector3(0, 2.8, 0)
+    root.add_child(lbl)
+
+
 func nearest_ai_target(pos: Vector3):
+    # (ai_targets already leaves out anyone protected by the safe zone)
     var best = null
     var best_d := INF
     for t in ai_targets():

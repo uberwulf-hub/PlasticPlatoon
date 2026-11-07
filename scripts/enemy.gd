@@ -110,6 +110,8 @@ func _player():
     var p = level.nearest_ai_target(global_position) if level.net != null else level.player
     if p == null or not is_instance_valid(p) or not p.alive:
         return null
+    if level.is_protected(p.vehicle if p.vehicle != null else p):
+        return null            # safe zone: hold fire
     return p
 
 
@@ -190,6 +192,11 @@ func _physics_process(delta: float) -> void:
             else:
                 desired = _combat(delta, p, to_p, dist)
 
+    # Never walk into the safe zone (and step back out if pushed in).
+    if level.safe_radius > 0.0 and desired != Vector3.ZERO and level.in_safe_zone(global_position + desired * 2.0):
+        var out: Vector3 = global_position - level.safe_center
+        out.y = 0.0
+        desired = out.normalized() * 0.6 if level.in_safe_zone(global_position) else Vector3.ZERO
     var spd: float = s["speed"] * (0.55 if state == PATROL else 1.0)
     velocity.x = move_toward(velocity.x, desired.x * spd, 20.0 * delta)
     velocity.z = move_toward(velocity.z, desired.z * spd, 20.0 * delta)

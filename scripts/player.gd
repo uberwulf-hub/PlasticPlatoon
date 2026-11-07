@@ -64,6 +64,7 @@ var shake := 0.0
 var shots_fired := 0
 var shots_hit := 0
 var _net_shot := false        # LAN: tells teammates to play our firing animation
+var last_fire_ms := -100000   # firing from the safe zone exposes you briefly
 
 
 func _ready() -> void:
@@ -285,6 +286,7 @@ func _fire(w: Dictionary) -> void:
         return
     mag[current] -= 1
     fire_cd = w["interval"]
+    last_fire_ms = Time.get_ticks_msec()
     shots_fired += 1
     var cam_b := camera.global_transform.basis
     var cam_pos := camera.global_position
@@ -429,6 +431,7 @@ func _throw_grenade() -> void:
         return
     grenades -= 1
     grenade_cd = 0.9
+    last_fire_ms = Time.get_ticks_msec()
     Game.play_sfx("throw", global_position, -4.0)
     var fwd := -camera.global_transform.basis.z
     var gpos := global_position + Vector3(0, 1.6, 0) + fwd * 0.7
@@ -462,6 +465,8 @@ func _call_drone() -> void:
 func take_damage(amount: float, _source: Vector3, _hit_pos: Vector3, _explosive := false) -> bool:
     if not alive or invulnerable or vehicle != null:
         return false        # the vehicle's armour takes the hits while we're inside
+    if level != null and level.is_protected(self):
+        return false        # safe zone
     if armor > 0.0:
         var absorbed := minf(armor, amount * 0.6)
         armor -= absorbed

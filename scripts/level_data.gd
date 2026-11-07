@@ -270,7 +270,7 @@ static func _desert(L) -> Dictionary:
                 Vector3(0, rng.randf_range(2.5, 4.0) if tall else rng.randf_range(1.2, 1.8), 0))
 
     return {
-        "spawn": Vector3(0, 0.5, 86), "spawn_yaw": 0.0, "drones": 1,
+        "spawn": Vector3(0, 0.5, 86), "spawn_yaw": 0.0, "drones": 1, "safe_radius": 24.0,
         "start_weapons": ["carbine", "shotgun"],
         "sky_top": Color(0.32, 0.55, 0.85), "sky_horizon": Color(0.9, 0.82, 0.68),
         "sun_color": Color(1.0, 0.93, 0.8), "sun_energy": 1.15, "sun_rot": Vector3(-52, 30, 0),
@@ -372,7 +372,7 @@ static func _urban(L) -> Dictionary:
         [Vector3(50, 0, 10), "rifleman"], [Vector3(48, 0, -20), "gunner"], [Vector3(-50, 0, 30), "rifleman"],
         [Vector3(-48, 0, -10), "rifleman"], [Vector3(-25, 0, -50), "rocketeer"], [Vector3(25, 0, 50), "rifleman"],
         [Vector3(-50, 0, -50), "gunner"], [Vector3(50, 0, 60), "rifleman"], [Vector3(-20, 0, 2), "rifleman"],
-        [Vector3(70, 0, -3), "rifleman"], [Vector3(0, 0, 70), "rifleman"],
+        [Vector3(70, 0, -3), "rifleman"], [Vector3(0, 0, 62), "rifleman"],
     ]
     for t in troops:
         L.add_enemy(t[0] + Vector3(0, 0.1, 0), t[1])
@@ -393,7 +393,7 @@ static func _urban(L) -> Dictionary:
     L.add_pickup(Vector3(0, 0, -50), "ammo")
 
     return {
-        "spawn": Vector3(0, 0.5, 92), "spawn_yaw": 0.0, "drones": 2,
+        "spawn": Vector3(0, 0.5, 92), "spawn_yaw": 0.0, "drones": 2, "safe_radius": 22.0,
         "start_weapons": ["carbine", "shotgun", "launcher"],
         "sky_top": Color(0.4, 0.5, 0.65), "sky_horizon": Color(0.78, 0.74, 0.7),
         "sun_color": Color(1.0, 0.85, 0.7), "sun_energy": 1.15, "sun_rot": Vector3(-35, -40, 0),
@@ -549,7 +549,7 @@ static func _tabletop(L) -> Dictionary:
     L.add_pickup(Vector3(55, 0, -50), "health")
 
     return {
-        "spawn": Vector3(0, 0.5, 54), "spawn_yaw": 0.0, "drones": 2,
+        "spawn": Vector3(0, 0.5, 54), "spawn_yaw": 0.0, "drones": 2, "safe_radius": 18.0,
         "start_weapons": ["carbine", "shotgun", "launcher", "sniper"],
         "sky_top": Color(0.62, 0.58, 0.52), "sky_horizon": Color(0.74, 0.7, 0.62),
         "sun_color": Color(1.0, 0.9, 0.75), "sun_energy": 0.95, "sun_rot": Vector3(-60, 20, 0),

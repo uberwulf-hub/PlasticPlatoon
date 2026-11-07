@@ -17,6 +17,7 @@ var health := 100.0
 var armor := 0.0
 var vehicle: Node = null          # the vehicle node they're driving, if any
 var weapon := "carbine"
+var last_fire_ms := -100000
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _hspeed := 0.0
@@ -76,6 +77,7 @@ func apply_state(d: PackedFloat32Array) -> void:
     armor = d[11]
     if d[12] > 0.5:
         model.notify_shot()
+        last_fire_ms = Time.get_ticks_msec()
     if not _have_state:
         position = _target_pos
         rotation.y = _target_yaw
@@ -128,7 +130,7 @@ func _physics_process(delta: float) -> void:
 
 ## Server only: something hit this teammate. Their own PC applies it.
 func take_damage(amount: float, source: Vector3, _hit_pos: Vector3, explosive := false) -> bool:
-    if not alive or vehicle != null:
+    if not alive or vehicle != null or level.is_protected(self):
         return false
     if level.net:
         level.net.send_damage(peer_id, amount, source, explosive)

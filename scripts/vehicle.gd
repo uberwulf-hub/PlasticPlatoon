@@ -87,6 +87,7 @@ var ai_travelled := 0.0
 # ---- LAN co-op ----
 var net_puppet := false           # follows sent state instead of simulating
 var occupant_peer := 0            # peer driving it (0 = empty)
+var last_fire_ms := -100000
 var _net_pos := Vector3.ZERO
 var _net_yaw := 0.0
 var _net_turret := 0.0
@@ -479,6 +480,8 @@ func _aim_point() -> Vector3:
 func fire_primary() -> void:
     if fire_cd > 0.0 or not alive:
         return
+    if not ai and driver:
+        driver.last_fire_ms = Time.get_ticks_msec()
     fire_cd = k["primary_interval"]
     if k["primary"] == "cannon":
         var m := muzzle.global_position
@@ -518,6 +521,8 @@ func fire_primary() -> void:
 func fire_secondary() -> void:
     if not k.has("secondary_interval") or fire2_cd > 0.0 or not alive:
         return
+    if not ai and driver:
+        driver.last_fire_ms = Time.get_ticks_msec()
     fire2_cd = k["secondary_interval"]
     _bullet(coax_muzzle.global_position, k["secondary_damage"], 2.5, "lmg")
 
@@ -578,6 +583,8 @@ func _bullet(from: Vector3, damage: float, spread_deg: float, sound: String) -> 
 func take_damage(amount: float, _source: Vector3, hit_pos: Vector3, explosive := false) -> bool:
     if not alive:
         return false
+    if not ai and level.is_protected(self):
+        return false        # safe zone
     if not explosive:
         amount *= k["bullet_armor"]
         Fx.impact(level, hit_pos, Vector3.UP)
@@ -647,6 +654,8 @@ func _ai_target() -> Node3D:
     var p = (level.nearest_ai_target(global_position) if level.net != null else level.player) if level else null
     if p == null or not is_instance_valid(p) or not p.alive:
         return null
+    if level.is_protected(p.vehicle if p.vehicle != null else p):
+        return null            # safe zone
     return p.vehicle if p.vehicle != null else p
 
 
@@ -714,6 +723,7 @@ func _ai_update(delta: float) -> Vector2:
             var ang := randf() * TAU
             _ai_patrol = home + Vector3(cos(ang), 0, sin(ang)) * randf_range(6.0, 18.0)
 
+    dest = level.outside_safe_zone(dest, global_position)
     # ---- steering ----
     var to_d := dest - global_position
     to_d.y = 0.0

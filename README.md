@@ -58,6 +58,15 @@ The project uses the Forward+ renderer. On older GPUs or integrated graphics, sw
 
 Bullets deal only 30% damage to objective hardware (radar jammers, SAMs and boosters). Use the AT4, grenades or a drone strike on them.
 
+## Safe zone
+
+Each operation starts inside a **safe zone**, shown as a faint green ring with a "SAFE ZONE" sign:
+- While you're inside it, Tan soldiers and vehicles won't target you, and nothing can hurt you, including stray rockets and splash damage.
+- Tan forces won't walk or drive into it.
+- Firing from inside leaves you exposed for 3 seconds, so you can't snipe safely from the zone.
+
+The HUD shows when you're protected. In co-op everyone respawns here too, so nobody gets spawn-camped.
+
 ## Vehicles
 
 Walk up to a jeep or tank and press **E**. WASD drives, the mouse aims the mounted gun, and **LMB** fires. Press **E** again to get out.
@@ -116,7 +125,7 @@ Before and after each operation, the Plastic News Network breaks in with the hea
 
 The after-action report reacts to how you played. Lots of headshots, spraying everywhere, a speed run and failing each get their own segment.
 
-Space or click skips ahead a line, and Esc skips the whole segment. You can turn news breaks off in Settings. The scripts live in `scripts/news_scripts.gd` if you want to write more.
+The anchors **read their lines aloud** using the speech voices built into Windows: Chip and Gary get male voices and Brenda a female one, each with its own pitch and pace. If a PC has no speech voices, you get cartoon gibberish instead. Space or click skips ahead a line, and Esc skips the whole segment. You can turn news breaks or narration off in Settings. The scripts live in `scripts/news_scripts.gd` if you want to write more.
 
 ## Campaign
 

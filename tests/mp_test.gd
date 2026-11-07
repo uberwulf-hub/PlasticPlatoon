@@ -158,7 +158,8 @@ func _run_client() -> void:
     _check(hits[0] > 0, "client got the hit marker from the host")
 
     await _at(9.0)
-    # t=10 the host hurts us.
+    # t=10 the host hurts us (outside the start's safe zone, where damage applies).
+    p.global_position = L.safe_center + Vector3(L.safe_radius + 8.0, 0.5, 0)
     p.invulnerable = false
     var hp0: float = p.health + p.armor
     await _at(10.0)

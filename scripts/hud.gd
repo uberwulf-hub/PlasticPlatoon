@@ -22,6 +22,7 @@ var info_label: Label
 var msg_label: Label
 var prompt_label: Label
 var team_label: Label
+var zone_label: Label
 var show_team := false
 var msg_t := 0.0
 var hit_t := 0.0
@@ -95,6 +96,11 @@ func _ready() -> void:
     team_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     UI.place(team_label, Vector2(1, 0), Rect2(-420, 90, 392, 140))
     root.add_child(team_label)
+
+    zone_label = UI.label("", 20, Color(0.55, 1.0, 0.55), 6)
+    zone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    UI.place(zone_label, Vector2(0.5, 0), Rect2(-400, 96, 800, 30))
+    root.add_child(zone_label)
 
     prompt_label = UI.label("", 22, Color(1, 1, 1), 6)
     prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -195,6 +201,12 @@ func _process(delta: float) -> void:
     dmg_t = maxf(0.0, dmg_t - delta * 0.9)
     vignette.color.a = dmg_t * 0.35 + (0.25 if not player.alive else 0.0)
     obj_label.text = level.get_objective_text()
+    var watched = player.vehicle if player.vehicle != null else player
+    if player.alive and level.in_safe_zone(watched.global_position):
+        zone_label.text = "SAFE ZONE  -  Tan forces won't fire here" if level.is_protected(watched) else "SAFE ZONE  -  you fired, so you're exposed for a moment"
+        zone_label.modulate = Color(1, 1, 1) if level.is_protected(watched) else Color(1.0, 0.8, 0.4)
+    else:
+        zone_label.text = ""
     if show_team:
         var lines := ["SQUAD"]
         lines.append("%s (you)  %s" % [Net.player_name(Net.my_id()), "%d HP" % int(ceil(player.health)) if player.alive else "DOWN"])

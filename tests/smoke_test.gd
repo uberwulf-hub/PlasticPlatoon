@@ -34,7 +34,8 @@ func _ready() -> void:
     main.level.request_restart.emit()
     await _frames(20)
     _check(main.level != null and main.level.player.alive, "restart works")
-    # death path
+    # death path (outside the start's safe zone, where damage applies)
+    main.level.player.global_position = main.level.safe_center + Vector3(main.level.safe_radius + 10.0, 0.5, 0)
     main.level.player.take_damage(9999.0, Vector3.ZERO, Vector3.ZERO)
     await _wait_finish()
     _check(finished_result == false, "death -> mission failed")
@@ -89,6 +90,7 @@ func _play_level(i: int) -> void:
     p._call_drone()
     await _frames(240)
     _check(p.shots_fired > 0, "L%d weapons fired (%d shots)" % [i, p.shots_fired])
+    _safe_zone_test(i, L, p)
     _one_gun_test(i, L, p)
     _invisible_wall_test(i, L)
     if i == 0:
@@ -316,6 +318,8 @@ func _open_spot_near(L, v, dists := [25.0, 18.0, 32.0]):
         for k in 16:
             var dir := Vector3.FORWARD.rotated(Vector3.UP, v.rotation.y + k * TAU / 16.0)
             var pos: Vector3 = v.global_position + dir * dist
+            if L.in_safe_zone(pos):
+                continue        # Tan units deliberately ignore players in the safe zone
             var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(pos + Vector3(0, 3, 0), pos + Vector3(0, -2, 0), 1))
             if ground.is_empty() or absf(ground["position"].y - v.global_position.y) > 1.0:
                 continue
@@ -413,3 +417,38 @@ func _one_gun_test(i: int, L, p) -> void:
         if n != 1:
             bad.append("%s:%d" % [who.name, n])
     _check(bad.is_empty(), "L%d every soldier holds exactly one gun %s" % [i, str(bad.slice(0, 3)) if not bad.is_empty() else ""])
+
+
+
+## The start point is a safe zone: no Tan units start inside it, players
+## there can't be hurt or targeted, firing exposes you briefly, and stepping
+## out makes you a target again.
+func _safe_zone_test(i: int, L, p) -> void:
+    var inside := []
+    for e in L.enemies + L.enemy_vehicles:
+        if L.in_safe_zone(e.global_position):
+            inside.append(str(e.global_position.snapped(Vector3.ONE)))
+    _check(inside.is_empty(), "L%d no Tan units start in the safe zone %s" % [i, str(inside)])
+    var was_inv: bool = p.invulnerable
+    p.invulnerable = false
+    p.global_position = L.safe_center + Vector3(0, 0.3, 0)
+    p.last_fire_ms = -100000
+    var hp0: float = p.health + p.armor
+    p.take_damage(30.0, Vector3.ZERO, p.global_position, false)
+    _check(p.health + p.armor == hp0, "L%d no damage inside the safe zone" % i)
+    var e = null
+    for x in L.enemies:
+        if x.alive and x.s["speed"] > 0.0:
+            e = x
+            break
+    _check(e != null and e._player() == null, "L%d Tan troops won't target a player in the safe zone" % i)
+    p.last_fire_ms = Time.get_ticks_msec()
+    p.take_damage(5.0, Vector3.ZERO, p.global_position, false)
+    _check(p.health + p.armor < hp0, "L%d firing from the safe zone exposes you" % i)
+    p.global_position = L.safe_center + Vector3(L.safe_radius + 10.0, 0.3, 0)
+    p.last_fire_ms = -100000
+    _check(e != null and e._player() == p, "L%d outside the zone you're a target again" % i)
+    p.health = 100.0
+    p.armor = 25.0
+    p.global_position = L.safe_center + Vector3(0, 0.3, 0)
+    p.invulnerable = was_inv
