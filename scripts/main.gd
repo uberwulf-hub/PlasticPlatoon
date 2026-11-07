@@ -19,6 +19,13 @@ var _boom_t := 3.0
 
 
 func _ready() -> void:
+    Net.start_requested.connect(func(op): start_level(op))
+    Net.lobby_requested.connect(show_lobby)
+    Net.host_left.connect(func(): _mp_message("The host left the game."))
+    Net.join_failed.connect(func(reason): _mp_message(reason))
+    Net.players_changed.connect(func():
+        if get_meta("in_lobby", false):
+            show_lobby())
     show_main_menu()
 
 
@@ -57,6 +64,10 @@ func _new_ui(dim := 0.0) -> Control:
 
 func _clear_level() -> void:
     if level and is_instance_valid(level):
+        # Remove right away so a new level can take the name "Level" (LAN
+        # games address each other's levels by node path).
+        if level.get_parent() == self:
+            remove_child(level)
         level.queue_free()
     level = null
 
@@ -71,6 +82,12 @@ func _clear_diorama() -> void:
 # ---------------------------------------------------------------- menus ----
 
 func show_main_menu() -> void:
+    set_meta("in_lobby", false)
+    Net.stop_discovery()
+    if Net.active and not Net.in_game:
+        pass
+    if Net.active and level == null:
+        Net.leave()
     _cancel_news()
     _clear_level()
     get_tree().paused = false
@@ -95,6 +112,7 @@ func show_main_menu() -> void:
     spacer.custom_minimum_size = Vector2(0, 30)
     vb.add_child(spacer)
     vb.add_child(UI.button("Campaign", show_campaign))
+    vb.add_child(UI.button("Multiplayer (LAN)", show_multiplayer))
     vb.add_child(UI.button("Settings", show_settings))
     vb.add_child(UI.button("Controls", show_controls))
     vb.add_child(UI.button("Quit", func(): get_tree().quit()))
@@ -222,6 +240,7 @@ func start_level(i: int) -> void:
         ui = null
     get_tree().paused = false
     level = Level.new()
+    level.name = "Level"
     level.level_index = i
     level.finished.connect(_on_level_finished)
     level.request_menu.connect(show_main_menu)
@@ -263,7 +282,10 @@ func _on_level_finished(success: bool, stats: Dictionary) -> void:
     if ui:
         ui.queue_free()
         ui = null
-    _news(NewsScripts.outro(i, success, stats), func(): _show_debrief(success, stats))
+    if Net.active:
+        _show_debrief(success, stats)       # LAN: straight to the debrief so the squad stays in step
+    else:
+        _news(NewsScripts.outro(i, success, stats), func(): _show_debrief(success, stats))
 
 
 func _show_debrief(success: bool, stats: Dictionary) -> void:
@@ -293,6 +315,18 @@ func _show_debrief(success: bool, stats: Dictionary) -> void:
         grid.add_child(UI.label(r[0], 19, Color(0.8, 0.82, 0.7)))
         grid.add_child(UI.label(r[1], 19, Color.WHITE))
     vb.add_child(grid)
+    if Net.active:
+        if multiplayer.is_server():
+            if success and not last:
+                vb.add_child(UI.button("Next Operation (everyone)", func(): Net.start_game(i + 1), 520))
+            vb.add_child(UI.button("Retry Operation (everyone)", func(): Net.start_game(i), 520))
+            vb.add_child(UI.button("Back to Lobby", func(): Net.back_to_lobby(), 520))
+        else:
+            vb.add_child(UI.label("Waiting for the host to pick the next operation...", 17, Color(0.8, 0.85, 0.7)))
+        vb.add_child(UI.button("Leave Game", func():
+            Net.leave()
+            show_main_menu(), 520))
+        return
     if success and not last:
         vb.add_child(UI.button("Next Operation", func(): show_briefing_from_game(i + 1), 520))
     vb.add_child(UI.button("Retry Operation", func(): start_level(i), 520))
@@ -374,3 +408,136 @@ func _build_diorama() -> void:
     diorama_cam.fov = 55
     diorama.add_child(diorama_cam)
     diorama_cam.current = true
+
+
+# ------------------------------------------------------------ multiplayer ----
+
+func show_multiplayer() -> void:
+    set_meta("in_lobby", false)
+    if Net.active:
+        Net.leave()
+    Net.start_discovery()
+    var root := _new_ui(0.4)
+    var vb := UI.centered_panel(root, 640)
+    vb.add_child(UI.label("MULTIPLAYER (LAN)", 40, UI.ACCENT))
+    vb.add_child(UI.label("Co-op for up to 4 players on the same network.", 17))
+    var row := HBoxContainer.new()
+    row.add_child(UI.label("Your name  ", 19))
+    var name_edit := LineEdit.new()
+    name_edit.text = Game.player_name
+    name_edit.max_length = 16
+    name_edit.custom_minimum_size = Vector2(300, 40)
+    name_edit.text_changed.connect(func(t):
+        Game.player_name = t
+        Game.save())
+    row.add_child(name_edit)
+    vb.add_child(row)
+    vb.add_child(UI.button("Host a game", func():
+        var err := Net.host(Game.player_name)
+        if err != "":
+            _mp_message(err)
+        else:
+            Net.stop_discovery()
+            show_lobby(), 560))
+    vb.add_child(UI.label("Games on your network", 19, UI.ACCENT))
+    var list := VBoxContainer.new()
+    list.name = "HostList"
+    vb.add_child(list)
+    _fill_host_list(list)
+    if not Net.hosts_changed.is_connected(_on_hosts_changed):
+        Net.hosts_changed.connect(_on_hosts_changed)
+    set_meta("host_list", list)
+    var ip_row := HBoxContainer.new()
+    var ip_edit := LineEdit.new()
+    ip_edit.placeholder_text = "or type the host's IP, e.g. 192.168.1.20"
+    ip_edit.custom_minimum_size = Vector2(380, 40)
+    ip_row.add_child(ip_edit)
+    ip_row.add_child(UI.button("Join", func(): _join(ip_edit.text), 160))
+    vb.add_child(ip_row)
+    vb.add_child(UI.label("Allow Plastic Platoon through Windows Firewall when asked (UDP ports 7777-7778).", 14, Color(0.75, 0.78, 0.68)))
+    vb.add_child(UI.button("Back", show_main_menu, 560))
+
+
+func _on_hosts_changed() -> void:
+    var list = get_meta("host_list", null)
+    if list != null and is_instance_valid(list):
+        _fill_host_list(list)
+
+
+func _fill_host_list(list: VBoxContainer) -> void:
+    for c in list.get_children():
+        c.queue_free()
+    if Net.hosts.is_empty():
+        list.add_child(UI.label("  Looking for games...", 17, Color(0.75, 0.78, 0.68)))
+        return
+    for ip in Net.hosts:
+        var h: Dictionary = Net.hosts[ip]
+        var full: bool = h["players"] >= Net.MAX_PLAYERS or h["started"]
+        var b := UI.button("%s's game   (%d/%d)%s" % [h["name"], h["players"], Net.MAX_PLAYERS, "  - in progress" if h["started"] else ""], func(): _join(ip), 560)
+        b.disabled = full
+        list.add_child(b)
+
+
+func _join(ip: String) -> void:
+    if ip.strip_edges() == "":
+        return
+    Net.stop_discovery()
+    Net.join(ip, Game.player_name)
+    show_lobby()
+
+
+func show_lobby() -> void:
+    _clear_level()
+    get_tree().paused = false
+    Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+    if diorama == null:
+        _build_diorama()
+    set_meta("in_lobby", true)
+    var root := _new_ui(0.4)
+    var vb := UI.centered_panel(root, 600)
+    var host: bool = Net.active and multiplayer.is_server()
+    vb.add_child(UI.label("LOBBY", 40, UI.ACCENT))
+    if not Net.active:
+        vb.add_child(UI.label("Not connected.", 18))
+    elif Net.players.is_empty():
+        vb.add_child(UI.label("Connecting...", 18))
+    else:
+        vb.add_child(UI.label("Squad (%d/%d)" % [Net.players.size(), Net.MAX_PLAYERS], 19))
+        var ids := Net.players.keys()
+        ids.sort_custom(func(a, b): return Net.players[a]["slot"] < Net.players[b]["slot"])
+        for id in ids:
+            var tag := "  (host)" if id == 1 else ""
+            tag += "  (you)" if id == Net.my_id() else ""
+            vb.add_child(UI.label("  ■  " + Net.player_name(id) + tag, 20, Net.SLOT_COLORS[Net.players[id]["slot"] % 4].lightened(0.35)))
+    if host:
+        vb.add_child(UI.label("Operation", 19, UI.ACCENT))
+        var pick := OptionButton.new()
+        for i in LevelData.META.size():
+            pick.add_item("%d. %s" % [i + 1, LevelData.META[i]["name"]], i)
+        pick.selected = clampi(get_meta("mp_op", 0), 0, LevelData.META.size() - 1)
+        pick.item_selected.connect(func(idx): set_meta("mp_op", idx))
+        pick.custom_minimum_size = Vector2(520, 44)
+        vb.add_child(pick)
+        vb.add_child(UI.button("START", func(): Net.start_game(get_meta("mp_op", 0)), 520))
+    elif Net.active:
+        vb.add_child(UI.label("Waiting for the host to start...", 17, Color(0.8, 0.85, 0.7)))
+    vb.add_child(UI.button("Leave", func():
+        Net.leave()
+        show_multiplayer(), 520))
+
+
+func _mp_message(text: String) -> void:
+    set_meta("in_lobby", false)
+    _clear_level()
+    get_tree().paused = false
+    Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+    if diorama == null:
+        _build_diorama()
+    var root := _new_ui(0.5)
+    var vb := UI.centered_panel(root, 520)
+    vb.add_child(UI.label("MULTIPLAYER", 34, UI.ACCENT))
+    var l := UI.label(text, 19)
+    l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    l.custom_minimum_size = Vector2(460, 0)
+    vb.add_child(l)
+    vb.add_child(UI.button("OK", show_multiplayer, 460))

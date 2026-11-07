@@ -47,6 +47,13 @@ var strafe_t := 0.0
 var stuck_t := 0.0
 var last_known := Vector3.ZERO
 var look_yaw := 0.0
+# LAN co-op: on non-host PCs enemies are puppets that follow the host's snapshots.
+var net_puppet := false
+var _net_pos := Vector3.ZERO
+var _net_yaw := 0.0
+var _net_hspeed := 0.0
+var _net_have := false
+var _net_shot := false
 
 
 func setup(lvl: Node, t: String, pos: Vector3, hvt := false) -> void:
@@ -100,14 +107,37 @@ func _ready() -> void:
 func _player():
     if level == null:
         return null
-    var p = level.player
+    var p = level.nearest_ai_target(global_position) if level.net != null else level.player
     if p == null or not is_instance_valid(p) or not p.alive:
         return null
     return p
 
 
+## Host snapshot for this soldier (non-host PCs only).
+func net_apply(pos: Vector3, yaw: float, hspeed: float, flags: int) -> void:
+    if not net_puppet:
+        return
+    _net_pos = pos
+    _net_yaw = yaw
+    _net_hspeed = hspeed
+    if not _net_have:
+        position = pos
+        rotation.y = yaw
+        _net_have = true
+    if flags & 2:
+        model.notify_shot()
+    if alive and not (flags & 1):
+        _die_visual()
+
+
 func _physics_process(delta: float) -> void:
     if not alive:
+        return
+    if net_puppet:
+        var k := minf(1.0, delta * 12.0)
+        position = position.lerp(_net_pos, k) if position.distance_to(_net_pos) < 8.0 else _net_pos
+        rotation.y = lerp_angle(rotation.y, _net_yaw, k)
+        model.animate(delta, _net_hspeed, false)
         return
     var p = _player()
     var to_p := Vector3.ZERO
@@ -273,6 +303,8 @@ func _shoot(p) -> void:
         r.setup(self, level, muzzle, (aim - muzzle).normalized(), s["damage"] * Game.enemy_damage_mult(), 4.0)
         r.speed = 30.0
         level.add_child(r)
+        if level.net:
+            level.net.send_projectile("rocket", muzzle, (aim - muzzle).normalized(), 0.0, 4.0, 30.0)
         Game.play_sfx("rocket", muzzle, -2.0)
         Fx.muzzle_flash(level, muzzle)
         return
@@ -295,14 +327,19 @@ func _shoot(p) -> void:
     if not hit.is_empty():
         end = hit["position"]
         var col = hit["collider"]
-        if col == p or (p.vehicle != null and col == p.vehicle):
+        var is_player_side: bool = col != null and (col.is_in_group("player") or (col.is_in_group("vehicles") and not col.ai))
+        if is_player_side:
             col.take_damage(s["damage"] * Game.enemy_damage_mult(), global_position, end, false)
         else:
             Fx.impact(level, end, hit["normal"])
-    Fx.tracer(level, muzzle, end, Color(1.0, 0.45, 0.3))
-    Fx.muzzle_flash(level, muzzle)
     model.notify_shot()
-    Game.play_sfx(s["sound"], muzzle, -3.0)
+    _net_shot = true
+    if level.net:
+        level.net.fx_shot(muzzle, end, Color(1.0, 0.45, 0.3), s["sound"], -3.0)
+    else:
+        Fx.tracer(level, muzzle, end, Color(1.0, 0.45, 0.3))
+        Fx.muzzle_flash(level, muzzle)
+        Game.play_sfx(s["sound"], muzzle, -3.0)
 
 
 func hear(pos: Vector3) -> void:
@@ -333,6 +370,24 @@ func take_damage(amount: float, source: Vector3, hit_pos: Vector3, explosive := 
         _die(headshot)
         return true
     return false
+
+
+## Non-host PCs: the host says this soldier is down.
+func _die_visual() -> void:
+    alive = false
+    remove_from_group("enemies")
+    remove_from_group("damageable")
+    collision_layer = 0
+    collision_mask = 0
+    set_physics_process(false)
+    model.melt()
+    Game.play_sfx("melt", global_position, -4.0)
+    var t := Timer.new()
+    t.wait_time = 14.0
+    t.one_shot = true
+    t.autostart = true
+    t.timeout.connect(queue_free)
+    add_child(t)
 
 
 func _die(headshot: bool) -> void:

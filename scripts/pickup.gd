@@ -16,6 +16,7 @@ const INFO := {
 
 var level: Node
 var kind := "ammo"
+var net_id := -1
 var visual: Node3D
 var t := 0.0
 var check_t := 0.0
@@ -87,7 +88,11 @@ func _physics_process(delta: float) -> void:
         return
     check_t = 0.25
     for b in get_overlapping_bodies():
-        if b.is_in_group("player") and b.alive and b.give_pickup(kind):
+        # Only our own soldier collects things on this PC (teammates collect on theirs).
+        if b == level.player and b.alive and b.give_pickup(kind):
             level.notify("Picked up " + str(INFO.get(kind, INFO["ammo"])["label"]).trim_prefix("+ "), 1.6)
+            if level.net:
+                level.net.pickup_taken(net_id)
+            level.pickups.erase(net_id)
             queue_free()
             return

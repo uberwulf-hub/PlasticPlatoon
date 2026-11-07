@@ -8,6 +8,7 @@ var fuse := 2.4
 var radius := 6.5
 var damage := 140.0
 var _done := false
+var visual_only := false
 
 
 func setup(lvl: Node) -> void:
@@ -52,8 +53,10 @@ func _physics_process(delta: float) -> void:
     if fuse <= 0.0 and not _done:
         _done = true
         var p := global_position
-        Fx.explosion(level, p, radius * 0.75)
-        Game.play_sfx("explosion", p)
+        if visual_only:
+            queue_free()
+            return
+        level.boom(p, radius * 0.75)
         level.apply_explosion(p, radius, damage)
         level.make_noise(p, 70.0)
         queue_free()

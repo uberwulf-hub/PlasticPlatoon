@@ -84,6 +84,15 @@ var _ai_stuck_decay := 0.0
 var ai_shots := 0
 var ai_travelled := 0.0
 
+# ---- LAN co-op ----
+var net_puppet := false           # follows sent state instead of simulating
+var occupant_peer := 0            # peer driving it (0 = empty)
+var _net_pos := Vector3.ZERO
+var _net_yaw := 0.0
+var _net_turret := 0.0
+var _net_barrel := 0.0
+var _net_have := false
+
 
 func setup(lvl: Node, kd: String, pos: Vector3, rot_y := 0.0, tm := "green") -> void:
     level = lvl
@@ -247,7 +256,7 @@ func _build_tank() -> void:
 # ------------------------------------------------------------ enter/exit ----
 
 func can_enter() -> bool:
-    return alive and driver == null and not ai
+    return alive and driver == null and not ai and occupant_peer == 0
 
 
 func enter(p) -> void:
@@ -274,6 +283,8 @@ func exit_vehicle() -> void:
         return
     var p = driver
     driver = null
+    if level.net != null and occupant_peer == multiplayer.get_unique_id():
+        level.net.release_vehicle(level.vehicles.find(self))
     p.vehicle = null
     collision_layer = 1
     engine.stop()
@@ -305,7 +316,47 @@ func _unhandled_input(event: InputEvent) -> void:
         cam_pitch = clampf(cam_pitch, -0.9, 0.35)
 
 
+## Host snapshot (non-host PCs): position, turret, health and who's driving.
+func net_apply(pos: Vector3, yaw: float, tur: float, bar: float, new_hp: float, is_alive: bool, spd: float, occ: int) -> void:
+    hp = new_hp
+    occupant_peer = occ
+    if alive and not is_alive:
+        _destroy_visual()
+        return
+    if not net_puppet:
+        return               # we're driving it: our own simulation wins
+    _net_follow(pos, yaw, tur, bar, spd)
+
+
+## State sent by whoever is driving it: [x, y, z, yaw, turret, barrel, speed].
+func net_drive_apply(vd: PackedFloat32Array) -> void:
+    if net_puppet:
+        _net_follow(Vector3(vd[0], vd[1], vd[2]), vd[3], vd[4], vd[5], vd[6])
+
+
+func _net_follow(pos: Vector3, yaw: float, tur: float, bar: float, spd: float) -> void:
+    _net_pos = pos
+    _net_yaw = yaw
+    _net_turret = tur
+    _net_barrel = bar
+    speed = spd
+    if not _net_have:
+        position = pos
+        rotation.y = yaw
+        _net_have = true
+
+
 func _physics_process(delta: float) -> void:
+    if net_puppet:
+        if _net_have:
+            var k2 := minf(1.0, delta * 12.0)
+            position = position.lerp(_net_pos, k2) if position.distance_to(_net_pos) < 10.0 else _net_pos
+            rotation.y = lerp_angle(rotation.y, _net_yaw, k2)
+            if turret:
+                turret.rotation.y = lerp_angle(turret.rotation.y, _net_turret, k2)
+                barrel.rotation.x = lerpf(barrel.rotation.x, _net_barrel, k2)
+            velocity = Vector3.ZERO
+        return
     fire_cd = maxf(0.0, fire_cd - delta)
     fire2_cd = maxf(0.0, fire2_cd - delta)
     _enter_cd = maxf(0.0, _enter_cd - delta)
@@ -440,13 +491,16 @@ func fire_primary() -> void:
         if ai:
             fire_cd = AI[kind]["cannon_cd"] * randf_range(0.85, 1.25)
             ai_shots += 1
+        var dmg: float = AI[kind]["cannon_damage"] * Game.enemy_damage_mult() if ai else k["primary_damage"]
+        var rad := 6.0 if ai else 7.0
         var r = Rocket.new()
-        if ai:
-            r.setup(self, level, m, dir, AI[kind]["cannon_damage"] * Game.enemy_damage_mult(), 6.0)
-        else:
-            r.setup(self, level, m, dir, k["primary_damage"], 7.0)
+        r.setup(self, level, m, dir, dmg, rad)
         r.speed = 90.0
+        # LAN: a client's shell is only a visual copy; the host fires the real one.
+        r.visual_only = level.net != null and not multiplayer.is_server()
         level.add_child(r)
+        if level.net:
+            level.net.send_projectile("rocket", m, dir, dmg, rad, 90.0)
         Fx.explosion(level, m, 1.2)
         Game.play_sfx("sniper", m, 6.0)
         Game.play_sfx("explosion", m, -4.0)
@@ -480,9 +534,22 @@ func _bullet(from: Vector3, damage: float, spread_deg: float, sound: String) -> 
     var ex: Array[RID] = [get_rid()]
     var hit := Fx.ray(self, from, to, (1 | 2) if ai else (1 | 4), ex)
     var end := to
+    if level.net != null and not multiplayer.is_server():
+        # LAN client driving: draw it here, let the host decide what it hit.
+        if not hit.is_empty():
+            end = hit["position"]
+        if driver:
+            driver.shots_fired += 1
+        Fx.tracer(level, from, end, Color(1.0, 0.75, 0.35))
+        Fx.muzzle_flash(level, from)
+        Game.play_sfx(sound, from, 0.0)
+        level.net.send_shot(PackedVector3Array([from, to]), PackedFloat32Array([damage]), Color(1.0, 0.75, 0.35), sound, 60.0)
+        return
     if not hit.is_empty():
         end = hit["position"]
         var col = hit["collider"]
+        if ai and col != null and not (col.is_in_group("player") or col.is_in_group("vehicles")):
+            col = null      # Tan gunners only hurt the green side
         if col != null and col.has_method("take_damage"):
             var killed: bool = col.take_damage(damage, global_position, end, false)
             if driver:
@@ -494,9 +561,12 @@ func _bullet(from: Vector3, damage: float, spread_deg: float, sound: String) -> 
         driver.shots_fired += 1
     if ai:
         ai_shots += 1
-    Fx.tracer(level, from, end, Color(1.0, 0.45, 0.3) if ai else Color(1.0, 0.75, 0.35))
-    Fx.muzzle_flash(level, from)
-    Game.play_sfx(sound, from, -3.0 if ai else 0.0)
+    if level.net:
+        level.net.fx_shot(from, end, Color(1.0, 0.45, 0.3) if ai else Color(1.0, 0.75, 0.35), sound, -3.0 if ai else 0.0)
+    else:
+        Fx.tracer(level, from, end, Color(1.0, 0.45, 0.3) if ai else Color(1.0, 0.75, 0.35))
+        Fx.muzzle_flash(level, from)
+        Game.play_sfx(sound, from, -3.0 if ai else 0.0)
     if not ai:
         level.make_noise(from, 60.0)
 
@@ -525,9 +595,8 @@ func _destroy() -> void:
     hp = 0.0
     remove_from_group("damageable")
     var p := global_position + Vector3(0, 1.2, 0)
-    Fx.explosion(level, p, 7.0)
+    level.boom(p, 7.0, 6.0)
     Fx.fire(level, p, 1.5)
-    Game.play_sfx("explosion", p, 6.0)
     for m in mats:
         m.albedo_color = m.albedo_color.darkened(0.7)
         m.roughness = 0.9
@@ -539,6 +608,23 @@ func _destroy() -> void:
     exit_vehicle()
     if d != null:
         d.take_damage(35.0, p, d.global_position, true)
+        level.notify("VEHICLE DESTROYED - BAIL OUT!", 2.0)
+
+
+## Non-host PCs: the host says this vehicle was destroyed.
+func _destroy_visual() -> void:
+    alive = false
+    hp = 0.0
+    remove_from_group("damageable")
+    Fx.fire(level, global_position + Vector3(0, 1.2, 0), 1.5)
+    for m in mats:
+        m.albedo_color = m.albedo_color.darkened(0.7)
+        m.roughness = 0.9
+    engine.stop()
+    var d = driver
+    exit_vehicle()
+    if d != null:
+        d.take_damage(35.0, global_position, d.global_position, true)
         level.notify("VEHICLE DESTROYED - BAIL OUT!", 2.0)
 
 
@@ -556,7 +642,7 @@ func hear(pos: Vector3) -> void:
 
 ## Whatever the AI should shoot: the player on foot, or the vehicle they drive.
 func _ai_target() -> Node3D:
-    var p = level.player if level else null
+    var p = (level.nearest_ai_target(global_position) if level.net != null else level.player) if level else null
     if p == null or not is_instance_valid(p) or not p.alive:
         return null
     return p.vehicle if p.vehicle != null else p

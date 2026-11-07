@@ -21,6 +21,8 @@ var obj_label: Label
 var info_label: Label
 var msg_label: Label
 var prompt_label: Label
+var team_label: Label
+var show_team := false
 var msg_t := 0.0
 var hit_t := 0.0
 var hit_kill := false
@@ -88,6 +90,11 @@ func _ready() -> void:
     info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     UI.place(info_label, Vector2(1, 0), Rect2(-420, 22, 392, 60))
     root.add_child(info_label)
+
+    team_label = UI.label("", 17, Color(0.8, 1.0, 0.7), 6)
+    team_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    UI.place(team_label, Vector2(1, 0), Rect2(-420, 90, 392, 140))
+    root.add_child(team_label)
 
     prompt_label = UI.label("", 22, Color(1, 1, 1), 6)
     prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -188,6 +195,13 @@ func _process(delta: float) -> void:
     dmg_t = maxf(0.0, dmg_t - delta * 0.9)
     vignette.color.a = dmg_t * 0.35 + (0.25 if not player.alive else 0.0)
     obj_label.text = level.get_objective_text()
+    if show_team:
+        var lines := ["SQUAD"]
+        lines.append("%s (you)  %s" % [Net.player_name(Net.my_id()), "%d HP" % int(ceil(player.health)) if player.alive else "DOWN"])
+        for id in level.remotes:
+            var r = level.remotes[id]
+            lines.append("%s  %s" % [Net.player_name(id), ("%d HP" % int(ceil(r.health))) if r.alive else "DOWN"])
+        team_label.text = "\n".join(lines)
     var secs := int(level.elapsed)
     info_label.text = "TAN FORCES: %d\nTIME %02d:%02d" % [level.enemies_alive(), secs / 60, secs % 60]
     if player.vehicle != null:

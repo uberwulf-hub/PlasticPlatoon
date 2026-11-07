@@ -21,6 +21,7 @@ var mats: Array = []
 var blinkers: Array = []
 var label: Label3D
 var _blink := 0.0
+var net_puppet := false
 
 
 func setup(lvl: Node, k: String, t: String, pos: Vector3, rot_y := 0.0) -> void:
@@ -211,6 +212,21 @@ func take_damage(amount: float, _source: Vector3, hit_pos: Vector3, explosive :=
 
 
 func _destroy() -> void:
+    _wreck()
+    var p := global_position + Vector3(0, 1.5, 0)
+    level.boom(p, 6.0, 4.0)
+    level.apply_explosion(p, 6.0, 50.0)
+    if level.net:
+        level.net.target_destroyed(level.targets.find(self))
+
+
+## LAN client: the host destroyed this target (its explosion arrives separately).
+func destroy_visual() -> void:
+    if alive:
+        _wreck()
+
+
+func _wreck() -> void:
     alive = false
     remove_from_group("damageable")
     label.text = "DESTROYED"
@@ -220,11 +236,7 @@ func _destroy() -> void:
     for m in mats:
         m.emission_enabled = false
         m.albedo_color = m.albedo_color.darkened(0.75)
-    var p := global_position + Vector3(0, 1.5, 0)
-    Fx.explosion(level, p, 6.0)
-    Game.play_sfx("explosion", p, 4.0)
-    Fx.fire(level, p, 1.4)
-    level.apply_explosion(p, 6.0, 50.0)
+    Fx.fire(level, global_position + Vector3(0, 1.5, 0), 1.4)
     level.on_target_destroyed(self)
     var tw := create_tween()
     tw.tween_property(self, "rotation:z", deg_to_rad(randf_range(-9.0, 9.0)), 0.4)

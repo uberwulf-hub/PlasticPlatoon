@@ -16,6 +16,12 @@ const Fx = preload("res://scripts/fx.gd")
 const UI = preload("res://scripts/ui_util.gd")
 const Barrel = preload("res://scripts/barrel.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
+const NetSync = preload("res://scripts/net_sync.gd")
+const RemotePlayer = preload("res://scripts/remote_player.gd")
+const Rocket = preload("res://scripts/rocket.gd")
+const Grenade = preload("res://scripts/grenade.gd")
+const DroneStrike = preload("res://scripts/drone_strike.gd")
+const RESPAWN_TIME := 8.0
 
 var level_index := 0
 var info: Dictionary = {}
@@ -27,6 +33,14 @@ var enemies: Array = []
 var vehicles: Array = []
 var enemy_vehicles: Array = []   # Tan Army jeeps and tanks (AI)
 var props: Array = []          # every model placed with prop(): {node, path}
+var targets: Array = []        # in build order: the same index means the same target on every PC
+var barrels: Array = []
+var pickups := {}              # id -> Pickup
+var _next_pickup_id := 0
+var net = null                 # NetSync in a LAN game, else null
+var remotes := {}              # peer id -> RemotePlayer (teammates)
+var spawn_point := Vector3.ZERO
+var _respawn_t := 0.0
 var hvts: Array = []
 var targets_by_tag := {}
 var extraction: Node3D
@@ -46,7 +60,11 @@ func _ready() -> void:
     _build_environment()
     player = Player.new()
     player.level = self
-    player.position = info["spawn"]
+    spawn_point = info["spawn"]
+    if Net.active:
+        # Spread the squad out a little at the start point.
+        spawn_point += Vector3(2.5 * (Net.my_slot() - 1.5), 0, 0).rotated(Vector3.UP, info.get("spawn_yaw", 0.0))
+    player.position = spawn_point
     player.rotation.y = info.get("spawn_yaw", 0.0)
     var start: Array = info.get("start_weapons", ["carbine", "shotgun"])
     for w in start:
@@ -59,6 +77,8 @@ func _ready() -> void:
     hud.bind(player, self)
     objectives = info["objectives"]
     Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+    if Net.active:
+        _setup_net()
     _begin_objective(0)
     notify(info["name"].to_upper(), 3.5)
     Game.play_music(info.get("music", ""), -8.0)
@@ -74,6 +94,182 @@ func _exit_tree() -> void:
 
 func is_playing() -> bool:
     return not ended and player != null and player.alive
+
+
+## True on the PC that runs the simulation (single-player, or the LAN host).
+func is_server() -> bool:
+    return net == null or multiplayer.is_server()
+
+
+# ------------------------------------------------------------- LAN co-op ----
+
+func _setup_net() -> void:
+    net = NetSync.new(self)
+    add_child(net)
+    if multiplayer.is_server():
+        # Hold the Tan Army until everyone has loaded the map.
+        for e in enemies + enemy_vehicles:
+            e.set_physics_process(false)
+    else:
+        # Everything but our own soldier is driven by the host's snapshots.
+        for e in enemies:
+            e.net_puppet = true
+        for v in enemy_vehicles + vehicles:
+            v.net_puppet = true
+        for b in barrels:
+            b.net_puppet = true
+        for t in targets:
+            t.net_puppet = true
+    hud.show_team = true
+
+
+func net_go() -> void:
+    if multiplayer.is_server():
+        for e in enemies + enemy_vehicles:
+            if is_instance_valid(e) and e.alive:
+                e.set_physics_process(true)
+
+
+## Everyone the Tan Army can shoot at (host only): us plus living teammates.
+func ai_targets() -> Array:
+    var out: Array = []
+    if player != null and is_instance_valid(player) and player.alive:
+        out.append(player)
+    for r in remotes.values():
+        if r.alive:
+            out.append(r)
+    return out
+
+
+func nearest_ai_target(pos: Vector3):
+    var best = null
+    var best_d := INF
+    for t in ai_targets():
+        var d: float = t.global_position.distance_to(pos)
+        if d < best_d:
+            best_d = d
+            best = t
+    return best
+
+
+func remote_state(id: int, d: PackedFloat32Array, vd: PackedFloat32Array) -> void:
+    if not Net.players.has(id) or ended and not remotes.has(id):
+        return
+    var r = remotes.get(id)
+    if r == null:
+        r = RemotePlayer.new()
+        r.setup(self, id, Vector3(d[0], d[1], d[2]))
+        add_child(r)
+        remotes[id] = r
+    r.apply_state(d)
+    var vi := int(d[10])
+    if vi >= 0 and vi < vehicles.size() and vd.size() >= 7:
+        vehicles[vi].net_drive_apply(vd)
+
+
+func net_peer_left(id: int, who: String) -> void:
+    var r = remotes.get(id)
+    if r:
+        r.queue_free()
+        remotes.erase(id)
+    for i in vehicles.size():
+        if vehicles[i].occupant_peer == id:
+            net_set_occupant(i, 0)
+    notify("%s LEFT THE GAME" % who.to_upper(), 2.5)
+
+
+func net_set_occupant(vi: int, peer: int) -> void:
+    if vi < 0 or vi >= vehicles.size():
+        return
+    var v = vehicles[vi]
+    var mine: bool = peer != 0 and peer == multiplayer.get_unique_id()
+    if mine and player.vehicle == null and player.alive:
+        v.occupant_peer = 0          # free while we climb in (can_enter checks it)
+        v.enter(player)
+    v.occupant_peer = peer
+    # Whoever drives a vehicle simulates it; everyone else follows its state.
+    var host: bool = multiplayer.is_server()
+    if mine:
+        v.net_puppet = false
+    elif peer != 0:
+        v.net_puppet = true
+    else:
+        v.net_puppet = not host
+
+
+func net_objective(i: int) -> void:
+    if i != obj_index:
+        Game.play_ui("objective")
+        _begin_objective(i)
+
+
+func net_mission_end(success: bool, stats: Dictionary) -> void:
+    if ended and get_meta("net_end_done", false):
+        return
+    set_meta("net_end_done", true)
+    ended = true
+    player.invulnerable = true
+    notify("MISSION ACCOMPLISHED" if success else "SQUAD MELTED.  MISSION FAILED", 3.0)
+    if not success:
+        Game.play_ui("fail")
+    var s := stats.duplicate()
+    if player.shots_fired > 0:
+        s["accuracy"] = float(player.shots_hit) / float(player.shots_fired) * 100.0
+    var t := get_tree().create_timer(2.5)
+    t.timeout.connect(func():
+        if is_inside_tree():
+            finished.emit(success, s))
+
+
+func net_squad_wiped() -> void:
+    if multiplayer.is_server() and not ended:
+        net.mission_end(false, _stats())
+
+
+## Effects for an explosion on this PC only.
+func boom_local(pos: Vector3, radius: float, db := 0.0) -> void:
+    Fx.explosion(self, pos, radius)
+    Game.play_sfx("explosion", pos, db)
+    if player and is_instance_valid(player):
+        var pd: float = player.global_position.distance_to(pos)
+        player.shake = maxf(player.shake, clampf(1.3 - pd / 30.0, 0.0, 1.3))
+
+
+## Explosion effects on every PC (call where the damage is decided).
+func boom(pos: Vector3, radius: float, db := 0.0) -> void:
+    if net != null and multiplayer.is_server():
+        net.boom(pos, radius, db)
+    else:
+        boom_local(pos, radius, db)
+
+
+## Spawns a rocket/grenade/drone strike. visual = harmless copy for display.
+func spawn_projectile(kind: String, pos: Vector3, dir: Vector3, a: float, b: float, c: float, visual: bool, shooter) -> Node:
+    match kind:
+        "rocket":
+            var r = Rocket.new()
+            r.setup(shooter, self, pos, dir, a, b)
+            if c > 0.0:
+                r.speed = c
+            r.visual_only = visual
+            add_child(r)
+            return r
+        "grenade":
+            var g = Grenade.new()
+            g.setup(self)
+            g.visual_only = visual
+            add_child(g)
+            g.global_position = pos
+            g.linear_velocity = dir
+            g.angular_velocity = Vector3(randf(), randf(), randf()) * 8.0
+            return g
+        "drone":
+            var d = DroneStrike.new()
+            d.setup(self, pos)
+            d.visual_only = visual
+            add_child(d)
+            return d
+    return null
 
 
 # ---------------------------------------------------------- environment ----
@@ -334,6 +530,7 @@ func add_target(pos: Vector3, kind: String, tag: String, rot_y := 0.0) -> Node:
     var t = Target.new()
     t.setup(self, kind, tag, pos, rot_y)
     add_child(t)
+    targets.append(t)
     if not targets_by_tag.has(tag):
         targets_by_tag[tag] = []
     targets_by_tag[tag].append(t)
@@ -377,12 +574,27 @@ func add_barrel(pos: Vector3) -> void:
     var b = Barrel.new()
     b.setup(self, pos)
     add_child(b)
+    barrels.append(b)
 
 
-func add_pickup(pos: Vector3, kind: String) -> void:
+func add_pickup(pos: Vector3, kind: String, id := -1) -> void:
+    if id < 0:
+        id = _next_pickup_id
+    _next_pickup_id = maxi(_next_pickup_id, id + 1)
+    if pickups.has(id):
+        return
     var p = Pickup.new()
     p.setup(self, kind, pos)
+    p.net_id = id
     add_child(p)
+    pickups[id] = p
+
+
+func remove_pickup(id: int) -> void:
+    var p = pickups.get(id)
+    if p != null and is_instance_valid(p):
+        p.queue_free()
+    pickups.erase(id)
 
 
 func add_helipad(pos: Vector3) -> Node3D:
@@ -450,6 +662,8 @@ func make_noise(pos: Vector3, radius: float) -> void:
 
 
 func apply_explosion(pos: Vector3, radius: float, damage: float) -> void:
+    if not is_server():
+        return          # in a LAN game the host decides all damage
     for n in get_tree().get_nodes_in_group("damageable"):
         if not is_instance_valid(n) or n.is_queued_for_deletion() or not is_ancestor_of(n):
             continue
@@ -468,9 +682,14 @@ func on_enemy_killed(e, headshot: bool) -> void:
     if headshot:
         headshots += 1
         notify("HEADSHOT", 0.8)
-    if randf() < 0.25:
+    if randf() < 0.25 and is_server():
         var kind: String = ["ammo", "ammo", "health", "grenades", "armor"].pick_random()
-        call_deferred("add_pickup", e.global_position + Vector3(0, 0.1, 0), kind)
+        var id := _next_pickup_id
+        _next_pickup_id += 1
+        var pos: Vector3 = e.global_position + Vector3(0, 0.1, 0)
+        call_deferred("add_pickup", pos, kind, id)
+        if net:
+            net.pickup_spawned(id, kind, pos)
 
 
 func on_target_destroyed(t) -> void:
@@ -500,6 +719,8 @@ func _begin_objective(i: int) -> void:
     if i > 0:
         notify("NEW OBJECTIVE: " + o["text"], 3.5)
         Game.play_ui("radio", -6.0)
+    if net != null and multiplayer.is_server() and i > 0:
+        net.objective(i)
 
 
 func _process(delta: float) -> void:
@@ -511,8 +732,9 @@ func _process(delta: float) -> void:
         if _boom_t <= 0.0:
             _boom_t = randf_range(9.0, 22.0)
             Game.play_ui("distant_boom", randf_range(-20.0, -12.0))
-    if obj_index >= objectives.size():
-        return
+    _tick_respawn(delta)
+    if obj_index >= objectives.size() or not is_server():
+        return          # in a LAN game only the host judges objectives
     var o: Dictionary = objectives[obj_index]
     var done := false
     match o["type"]:
@@ -523,7 +745,9 @@ func _process(delta: float) -> void:
         "kill_all":
             done = enemies_alive() == 0
         "extract":
-            done = player.alive and player.global_position.distance_to(o["pos"]) < 5.5
+            for t in ai_targets():
+                if t.global_position.distance_to(o["pos"]) < 5.5:
+                    done = true
     if done:
         Game.play_ui("objective")
         _begin_objective(obj_index + 1)
@@ -580,6 +804,9 @@ func _stats() -> Dictionary:
 
 
 func _complete() -> void:
+    if net != null:
+        net.mission_end(true, _stats())
+        return
     ended = true
     player.invulnerable = true
     notify("MISSION ACCOMPLISHED", 3.0)
@@ -592,6 +819,12 @@ func _complete() -> void:
 func _on_player_died() -> void:
     if ended:
         return
+    if net != null:
+        # Co-op: you're back in a few seconds. The mission only fails if the
+        # whole squad is down at once (the host checks that).
+        _respawn_t = RESPAWN_TIME
+        notify("YOU MELTED!  BACK IN %d SECONDS" % int(RESPAWN_TIME), 3.0)
+        return
     ended = true
     notify("YOU MELTED.  MISSION FAILED", 3.0)
     Game.play_ui("fail")
@@ -601,10 +834,22 @@ func _on_player_died() -> void:
             finished.emit(false, _stats()))
 
 
+func _tick_respawn(delta: float) -> void:
+    if _respawn_t <= 0.0:
+        return
+    _respawn_t -= delta
+    if _respawn_t <= 0.0 and not ended:
+        player.respawn(spawn_point)
+        notify("BACK IN THE FIGHT", 1.5)
+
+
 # ---------------------------------------------------------------- pause ----
 
 func toggle_pause() -> void:
     if ended:
+        return
+    if net != null:
+        _toggle_net_menu()     # a LAN game can't pause for everyone
         return
     if get_tree().paused:
         _resume()
@@ -638,6 +883,29 @@ func _pause() -> void:
         get_tree().paused = false
         request_menu.emit()))
     vb.add_child(UI.label("WASD move · Mouse aim · LMB fire · RMB aim/scope\nShift sprint · C crouch · Space jump · R reload\n1-5 / wheel weapons · G frag · F drone strike · E jeep/tank", 16, Color(0.8, 0.85, 0.75)))
+
+
+func _toggle_net_menu() -> void:
+    if pause_layer:
+        pause_layer.queue_free()
+        pause_layer = null
+        Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+        return
+    Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+    pause_layer = CanvasLayer.new()
+    pause_layer.layer = 20
+    add_child(pause_layer)
+    var root := Control.new()
+    root.set_anchors_preset(Control.PRESET_FULL_RECT)
+    root.theme = UI.make_theme()
+    pause_layer.add_child(root)
+    var vb := UI.centered_panel(root, 460)
+    vb.add_child(UI.label("LAN GAME", 36, UI.ACCENT))
+    vb.add_child(UI.label("The game keeps running for your squad.", 17))
+    vb.add_child(UI.button("Back to the fight", _toggle_net_menu))
+    vb.add_child(UI.button("Leave game", func():
+        Net.leave()
+        request_menu.emit()))
 
 
 func _resume() -> void:

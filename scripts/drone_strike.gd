@@ -15,6 +15,7 @@ var beam: MeshInstance3D
 var missile: MeshInstance3D
 var fired := false
 var exploded := false
+var visual_only := false
 
 
 func setup(lvl: Node, pos: Vector3) -> void:
@@ -67,8 +68,10 @@ func _process(delta: float) -> void:
         Fx.smoke_puff(level, missile.global_position)
     if t > 2.7 and not exploded:
         exploded = true
-        Fx.explosion(level, target, RADIUS * 0.85)
-        Game.play_sfx("explosion", target, 6.0)
+        if visual_only:
+            queue_free()
+            return
+        level.boom(target, RADIUS * 0.85, 6.0)
         level.apply_explosion(target, RADIUS, DAMAGE)
         level.make_noise(target, 90.0)
         queue_free()

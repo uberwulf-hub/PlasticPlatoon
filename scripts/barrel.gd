@@ -7,6 +7,7 @@ const Fx = preload("res://scripts/fx.gd")
 var level: Node
 var hp := 25.0
 var alive := true
+var net_puppet := false        # LAN client: the host decides when it blows
 
 
 func setup(lvl: Node, pos: Vector3) -> void:
@@ -58,9 +59,10 @@ func _explode() -> void:
     if not is_inside_tree():
         return
     var p := global_position + Vector3(0, 0.6, 0)
-    Fx.explosion(level, p, 4.5)
+    level.boom(p, 4.5, 2.0)
     Fx.fire(level, global_position, 0.7)
-    Game.play_sfx("explosion", p, 2.0)
     level.apply_explosion(p, 5.5, 120.0)
     level.make_noise(p, 60.0)
+    if level.net:
+        level.net.barrel_gone(level.barrels.find(self))
     queue_free()

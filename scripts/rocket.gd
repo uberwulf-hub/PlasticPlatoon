@@ -12,6 +12,7 @@ var radius := 5.0
 var life := 5.0
 var _smoke_t := 0.0
 var _done := false
+var visual_only := false       # LAN: a harmless copy; the host has the real one
 
 
 func setup(src: Node3D, lvl: Node, pos: Vector3, d: Vector3, dmg: float, rad: float) -> void:
@@ -76,8 +77,10 @@ func _physics_process(delta: float) -> void:
 
 func _explode(p: Vector3) -> void:
     _done = true
-    Fx.explosion(level, p, radius * 0.8)
-    Game.play_sfx("explosion", p)
+    if visual_only:
+        queue_free()          # the host's real rocket sends the explosion
+        return
+    level.boom(p, radius * 0.8)
     level.apply_explosion(p, radius, damage)
     level.make_noise(p, 70.0)
     queue_free()

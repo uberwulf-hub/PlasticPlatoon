@@ -63,6 +63,7 @@ var bloom := 0.0
 var shake := 0.0
 var shots_fired := 0
 var shots_hit := 0
+var _net_shot := false        # LAN: tells teammates to play our firing animation
 
 
 func _ready() -> void:
@@ -154,7 +155,10 @@ func _physics_process(delta: float) -> void:
         if v != null:
             aiming = false
             sprinting = false
-            v.enter(self)
+            if level.net != null:
+                level.net.request_enter(level.vehicles.find(v))   # the host hands out seats
+            else:
+                v.enter(self)
             return
     _move(delta)
     _combat(delta)
@@ -291,18 +295,33 @@ func _fire(w: Dictionary) -> void:
     if w["kind"] == "rocket":
         var target := _aim_point(_spread_dir(fwd, cam_b, spread), cam_pos, w["range"])
         var r = Rocket.new()
-        r.setup(self, level, muzzle_pos, (target - muzzle_pos).normalized(), w["damage"], w["splash"])
+        var rdir := (target - muzzle_pos).normalized()
+        r.setup(self, level, muzzle_pos, rdir, w["damage"], w["splash"])
+        r.visual_only = _net_client()
         level.add_child(r)
+        if level.net:
+            level.net.send_projectile("rocket", muzzle_pos, rdir, w["damage"], w["splash"], r.speed)
     else:
         var any_hit := false
         var killed := false
         var ex: Array[RID] = [get_rid()]
+        var net_segs := PackedVector3Array()
+        var net_dmgs := PackedFloat32Array()
         for i in int(w["pellets"]):
             var dir := _spread_dir(fwd, cam_b, spread)
             var target := _aim_point(dir, cam_pos, w["range"])
             var to := target + (target - muzzle_pos).normalized() * 0.5
             var hit := Fx.ray(self, muzzle_pos, to, SHOT_MASK, ex)
             var end_point := to
+            if _net_client():
+                # LAN client: show the shot now, let the host decide what it hit.
+                if not hit.is_empty():
+                    end_point = hit["position"]
+                net_segs.append_array([muzzle_pos, to])
+                net_dmgs.append(w["damage"] * _falloff(w, muzzle_pos.distance_to(end_point)))
+                if i == 0 or randf() < 0.3:
+                    Fx.tracer(level, muzzle_pos, end_point, w["tracer"])
+                continue
             if not hit.is_empty():
                 end_point = hit["position"]
                 var recv = _receiver(hit["collider"])
@@ -316,12 +335,17 @@ func _fire(w: Dictionary) -> void:
                     Fx.impact(level, end_point, hit["normal"])
             if i == 0 or randf() < 0.3:
                 Fx.tracer(level, muzzle_pos, end_point, w["tracer"])
+                if level.net:
+                    level.net._fx_shot_except(1, muzzle_pos, end_point, w["tracer"], w["sound"] if i == 0 else "", 0.0)
+        if net_segs.size() > 0:
+            level.net.send_shot(net_segs, net_dmgs, w["tracer"], w["sound"], w["noise"])
         if any_hit:
             shots_hit += 1
             hit_confirmed.emit(killed)
             Game.play_ui("hit", -10.0)
     Fx.muzzle_flash(level, muzzle_pos)
     model.notify_shot()
+    _net_shot = true
     Game.play_sfx(w["sound"], muzzle_pos)
     level.make_noise(global_position, w["noise"])
     bloom = minf(bloom + w["bloom"], 4.0)
@@ -401,12 +425,11 @@ func _throw_grenade() -> void:
     grenade_cd = 0.9
     Game.play_sfx("throw", global_position, -4.0)
     var fwd := -camera.global_transform.basis.z
-    var g = Grenade.new()
-    g.setup(level)
-    level.add_child(g)
-    g.global_position = global_position + Vector3(0, 1.6, 0) + fwd * 0.7
-    g.linear_velocity = fwd * 17.0 + Vector3(0, 4.5, 0) + velocity * 0.5
-    g.angular_velocity = Vector3(randf(), randf(), randf()) * 8.0
+    var gpos := global_position + Vector3(0, 1.6, 0) + fwd * 0.7
+    var gvel := fwd * 17.0 + Vector3(0, 4.5, 0) + velocity * 0.5
+    level.spawn_projectile("grenade", gpos, gvel, 0, 0, 0, _net_client(), self)
+    if level.net:
+        level.net.send_projectile("grenade", gpos, gvel)
     stats_changed.emit()
 
 
@@ -421,9 +444,9 @@ func _call_drone() -> void:
         level.notify("Drone strike: no valid target - aim at the ground", 1.5)
         return
     drones -= 1
-    var d = DroneStrike.new()
-    d.setup(level, hit["position"])
-    level.add_child(d)
+    level.spawn_projectile("drone", hit["position"], Vector3.ZERO, 0, 0, 0, _net_client(), self)
+    if level.net:
+        level.net.send_projectile("drone", hit["position"], Vector3.ZERO)
     level.notify("REAPER DRONE: Hellfire inbound - danger close!", 2.0)
     stats_changed.emit()
 
@@ -446,6 +469,30 @@ func take_damage(amount: float, _source: Vector3, _hit_pos: Vector3, _explosive 
         _die()
         return true
     return false
+
+
+## LAN client: our shots are resolved by the host.
+func _net_client() -> bool:
+    return level != null and level.net != null and not multiplayer.is_server()
+
+
+## Co-op respawn: a fresh soldier back at the start point.
+func respawn(pos: Vector3) -> void:
+    model.queue_free()
+    model = preload("res://scripts/plastic_soldier.gd").create()
+    add_child(model)
+    model.build(PLAYER_COLOR, Weapons.DATA[current]["model"])
+    global_position = pos
+    velocity = Vector3.ZERO
+    health = max_health
+    armor = maxf(armor, 25.0)
+    alive = true
+    crouching = false
+    capsule.height = 1.8
+    col_shape.position.y = 0.9
+    for id in owned:
+        reserve[id] = maxi(reserve[id], int(Weapons.DATA[id]["mag"]) * 2)
+    stats_changed.emit()
 
 
 func _die() -> void:

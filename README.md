@@ -85,6 +85,27 @@ How they behave:
 
 **How to kill them:** tank armour shrugs off rifle fire, so use the AT4, frags, a drone strike or your own tank. Each one destroyed counts toward Tan forces and the "clear the table" objective.
 
+## Multiplayer (LAN co-op, up to 4 players)
+
+**Main menu → Multiplayer (LAN)**, then:
+1. **One player hosts.** They type a name, click **Host a game**, pick the operation, and press **START** once everyone is in.
+2. **Everyone else joins.** Games on your network show up in the list automatically, or you can type the host's IP address.
+3. **Firewall:** allow Plastic Platoon through Windows Firewall when asked. It uses UDP ports 7777 (game) and 7778 (finding games on the network).
+
+**How co-op works**
+- The host runs the Tan Army, objectives and damage. Each player moves their own soldier and drives their own vehicle on their own PC, so controls feel instant.
+- There's no friendly fire. If you go down, you're back in 8 seconds. The mission only fails if the whole squad is down at the same time.
+- Any player can capture a pickup or claim an empty vehicle (press E), and any player reaching the helipad triggers extraction.
+- Esc opens a menu but doesn't pause the game. If a player leaves, the rest carry on. If the host leaves, everyone returns to the menu.
+- PNN news breaks are skipped in LAN games so the squad stays in step.
+
+**Testing it:** run two copies of the game on one PC (one hosts, the other joins `127.0.0.1`), or use the automated two-process test:
+
+```bash
+godot --headless --path . res://tests/mp_test.tscn -- host &
+godot --headless --path . res://tests/mp_test.tscn -- client
+```
+
 ## PNN: the Plastic News Network
 
 Before and after each operation, the Plastic News Network breaks in with the headlines. It's parody news: silly for kids, with a dry grown-up undertone. Everything in it is made up: no real people, places or events.
