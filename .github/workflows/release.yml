@@ -84,4 +84,4 @@ jobs:
           gh release create "${{ inputs.version }}" dist/PlasticPlatoon-windows.zip \
             --target "${{ github.sha }}" \
             --title "Plastic Platoon: Revenge 2026 ${{ inputs.version }}" \
-            --notes "Windows build. Unzip and run PlasticPlatoon.exe. All third-party assets are CC0; see CREDITS.md."
+            --notes "Windows build. Unzip and run PlasticPlatoon.exe. Third-party art, audio and textures are CC0, the PNN voices were made with Kokoro-82M (Apache-2.0), and the Godot engine is MIT; see CREDITS.md."

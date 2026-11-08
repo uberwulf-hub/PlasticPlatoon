@@ -12,4 +12,5 @@ support Vulkan. Start it in compatibility mode instead from a command prompt:
     PlasticPlatoon.exe --rendering-method gl_compatibility
 
 Made with the Godot Engine (MIT license, see licenses/). All third-party art,
-music and sound are CC0; see CREDITS.md.
+music, sound and textures are CC0. The PNN news voices were recorded with the
+Kokoro-82M text-to-speech model (Apache-2.0). See CREDITS.md.
