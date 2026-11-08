@@ -68,6 +68,8 @@ static var _scenes := {}
 func _ready() -> void:
     Game.current_level = self
     info = LevelData.build(level_index, self)
+    if _ground_spec != null:
+        _build_terrain()
     _build_environment()
     player = Player.new()
     player.level = self
@@ -624,11 +626,11 @@ func _tint(inst: Node3D, tint: Color) -> void:
                 mi.set_surface_override_material(i, d)
 
 
-func wall(a: Vector3, b: Vector3, h: float, thick: float, color: Color) -> void:
+func wall(a: Vector3, b: Vector3, h: float, thick: float, color: Color, m: Material = null) -> void:
     var d := b - a
     var length := Vector2(d.x, d.z).length()
     var mid := (a + b) * 0.5
-    box(Vector3(mid.x, a.y + h * 0.5, mid.z), Vector3(thick, h, length), color, atan2(d.x, d.z))
+    box(Vector3(mid.x, a.y + h * 0.5, mid.z), Vector3(thick, h, length), color, atan2(d.x, d.z), true, m)
 
 
 func bounds(half_x: float, half_z: float, y := 0.0) -> void:
@@ -1169,3 +1171,163 @@ func _resume() -> void:
         pause_layer.queue_free()
         pause_layer = null
     Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+# ------------------------------------------------- textures + terrain ----
+
+const TEX_DIR := "res://assets/textures/"
+var _ground_spec = null            # set by ground(); the terrain is built after the map
+var terrain_node: StaticBody3D
+
+
+## A material that projects one of assets/textures/<name> onto any surface in
+## world space (triplanar), so procedural boxes need no UVs. `tile` is how
+## many metres one repeat of the texture covers; `tint` multiplies its colour.
+func tex(name: String, tint := Color.WHITE, tile := 6.0, rough := 0.9) -> StandardMaterial3D:
+    var key := "tex|%s|%s|%.2f|%.2f" % [name, tint.to_html(), tile, rough]
+    if _mats.has(key):
+        return _mats[key]
+    var albedo := TEX_DIR + name + "/albedo.jpg"
+    if not ResourceLoader.exists(albedo):
+        return mat(tint, rough)
+    var m := StandardMaterial3D.new()
+    m.albedo_texture = load(albedo)
+    m.albedo_color = tint
+    var normal := TEX_DIR + name + "/normal.jpg"
+    if ResourceLoader.exists(normal):
+        m.normal_enabled = true
+        m.normal_texture = load(normal)
+        m.normal_scale = 0.9
+    m.roughness = rough
+    m.uv1_triplanar = true
+    m.uv1_world_triplanar = true
+    m.uv1_triplanar_sharpness = 6.0
+    m.uv1_scale = Vector3.ONE / tile
+    m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+    _mats[key] = m
+    return m
+
+
+## Outdoor ground: a textured terrain `size` metres across with gentle hills
+## (up to `amp` m) wherever the map is empty. Anything placed on the map, the
+## start point and the objectives keep flat ground around them. `flat` is a
+## list of Rect2 (x, z) areas that must stay flat too (beaches, roads...).
+func ground(size: float, m: Material, amp := 2.5, seed := 1, flat: Array = [], rim := 6.0) -> void:
+    _ground_spec = {"size": size, "mat": m, "amp": amp, "seed": seed, "flat": flat, "rim": rim}
+
+
+func _build_terrain() -> void:
+    var g: Dictionary = _ground_spec
+    var size: float = g["size"]
+    var cell := 2.0
+    var n := int(size / cell) + 1
+    var half := size * 0.5
+    # 1. Mark every cell that has something on it (plus a margin).
+    var occ := PackedByteArray()
+    occ.resize(n * n)
+    var mark := func(aabb: AABB, margin: float) -> void:
+        var x0 := clampi(int(floor((aabb.position.x - margin + half) / cell)), 0, n - 1)
+        var x1 := clampi(int(ceil((aabb.end.x + margin + half) / cell)), 0, n - 1)
+        var z0 := clampi(int(floor((aabb.position.z - margin + half) / cell)), 0, n - 1)
+        var z1 := clampi(int(ceil((aabb.end.z + margin + half) / cell)), 0, n - 1)
+        for z in range(z0, z1 + 1):
+            for x in range(x0, x1 + 1):
+                occ[z * n + x] = 1
+    for vi in find_children("*", "MeshInstance3D", true, false):
+        var ab: AABB = vi.global_transform * vi.get_aabb()
+        if ab.size.x > 120.0 or ab.size.z > 120.0 or ab.position.y > 3.0:
+            continue        # the sky-high room walls, oceans and map edges don't flatten anything
+        mark.call(ab, 2.0)
+    var keep: Array = [[info["spawn"], 14.0]]
+    for o in info.get("objectives", []):
+        if o.has("pos"):
+            keep.append([o["pos"], 12.0])
+    for k in keep:
+        var p: Vector3 = k[0]
+        mark.call(AABB(p - Vector3(k[1], 0, k[1]), Vector3(k[1] * 2, 1, k[1] * 2)), 0.0)
+    for r in g["flat"]:
+        var rc: Rect2 = r
+        mark.call(AABB(Vector3(rc.position.x, 0, rc.position.y), Vector3(rc.size.x, 1, rc.size.y)), 0.0)
+    # 2. Distance (in cells) from each cell to the nearest occupied one (two-pass chamfer).
+    var dist := PackedFloat32Array()
+    dist.resize(n * n)
+    for i in n * n:
+        dist[i] = 0.0 if occ[i] else 9999.0
+    for z in n:
+        for x in n:
+            var i := z * n + x
+            var d := dist[i]
+            if x > 0: d = minf(d, dist[i - 1] + 1.0)
+            if z > 0: d = minf(d, dist[i - n] + 1.0)
+            if x > 0 and z > 0: d = minf(d, dist[i - n - 1] + 1.414)
+            if x < n - 1 and z > 0: d = minf(d, dist[i - n + 1] + 1.414)
+            dist[i] = d
+    for z in range(n - 1, -1, -1):
+        for x in range(n - 1, -1, -1):
+            var i := z * n + x
+            var d := dist[i]
+            if x < n - 1: d = minf(d, dist[i + 1] + 1.0)
+            if z < n - 1: d = minf(d, dist[i + n] + 1.0)
+            if x < n - 1 and z < n - 1: d = minf(d, dist[i + n + 1] + 1.414)
+            if x > 0 and z < n - 1: d = minf(d, dist[i + n - 1] + 1.414)
+            dist[i] = d
+    # 3. Heights: rolling noise faded in away from anything placed, rising at the rim.
+    var noise := FastNoiseLite.new()
+    noise.seed = g["seed"]
+    noise.frequency = 0.022
+    noise.fractal_octaves = 3
+    var amp: float = g["amp"]
+    var rim: float = g["rim"]
+    var inner := half - 22.0
+    var hts := PackedFloat32Array()
+    hts.resize(n * n)
+    for z in n:
+        for x in n:
+            var i := z * n + x
+            var wx := -half + x * cell
+            var wz := -half + z * cell
+            var meters := dist[i] * cell
+            var fade := smoothstep(3.0, 16.0, meters)
+            var h := (noise.get_noise_2d(wx, wz) * 0.5 + 0.5) * amp * fade
+            var edge := maxf(absf(wx), absf(wz))
+            h += smoothstep(inner - 6.0, half, edge) * rim * (0.6 + 0.4 * (noise.get_noise_2d(wz, wx) * 0.5 + 0.5)) * minf(1.0, fade + 0.3)
+            hts[i] = h
+    # 4. Mesh + matching trimesh collision.
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    for z in n:
+        for x in n:
+            st.add_vertex(Vector3(-half + x * cell, hts[z * n + x], -half + z * cell))
+    for z in n - 1:
+        for x in n - 1:
+            var a := z * n + x
+            st.add_index(a)
+            st.add_index(a + 1)
+            st.add_index(a + n)
+            st.add_index(a + 1)
+            st.add_index(a + n + 1)
+            st.add_index(a + n)
+    st.generate_normals()
+    var mesh := st.commit()
+    terrain_node = StaticBody3D.new()
+    terrain_node.name = "Terrain"
+    terrain_node.collision_layer = 1
+    terrain_node.collision_mask = 0
+    var mi := MeshInstance3D.new()
+    mi.mesh = mesh
+    mi.material_override = g["mat"]
+    terrain_node.add_child(mi)
+    var cs := CollisionShape3D.new()
+    cs.shape = mesh.create_trimesh_shape()
+    terrain_node.add_child(cs)
+    add_child(terrain_node)
+
+
+## Terrain height at (x, z) (0 if the map has none), for placing things later.
+func ground_height(x: float, z: float) -> float:
+    if terrain_node == null:
+        return 0.0
+    var from := Vector3(x, 60.0, z)
+    var q := PhysicsRayQueryParameters3D.create(from, Vector3(x, -10.0, z), 1)
+    var hit := get_world_3d().direct_space_state.intersect_ray(q)
+    return 0.0 if hit.is_empty() else hit["position"].y

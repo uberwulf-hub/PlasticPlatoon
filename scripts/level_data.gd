@@ -161,8 +161,10 @@ static func vehicle(L, pos: Vector3, rot: float, color: Color, burnt := false) -
 
 
 static func hesco(L, a: Vector3, b: Vector3, color: Color) -> void:
-    L.wall(a, b, 1.9, 1.4, color)
-    L.wall(a + Vector3(0, 1.9, 0), b + Vector3(0, 1.9, 0), 0.15, 1.45, color.darkened(0.15))
+    # Woven geotextile baskets: the carpet weave reads as hesco fabric at this scale.
+    var cloth = L.tex("carpet", color.lightened(0.25), 2.5)
+    L.wall(a, b, 1.9, 1.4, color, cloth)
+    L.wall(a + Vector3(0, 1.9, 0), b + Vector3(0, 1.9, 0), 0.15, 1.45, color.darkened(0.15), L.tex("carpet", color, 2.5))
 
 
 static func watchtower(L, pos: Vector3, color: Color) -> void:
@@ -231,15 +233,9 @@ static func _desert(L) -> Dictionary:
     var mud := Color(0.78, 0.66, 0.48)
     var green := Color(0.3, 0.38, 0.24)
 
-    L.box(Vector3(0, -0.5, 0), Vector3(260, 1, 260), sand)
+    # Rolling dunes everywhere the map is empty, rising into a ridge at the edge.
+    L.ground(260, L.tex("sand", Color(1.12, 1.0, 0.86), 10.0), 3.0, 2026, [], 7.0)
     L.bounds(108, 108)
-    for s in [-1, 1]:
-        L.box(Vector3(0, 1.5, 112 * s), Vector3(240, 6, 8), sand.darkened(0.06), 0.0, false)
-        L.box(Vector3(112 * s, 1.5, 0), Vector3(8, 6, 240), sand.darkened(0.06), 0.0, false)
-    # Dunes (visual swells that hug the ground).
-    for i in 14:
-        var p := Vector3(rng.randf_range(-100, 100), -2.2, rng.randf_range(-100, 100))
-        L.sphere(p, 6.0, sand.darkened(0.03), Vector3(rng.randf_range(1.5, 3.0), 0.45, rng.randf_range(1.5, 3.0)))
 
     # --- FOB Juliet (south) ---
     hesco(L, Vector3(-22, 0, 70), Vector3(-6, 0, 70), hesco_c)
@@ -247,8 +243,9 @@ static func _desert(L) -> Dictionary:
     hesco(L, Vector3(-22, 0, 70), Vector3(-22, 0, 100), hesco_c)
     hesco(L, Vector3(22, 0, 70), Vector3(22, 0, 100), hesco_c)
     hesco(L, Vector3(-22, 0, 100), Vector3(22, 0, 100), hesco_c)
-    L.box(Vector3(-13, 1.3, 91), Vector3(7, 2.6, 9), Color(0.5, 0.47, 0.36))
-    L.box(Vector3(13, 1.3, 91), Vector3(7, 2.6, 9), Color(0.5, 0.47, 0.36))
+    var fob_m = L.tex("concrete", Color(0.95, 0.92, 0.8), 6.0)
+    L.box(Vector3(-13, 1.3, 91), Vector3(7, 2.6, 9), Color(0.5, 0.47, 0.36), 0.0, true, fob_m)
+    L.box(Vector3(13, 1.3, 91), Vector3(7, 2.6, 9), Color(0.5, 0.47, 0.36), 0.0, true, fob_m)
     container(L, Vector3(15, 0, 78), 0.0, green)
     L.add_vehicle("tank", Vector3(-12, 0, 80), 0.0)
     L.add_enemy_vehicle("jeep", Vector3(15, 0, 28), PI)
@@ -271,8 +268,8 @@ static func _desert(L) -> Dictionary:
         [-66, 32, 9, 4, 9], [-6, 46, 6, 3, 6], [70, -30, 8, 4, 8],
     ]
     for h in houses:
-        L.box(Vector3(h[0], h[3] * 0.5, h[1]), Vector3(h[2], h[3], h[4]), mud)
-        L.box(Vector3(h[0], h[3] + 0.3, h[1]), Vector3(h[2] + 0.3, 0.6, h[4] + 0.3), mud.darkened(0.08))
+        L.box(Vector3(h[0], h[3] * 0.5, h[1]), Vector3(h[2], h[3], h[4]), mud, 0.0, true, L.tex("plaster", Color(1.25, 1.15, 1.0), 5.0))
+        L.box(Vector3(h[0], h[3] + 0.3, h[1]), Vector3(h[2] + 0.3, 0.6, h[4] + 0.3), mud.darkened(0.08), 0.0, true, L.tex("plaster", Color(1.1, 1.0, 0.88), 5.0))
         L.box(Vector3(h[0], h[3] * 0.35, h[1] + h[4] * 0.5 + 0.02), Vector3(1.2, h[3] * 0.7, 0.05), Color(0.25, 0.18, 0.12), 0.0, false)
     container(L, Vector3(5, 0, 20), 0.3, Color(0.55, 0.2, 0.15))
     container(L, Vector3(-30, 0, 46), 1.2, Color(0.2, 0.35, 0.55))
@@ -299,7 +296,7 @@ static func _desert(L) -> Dictionary:
     container(L, Vector3(-15, 0, -62), 1.57, Color(0.62, 0.52, 0.34))
     container(L, Vector3(20, 0, -75), 0.0, Color(0.62, 0.52, 0.34))
     container(L, Vector3(-38, 0, -76), 0.0, Color(0.5, 0.42, 0.3))
-    L.box(Vector3(0, 2, -90), Vector3(14, 4, 7), Color(0.6, 0.52, 0.38))
+    L.box(Vector3(0, 2, -90), Vector3(14, 4, 7), Color(0.6, 0.52, 0.38), 0.0, true, L.tex("plaster", Color(1.1, 1.0, 0.85), 5.0))
     sandbags(L, Vector3(-9, 0, -38), 0.0)
     sandbags(L, Vector3(9, 0, -38), 0.0)
     sandbags(L, Vector3(-25, 0, -56), 0.4)
@@ -371,7 +368,7 @@ static func _urban(L) -> Dictionary:
     var rng := RandomNumberGenerator.new()
     rng.seed = 7
     var asphalt := Color(0.3, 0.31, 0.33)
-    L.box(Vector3(0, -0.5, 0), Vector3(240, 1, 240), asphalt)
+    L.box(Vector3(0, -0.5, 0), Vector3(240, 1, 240), asphalt, 0.0, true, L.tex("asphalt", Color(0.95, 0.95, 0.95), 9.0))
     L.bounds(102, 102)
     var streets := [-50.0, 0.0, 50.0]
     var ranges := [[-100.0, -57.0], [-43.0, -7.0], [7.0, 43.0], [57.0, 100.0]]
@@ -392,7 +389,7 @@ static func _urban(L) -> Dictionary:
             var cx := (x0 + x1) * 0.5
             var cz := (z0 + z1) * 0.5
             # sidewalk slab (visual)
-            L.box(Vector3(cx, 0.03, cz), Vector3(x1 - x0, 0.04, z1 - z0), Color(0.55, 0.55, 0.53), 0.0, false)
+            L.box(Vector3(cx, 0.03, cz), Vector3(x1 - x0, 0.04, z1 - z0), Color(0.55, 0.55, 0.53), 0.0, false, L.tex("concrete", Color(1.05, 1.05, 1.05), 5.0))
             var key := "%d,%d" % [i, j]
             if special.has(key):
                 _urban_special(L, special[key], Vector3(cx, 0, cz))
@@ -415,7 +412,7 @@ static func _urban(L) -> Dictionary:
                     var face: float = [0.0, PI / 2, PI, -PI / 2][rng.randi() % 4]
                     var fit := Vector3(ld, h, lw) if absf(sin(face)) > 0.5 else Vector3(lw, h, ld)
                     if L.prop(model, Vector3(bx, 0, bz), face, fit) == null:
-                        L.box(Vector3(bx, h * 0.5, bz), Vector3(lw, h, ld), col)
+                        L.box(Vector3(bx, h * 0.5, bz), Vector3(lw, h, ld), col, 0.0, true, L.tex("plaster", col.lightened(0.35), 6.0))
                         var band := col.darkened(0.45)
                         var y := 3.0
                         while y < h - 1.5:
@@ -492,7 +489,7 @@ static func _urban(L) -> Dictionary:
 
 static func _urban_special(L, kind: String, c: Vector3) -> void:
     var paving := Color(0.68, 0.64, 0.58)
-    L.box(c + Vector3(0, 0.05, 0), Vector3(34, 0.04, 34), paving, 0.0, false)
+    L.box(c + Vector3(0, 0.05, 0), Vector3(34, 0.04, 34), paving, 0.0, false, L.tex("concrete", Color(1.15, 1.1, 1.0), 4.0))
     match kind:
         "hvt":
             L.cyl(c + Vector3(0, 0.5, -4), 4.0, 1.0, Color(0.7, 0.7, 0.68))
@@ -521,7 +518,7 @@ static func _urban_special(L, kind: String, c: Vector3) -> void:
             L.add_enemy(c + Vector3(-8, 0.1, 8), "rifleman")
             L.add_enemy(c + Vector3(10, 0.1, 0), "rifleman")
         "park":
-            L.box(c + Vector3(0, 0.06, 0), Vector3(32, 0.04, 32), Color(0.3, 0.5, 0.22), 0.0, false)
+            L.box(c + Vector3(0, 0.06, 0), Vector3(32, 0.04, 32), Color(0.3, 0.5, 0.22), 0.0, false, L.tex("grass", Color.WHITE, 6.0))
             for p in [Vector3(-10, 0, -10), Vector3(9, 0, -12), Vector3(-12, 0, 8), Vector3(11, 0, 9), Vector3(0, 0, 0)]:
                 tree(L, c + p)
             L.box(c + Vector3(5, 0.45, 2), Vector3(3, 0.9, 1), Color(0.45, 0.3, 0.2))
@@ -534,17 +531,15 @@ static func _tabletop(L) -> Dictionary:
     var wood := Color(0.56, 0.37, 0.22)
     var hx := 75.0
     var hz := 60.0
-    L.box(Vector3(0, -1, 0), Vector3(hx * 2, 2, hz * 2), wood, 0.0, true, L.mat(wood, 0.45))
-    for k in range(-5, 6):
-        L.box(Vector3(0, 0.005, k * 11.0), Vector3(hx * 2, 0.01, 0.18), wood.darkened(0.3), 0.0, false)
+    L.box(Vector3(0, -1, 0), Vector3(hx * 2, 2, hz * 2), wood, 0.0, true, L.tex("table_wood", Color(1.0, 0.92, 0.85), 22.0, 0.45))
     L.bounds(hx, hz)
     # The room around the table (far, far below / away).
-    L.box(Vector3(0, -62, 0), Vector3(900, 2, 900), Color(0.75, 0.72, 0.66), 0.0, false)
+    L.box(Vector3(0, -62, 0), Vector3(900, 2, 900), Color(0.75, 0.72, 0.66), 0.0, false, L.tex("tiles", Color(0.95, 0.92, 0.88), 30.0))
     for p in [Vector3(-70, -31, -55), Vector3(70, -31, -55), Vector3(-70, -31, 55), Vector3(70, -31, 55)]:
         L.box(p, Vector3(6, 60, 6), wood.darkened(0.15), 0.0, false)
-    L.box(Vector3(0, 60, -320), Vector3(900, 300, 4), Color(0.62, 0.66, 0.6), 0.0, false)
+    L.box(Vector3(0, 60, -320), Vector3(900, 300, 4), Color(0.62, 0.66, 0.6), 0.0, false, L.tex("wall", Color(0.78, 0.84, 0.76), 60.0))
     L.box(Vector3(80, 90, -317), Vector3(140, 110, 1), Color(0.8, 0.9, 1.0), 0.0, false, L.glow_mat(Color(0.8, 0.9, 1.0), 1.4))
-    L.box(Vector3(-320, 60, 0), Vector3(4, 300, 900), Color(0.58, 0.62, 0.56), 0.0, false)
+    L.box(Vector3(-320, 60, 0), Vector3(4, 300, 900), Color(0.58, 0.62, 0.56), 0.0, false, L.tex("wall", Color(0.74, 0.8, 0.72), 60.0))
     L.box(Vector3(-200, -20, -250), Vector3(160, 80, 60), Color(0.95, 0.95, 0.95), 0.0, false)   # fridge-ish counter
     L.box(Vector3(0, -30, 160), Vector3(70, 60, 8), wood.darkened(0.2), 0.0, false)          # chair back
 
@@ -685,18 +680,24 @@ static func pine(L, pos: Vector3, h := 8.0) -> void:
 
 ## Snow-capped ridge segment used as a map edge or canyon wall.
 static func ridge(L, pos: Vector3, size: Vector3, rot: float, rock: Color, snow: Color) -> void:
-    L.box(pos + Vector3(0, size.y * 0.5, 0), size, rock, rot)
-    L.box(pos + Vector3(0, size.y + 0.4, 0), Vector3(size.x + 0.6, 0.8, size.z + 0.6), snow, rot, false)
+    L.box(pos + Vector3(0, size.y * 0.5, 0), size, rock, rot, true, L.tex("rock", Color(1.15, 1.15, 1.2), 12.0))
+    L.box(pos + Vector3(0, size.y + 0.4, 0), Vector3(size.x + 0.6, 0.8, size.z + 0.6), snow, rot, false, L.tex("snow", Color.WHITE, 10.0))
 
 
 ## Interior room: floor, four tall walls (visual) and the invisible bounds.
-static func room(L, hx: float, hz: float, floor_c: Color, wall_c: Color, wall_h := 80.0) -> void:
-    L.box(Vector3(0, -1, 0), Vector3(hx * 2 + 40, 2, hz * 2 + 40), floor_c, 0.0, true, L.mat(floor_c, 0.5))
+## floor_tex / floor_tint / floor_tile pick a texture from assets/textures for the floor.
+static func room(L, hx: float, hz: float, floor_c: Color, wall_c: Color, wall_h := 80.0,
+        floor_tex := "", floor_tint := Color.WHITE, floor_tile := 12.0) -> void:
+    var fm = L.tex(floor_tex, floor_tint, floor_tile, 0.6) if floor_tex != "" else L.mat(floor_c, 0.5)
+    L.box(Vector3(0, -1, 0), Vector3(hx * 2 + 40, 2, hz * 2 + 40), floor_c, 0.0, true, fm)
     L.bounds(hx, hz)
-    L.box(Vector3(0, wall_h * 0.5, -hz - 12), Vector3(hx * 2 + 60, wall_h, 2), wall_c, 0.0, false)
-    L.box(Vector3(0, wall_h * 0.5, hz + 12), Vector3(hx * 2 + 60, wall_h, 2), wall_c, 0.0, false)
-    L.box(Vector3(-hx - 12, wall_h * 0.5, 0), Vector3(2, wall_h, hz * 2 + 60), wall_c.darkened(0.06), 0.0, false)
-    L.box(Vector3(hx + 12, wall_h * 0.5, 0), Vector3(2, wall_h, hz * 2 + 60), wall_c.darkened(0.06), 0.0, false)
+    # Painted plaster walls, tinted to the room's colour (the texture is near-white).
+    var wm = L.tex("wall", wall_c.lightened(0.12), 40.0)
+    var wm2 = L.tex("wall", wall_c.darkened(0.02), 40.0)
+    L.box(Vector3(0, wall_h * 0.5, -hz - 12), Vector3(hx * 2 + 60, wall_h, 2), wall_c, 0.0, false, wm)
+    L.box(Vector3(0, wall_h * 0.5, hz + 12), Vector3(hx * 2 + 60, wall_h, 2), wall_c, 0.0, false, wm)
+    L.box(Vector3(-hx - 12, wall_h * 0.5, 0), Vector3(2, wall_h, hz * 2 + 60), wall_c.darkened(0.06), 0.0, false, wm2)
+    L.box(Vector3(hx + 12, wall_h * 0.5, 0), Vector3(2, wall_h, hz * 2 + 60), wall_c.darkened(0.06), 0.0, false, wm2)
     # skirting boards
     for s in [-1.0, 1.0]:
         L.box(Vector3(0, 1.5, (hz + 11) * s), Vector3(hx * 2 + 60, 3, 0.6), Color(0.95, 0.95, 0.92), 0.0, false)
@@ -725,16 +726,13 @@ static func _snow(L) -> Dictionary:
     var rock := Color(0.45, 0.47, 0.52)
     var steel := Color(0.62, 0.64, 0.66)
     var tan_c := Color(0.74, 0.65, 0.48)
-    L.box(Vector3(0, -0.5, 0), Vector3(260, 1, 260), snow, 0.0, true, L.mat(snow, 0.6))
+    L.ground(260, L.tex("snow", Color.WHITE, 10.0, 0.7), 3.2, 404, [], 4.0)
     L.bounds(100, 100)
     for s in [-1, 1]:
         ridge(L, Vector3(0, 0, 110 * s), Vector3(240, 10, 10), 0.0, rock, snow)
         ridge(L, Vector3(110 * s, 0, 0), Vector3(10, 12, 240), 0.0, rock, snow)
     # Frozen lake (west) and snow drifts.
     L.water(Vector3(-55, 0.02, 20), Vector2(40, 30), Color(0.7, 0.85, 0.95, 0.85))
-    for i in 12:
-        var p := Vector3(rng.randf_range(-95, 95), -2.0, rng.randf_range(-95, 95))
-        L.sphere(p, 5.0, snow.darkened(0.03), Vector3(rng.randf_range(1.4, 2.6), 0.45, rng.randf_range(1.4, 2.6)))
 
     # --- Green camp (south) ---
     hesco(L, Vector3(-16, 0, 72), Vector3(-5, 0, 72), Color(0.82, 0.84, 0.86))
@@ -757,7 +755,7 @@ static func _snow(L) -> Dictionary:
     for p in [Vector3(-52, 0, -48), Vector3(52, 0, -48)]:
         watchtower(L, p, tan_c)
     for h in [[-30, -58, 12, 4, 8], [30, -60, 14, 5, 9], [0, -88, 18, 5, 8], [-42, -84, 10, 4, 10]]:
-        L.box(Vector3(h[0], h[3] * 0.5, h[1]), Vector3(h[2], h[3], h[4]), tan_c)
+        L.box(Vector3(h[0], h[3] * 0.5, h[1]), Vector3(h[2], h[3], h[4]), tan_c, 0.0, true, L.tex("plaster", Color(1.2, 1.1, 0.95), 5.0))
         L.box(Vector3(h[0], h[3] + 0.35, h[1]), Vector3(h[2] + 0.6, 0.7, h[4] + 0.6), snow, 0.0, false)
     L.prop("kenney_city_industrial/detail-tank-large.glb", Vector3(44, 0, -82), 0.0, Vector3(0, 7.0, 0))
     L.prop("kenney_city_industrial/water-tower.glb", Vector3(-20, 0, -92), 0.0, Vector3(0, 12.0, 0))
@@ -818,13 +816,14 @@ static func _jungle(L) -> Dictionary:
     var moss := Color(0.24, 0.36, 0.18)
     var mud := Color(0.4, 0.3, 0.2)
     var stone := Color(0.55, 0.55, 0.48)
-    L.box(Vector3(0, -0.5, 0), Vector3(240, 1, 240), moss)
+    # Jungle floor with hummocks; the river channel stays flat so you can wade it.
+    L.ground(240, L.tex("forest", Color(0.95, 1.05, 0.85), 7.0), 2.4, 505, [Rect2(-120, -6, 240, 22)], 9.0)
     L.bounds(95, 95)
     for s in [-1, 1]:
         L.box(Vector3(0, 6, 104 * s), Vector3(230, 14, 10), moss.darkened(0.3), 0.0, false)
         L.box(Vector3(104 * s, 6, 0), Vector3(10, 14, 230), moss.darkened(0.3), 0.0, false)
     # The river (shallow - wade across) with two rope bridges.
-    L.box(Vector3(0, 0.01, 5), Vector3(200, 0.02, 18), mud, 0.0, false)
+    L.box(Vector3(0, 0.01, 5), Vector3(200, 0.02, 18), mud, 0.0, false, L.tex("forest", Color(0.6, 0.55, 0.5), 6.0))
     L.water(Vector3(0, 0.06, 5), Vector2(200, 14), Color(0.25, 0.4, 0.3, 0.85))
     L.prop("kenney_nature/bridge_wood.glb", Vector3(-30, 0, 5), PI / 2, Vector3(0, 0, 18.0), false)
     L.prop("kenney_nature/bridge_wood.glb", Vector3(40, 0, 5), PI / 2, Vector3(0, 0, 18.0), false)
@@ -842,11 +841,12 @@ static func _jungle(L) -> Dictionary:
     L.prop("kenney_nature/campfire_stones.glb", Vector3(-6, 0, 88), 0.0, Vector3(0, 0.8, 0), false)
 
     # --- Ancient temple + POW camp (north) ---
-    L.box(Vector3(0, 1.5, -60), Vector3(36, 3, 30), stone)
-    L.box(Vector3(0, 4.5, -64), Vector3(24, 3, 20), stone.darkened(0.05))
-    L.box(Vector3(0, 7.5, -66), Vector3(12, 3, 12), stone.darkened(0.1))
-    L.box_rot(Vector3(0, 1.5, -42.5), Vector3(10, 0.5, 9.5), stone, Vector3(deg_to_rad(18), 0, 0))
-    L.box_rot(Vector3(0, 4.4, -51.5), Vector3(8, 0.5, 6.6), stone, Vector3(deg_to_rad(27), 0, 0))
+    var temple = L.tex("rock", Color(1.6, 1.6, 1.4), 6.0)
+    L.box(Vector3(0, 1.5, -60), Vector3(36, 3, 30), stone, 0.0, true, temple)
+    L.box(Vector3(0, 4.5, -64), Vector3(24, 3, 20), stone.darkened(0.05), 0.0, true, temple)
+    L.box(Vector3(0, 7.5, -66), Vector3(12, 3, 12), stone.darkened(0.1), 0.0, true, temple)
+    L.box_rot(Vector3(0, 1.5, -42.5), Vector3(10, 0.5, 9.5), stone, Vector3(deg_to_rad(18), 0, 0), true, temple)
+    L.box_rot(Vector3(0, 4.4, -51.5), Vector3(8, 0.5, 6.6), stone, Vector3(deg_to_rad(27), 0, 0), true, temple)
     for p in [Vector3(-16, 0, -44), Vector3(16, 0, -44), Vector3(-16, 0, -76), Vector3(16, 0, -76)]:
         L.prop("kenney_nature/statue_column.glb", p, 0.0, Vector3(0, 7.0, 0))
     L.prop("kenney_nature/statue_head.glb", Vector3(-30, 0, -70), 0.5, Vector3(0, 7.0, 0))
@@ -910,11 +910,7 @@ static func _bathroom(L) -> Dictionary:
     var tile := Color(0.88, 0.9, 0.92)
     var hx := 72.0
     var hz := 58.0
-    room(L, hx, hz, tile, Color(0.62, 0.78, 0.82))
-    for k in range(-7, 8):
-        L.box(Vector3(k * 10.0, 0.005, 0), Vector3(0.25, 0.01, hz * 2 + 30), tile.darkened(0.25), 0.0, false)
-    for k in range(-6, 7):
-        L.box(Vector3(0, 0.005, k * 10.0), Vector3(hx * 2 + 30, 0.01, 0.25), tile.darkened(0.25), 0.0, false)
+    room(L, hx, hz, tile, Color(0.62, 0.78, 0.82), 80.0, "tiles", Color(0.95, 0.97, 1.0), 20.0)
     # The bathtub: a porcelain cliff along the north wall, full of water.
     var porcelain := Color(0.97, 0.97, 0.95)
     L.box(Vector3(0, 11, -52), Vector3(110, 22, 16), porcelain, 0.0, true, L.mat(porcelain, 0.2))
@@ -997,8 +993,9 @@ static func _beach(L) -> Dictionary:
     var sand := Color(0.76, 0.64, 0.42)
     var grass := Color(0.38, 0.5, 0.26)
     var concrete := Color(0.62, 0.6, 0.55)
-    L.box(Vector3(0, -0.5, 0), Vector3(260, 1, 260), grass)
-    L.box(Vector3(0, 0.01, 55), Vector3(220, 0.02, 90), sand, 0.0, false)
+    # Grassy hills inland; the beach itself (z > 8) stays flat down to the surf.
+    L.ground(260, L.tex("grass", Color(1.0, 1.05, 0.9), 7.0), 2.6, 707, [Rect2(-130, 8, 260, 130)], 6.0)
+    L.box(Vector3(0, 0.01, 55), Vector3(220, 0.02, 90), sand, 0.0, false, L.tex("beach_sand", Color(1.15, 1.08, 0.95), 8.0))
     L.bounds(100, 100)
     # Surf + open sea beyond the south edge
     L.water(Vector3(0, 0.04, 95), Vector2(220, 20), Color(0.3, 0.6, 0.7, 0.7))
@@ -1021,7 +1018,7 @@ static func _beach(L) -> Dictionary:
     # Inland: Tan HQ village + barbed fences
     var houses := [[-50, -40, 10, 5, 9], [-20, -60, 12, 5, 10], [30, -50, 10, 6, 10], [55, -70, 12, 5, 8], [0, -85, 16, 6, 10], [-60, -80, 10, 5, 10]]
     for h in houses:
-        L.box(Vector3(h[0], h[3] * 0.5, h[1]), Vector3(h[2], h[3], h[4]), concrete)
+        L.box(Vector3(h[0], h[3] * 0.5, h[1]), Vector3(h[2], h[3], h[4]), concrete, 0.0, true, L.tex("plaster", Color(1.35, 1.35, 1.3), 5.0))
         L.box_rot(Vector3(h[0], h[3] + 1.2, h[1]), Vector3(h[2] + 0.5, 0.4, h[4] * 0.62), Color(0.6, 0.25, 0.2), Vector3(deg_to_rad(28), 0, 0), false)
     for p in [Vector3(-80, 0, 40), Vector3(-45, 0, 35), Vector3(40, 0, 38), Vector3(85, 0, 45), Vector3(-75, 0, -5), Vector3(80, 0, -10)]:
         palm(L, p)
@@ -1081,21 +1078,21 @@ static func _sandbox(L) -> Dictionary:
     var lawn := Color(0.3, 0.52, 0.2)
     var sand := Color(0.9, 0.8, 0.55)
     var plank := Color(0.62, 0.45, 0.28)
-    L.box(Vector3(0, -0.5, 0), Vector3(240, 1, 240), lawn)
+    L.ground(240, L.tex("grass", Color(0.95, 1.1, 0.85), 6.0), 1.4, 808, [], 0.0)
     L.bounds(85, 85)
     # Backyard fence (giant)
     for s in [-1, 1]:
         L.box(Vector3(0, 20, 94 * s), Vector3(220, 40, 3), Color(0.8, 0.72, 0.6), 0.0, false)
         L.box(Vector3(94 * s, 20, 0), Vector3(3, 40, 220), Color(0.8, 0.72, 0.6), 0.0, false)
     # The sandbox: wooden walls with gaps, sand floor, sand castle fort
-    L.box(Vector3(0, 0.02, -20), Vector3(70, 0.04, 60), sand, 0.0, false)
-    L.wall(Vector3(-35, 0, -50), Vector3(35, 0, -50), 2.4, 2.0, plank)
-    L.wall(Vector3(-35, 0, 10), Vector3(-8, 0, 10), 2.4, 2.0, plank)
-    L.wall(Vector3(8, 0, 10), Vector3(35, 0, 10), 2.4, 2.0, plank)
-    L.wall(Vector3(-35, 0, -50), Vector3(-35, 0, -28), 2.4, 2.0, plank)
-    L.wall(Vector3(-35, 0, -14), Vector3(-35, 0, 10), 2.4, 2.0, plank)
-    L.wall(Vector3(35, 0, -50), Vector3(35, 0, -26), 2.4, 2.0, plank)
-    L.wall(Vector3(35, 0, -12), Vector3(35, 0, 10), 2.4, 2.0, plank)
+    L.box(Vector3(0, 0.02, -20), Vector3(70, 0.04, 60), sand, 0.0, false, L.tex("beach_sand", Color(1.3, 1.22, 1.05), 5.0))
+    L.wall(Vector3(-35, 0, -50), Vector3(35, 0, -50), 2.4, 2.0, plank, L.tex("table_wood", Color(1.0, 0.9, 0.8), 6.0))
+    L.wall(Vector3(-35, 0, 10), Vector3(-8, 0, 10), 2.4, 2.0, plank, L.tex("table_wood", Color(1.0, 0.9, 0.8), 6.0))
+    L.wall(Vector3(8, 0, 10), Vector3(35, 0, 10), 2.4, 2.0, plank, L.tex("table_wood", Color(1.0, 0.9, 0.8), 6.0))
+    L.wall(Vector3(-35, 0, -50), Vector3(-35, 0, -28), 2.4, 2.0, plank, L.tex("table_wood", Color(1.0, 0.9, 0.8), 6.0))
+    L.wall(Vector3(-35, 0, -14), Vector3(-35, 0, 10), 2.4, 2.0, plank, L.tex("table_wood", Color(1.0, 0.9, 0.8), 6.0))
+    L.wall(Vector3(35, 0, -50), Vector3(35, 0, -26), 2.4, 2.0, plank, L.tex("table_wood", Color(1.0, 0.9, 0.8), 6.0))
+    L.wall(Vector3(35, 0, -12), Vector3(35, 0, 10), 2.4, 2.0, plank, L.tex("table_wood", Color(1.0, 0.9, 0.8), 6.0))
     # sand castle
     for t in [Vector3(-8, 0, -34), Vector3(8, 0, -34), Vector3(-8, 0, -22), Vector3(8, 0, -22)]:
         L.cyl(t + Vector3(0, 3.5, 0), 2.6, 7.0, sand.darkened(0.08), true, Vector3.ZERO, null, 2.2)
@@ -1165,7 +1162,7 @@ static func _port(L) -> Dictionary:
     var rng := RandomNumberGenerator.new()
     rng.seed = 909
     var concrete := Color(0.4, 0.4, 0.42)
-    L.box(Vector3(0, -0.5, 0), Vector3(240, 1, 240), concrete)
+    L.box(Vector3(0, -0.5, 0), Vector3(240, 1, 240), concrete, 0.0, true, L.tex("concrete", Color(0.7, 0.7, 0.72), 9.0))
     L.bounds(100, 95)
     L.box(Vector3(0, -0.3, -170), Vector3(600, 0.1, 140), Color(0.03, 0.06, 0.1), 0.0, false, L.mat(Color(0.03, 0.06, 0.1), 0.05, 0.4))
     L.box(Vector3(0, 0.3, -98), Vector3(220, 0.6, 3), Color(0.85, 0.7, 0.15), 0.0, false)
@@ -1257,9 +1254,9 @@ static func _bedroom(L) -> Dictionary:
     var carpet := Color(0.35, 0.45, 0.7)
     var hx := 75.0
     var hz := 62.0
-    room(L, hx, hz, carpet, Color(0.85, 0.82, 0.6))
-    L.cyl(Vector3(0, 0.03, 0), 30, 0.06, Color(0.85, 0.35, 0.3), false)
-    L.cyl(Vector3(0, 0.05, 0), 24, 0.06, Color(0.95, 0.8, 0.3), false)
+    room(L, hx, hz, carpet, Color(0.85, 0.82, 0.6), 80.0, "carpet", Color(0.5, 0.65, 1.15), 8.0)
+    L.cyl(Vector3(0, 0.03, 0), 30, 0.06, Color(0.85, 0.35, 0.3), false, Vector3.ZERO, L.tex("carpet", Color(1.25, 0.5, 0.45), 6.0))
+    L.cyl(Vector3(0, 0.05, 0), 24, 0.06, Color(0.95, 0.8, 0.3), false, Vector3.ZERO, L.tex("carpet", Color(1.3, 1.1, 0.5), 6.0))
     # Bunk bed (west): huge posts + slatted base you can run under
     var wood := Color(0.75, 0.55, 0.35)
     for p in [Vector3(-70, 0, -50), Vector3(-70, 0, 20), Vector3(-30, 0, -50), Vector3(-30, 0, 20)]:
@@ -1343,7 +1340,7 @@ static func _mountain(L) -> Dictionary:
     var snow := Color(0.88, 0.9, 0.94)
     var rock := Color(0.42, 0.42, 0.46)
     var road := Color(0.35, 0.33, 0.32)
-    L.box(Vector3(0, -0.5, 0), Vector3(260, 1, 260), snow, 0.0, true, L.mat(snow, 0.6))
+    L.ground(260, L.tex("snow", Color.WHITE, 10.0, 0.7), 1.6, 1111, [], 0.0)
     L.bounds(70, 105)
     # Canyon walls, zig-zagging
     for i in 9:
@@ -1357,7 +1354,7 @@ static func _mountain(L) -> Dictionary:
         L.box(p + Vector3(0, 8.2, 0), Vector3(6.4, 0.4, 6.4), snow, 0.0, false)
     # Winding road + frozen river with a bridge
     for i in 10:
-        L.box(Vector3(sin(i * 0.7) * 10.0, 0.02, 95 - i * 21.0), Vector3(12, 0.04, 22), road, sin(i * 0.7) * 0.3, false)
+        L.box(Vector3(sin(i * 0.7) * 10.0, 0.02, 95 - i * 21.0), Vector3(12, 0.04, 22), road, sin(i * 0.7) * 0.3, false, L.tex("asphalt", Color(0.9, 0.9, 0.95), 8.0))
     L.water(Vector3(0, 0.05, 0), Vector2(90, 12), Color(0.7, 0.85, 0.95, 0.85))
     L.box(Vector3(0, 1.0, 0), Vector3(14, 0.6, 18), Color(0.45, 0.35, 0.25))
     for s in [-1, 1]:
@@ -1424,7 +1421,7 @@ static func _garage(L) -> Dictionary:
     var floor_c := Color(0.55, 0.55, 0.55)
     var hx := 75.0
     var hz := 62.0
-    room(L, hx, hz, floor_c, Color(0.75, 0.72, 0.66))
+    room(L, hx, hz, floor_c, Color(0.75, 0.72, 0.66), 80.0, "concrete", Color(0.95, 0.95, 0.95), 16.0)
     L.box(Vector3(10, 0.01, -5), Vector3(30, 0.02, 20), Color(0.25, 0.25, 0.26), 0.3, false)   # oil stain
     L.box(Vector3(0, 30, 73), Vector3(110, 50, 1), Color(0.9, 0.95, 1.0), 0.0, false, L.glow_mat(Color(0.95, 0.97, 1.0), 1.0))  # open door glare
     # The family car (parked, enormous)
@@ -1501,19 +1498,18 @@ static func _living_room(L) -> Dictionary:
     var floor_c := Color(0.55, 0.38, 0.24)
     var hx := 85.0
     var hz := 70.0
-    room(L, hx, hz, floor_c, Color(0.78, 0.74, 0.66))
-    for k in range(-9, 10):
-        L.box(Vector3(k * 9.0, 0.005, 0), Vector3(0.15, 0.01, hz * 2 + 30), floor_c.darkened(0.3), 0.0, false)
-    L.box(Vector3(-10, 0.04, 20), Vector3(90, 0.08, 60), Color(0.65, 0.2, 0.2), 0.0, false)
-    L.box(Vector3(-10, 0.06, 20), Vector3(80, 0.08, 50), Color(0.8, 0.7, 0.5), 0.0, false)
+    room(L, hx, hz, floor_c, Color(0.78, 0.74, 0.66), 80.0, "wood_floor", Color(1.0, 0.95, 0.9), 26.0)
+    L.box(Vector3(-10, 0.04, 20), Vector3(90, 0.08, 60), Color(0.65, 0.2, 0.2), 0.0, false, L.tex("carpet", Color(1.0, 0.35, 0.32), 7.0))
+    L.box(Vector3(-10, 0.06, 20), Vector3(80, 0.08, 50), Color(0.8, 0.7, 0.5), 0.0, false, L.tex("carpet", Color(1.15, 1.0, 0.8), 7.0))
     # The beige couch fortress (north)
     var beige := Color(0.8, 0.72, 0.58)
-    L.box(Vector3(0, 9, -58), Vector3(120, 18, 30), beige)
-    L.box(Vector3(0, 30, -70), Vector3(120, 30, 8), beige.darkened(0.06), 0.0, false)
+    var couch = L.tex("carpet", Color(1.1, 1.0, 0.85), 5.0)
+    L.box(Vector3(0, 9, -58), Vector3(120, 18, 30), beige, 0.0, true, couch)
+    L.box(Vector3(0, 30, -70), Vector3(120, 30, 8), beige.darkened(0.06), 0.0, false, couch)
     for s in [-1, 1]:
-        L.box(Vector3(64 * s, 16, -58), Vector3(10, 32, 32), beige.darkened(0.04))
+        L.box(Vector3(64 * s, 16, -58), Vector3(10, 32, 32), beige.darkened(0.04), 0.0, true, couch)
     for i in 3:
-        L.box(Vector3(-40 + i * 40, 18.3, -55), Vector3(38, 0.6, 24), beige.lightened(0.05))
+        L.box(Vector3(-40 + i * 40, 18.3, -55), Vector3(38, 0.6, 24), beige.lightened(0.05), 0.0, true, L.tex("carpet", Color(1.18, 1.08, 0.92), 5.0))
     # cushion walls (fallen cushions as Tan ramparts)
     L.box_rot(Vector3(-30, 6, -30), Vector3(30, 12, 6), beige.darkened(0.1), Vector3(0.15, 0.2, 0))
     L.box_rot(Vector3(30, 6, -32), Vector3(30, 12, 6), beige.darkened(0.1), Vector3(0.15, -0.25, 0))

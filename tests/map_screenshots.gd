@@ -2,7 +2,7 @@ extends Node
 ## One establishing shot per map (needs a real renderer).
 var main: Node
 const VIEWS := [
-    [0, Vector3(-6, 0.5, -20), 0.0, -0.05],     # desert: compound gate
+    [0, Vector3(30, 0.5, 40), -0.5, 0.0],       # desert: village and dunes
     [1, Vector3(0, 0.5, 30), 0.0, 0.05],        # city: main street north
     [2, Vector3(-12, 0.5, 52), 0.35, -0.02],    # tabletop
     [3, Vector3(0, 0.5, -12), 0.0, 0.0],        # snow globe: radar station
@@ -35,6 +35,8 @@ func _ready() -> void:
         for e in main.level.enemies + main.level.enemy_vehicles:
             e.set_physics_process(false)
         p.global_position = v[1]
+        if main.level.has_method("ground_height"):
+            p.global_position.y = main.level.ground_height(v[1].x, v[1].z) + 0.5
         p.rotation.y = v[2]
         p.pitch = v[3]
         await _frames(45)

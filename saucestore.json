@@ -157,6 +157,18 @@
       "author": "bart",
       "license": "CC0",
       "source": "https://opengameart.org/content/ticking-clock"
+    },
+    {
+      "asset": "Ground, wall and floor textures (11 sets)",
+      "author": "Poly Haven",
+      "license": "CC0",
+      "source": "https://polyhaven.com/textures"
+    },
+    {
+      "asset": "Carpet, tile and rock textures (Carpet016, Tiles107, Rock028)",
+      "author": "ambientCG",
+      "license": "CC0",
+      "source": "https://ambientcg.com"
     }
   ]
 }

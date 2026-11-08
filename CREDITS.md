@@ -54,6 +54,27 @@ Kenney's packs are also available at https://kenney.nl/assets, and each pack fol
 | `distant_explosion.ogg` | Muffled Distant Explosion | NenadSimic | CC0 | https://opengameart.org/content/muffled-distant-explosion |
 | `helicopter.ogg` | (from War on Water: SNDFX) | yd | CC0 | https://opengameart.org/content/war-on-water-sndfx |
 
+## Textures (`assets/textures/`)
+
+Colour and normal maps at 1K, projected onto the procedural maps with triplanar mapping.
+
+| Folder | Asset | Author | License | Source |
+|---|---|---|---|---|
+| `sand` | aerial_sand | Poly Haven | CC0 | https://polyhaven.com/a/aerial_sand |
+| `beach_sand` | coast_sand_01 | Poly Haven | CC0 | https://polyhaven.com/a/coast_sand_01 |
+| `snow` | snow_02 | Poly Haven | CC0 | https://polyhaven.com/a/snow_02 |
+| `forest` | forest_ground_04 | Poly Haven | CC0 | https://polyhaven.com/a/forest_ground_04 |
+| `grass` | leafy_grass | Poly Haven | CC0 | https://polyhaven.com/a/leafy_grass |
+| `plaster` | clay_plaster | Poly Haven | CC0 | https://polyhaven.com/a/clay_plaster |
+| `concrete` | concrete_floor_02 | Poly Haven | CC0 | https://polyhaven.com/a/concrete_floor_02 |
+| `asphalt` | asphalt_02 | Poly Haven | CC0 | https://polyhaven.com/a/asphalt_02 |
+| `wood_floor` | wood_floor | Poly Haven | CC0 | https://polyhaven.com/a/wood_floor |
+| `table_wood` | oak_wood_planks | Poly Haven | CC0 | https://polyhaven.com/a/oak_wood_planks |
+| `wall` | painted_plaster_wall | Poly Haven | CC0 | https://polyhaven.com/a/painted_plaster_wall |
+| `carpet` | Carpet016 | ambientCG | CC0 | https://ambientcg.com/view?id=Carpet016 |
+| `tiles` | Tiles107 | ambientCG | CC0 | https://ambientcg.com/view?id=Tiles107 |
+| `rock` | Rock028 | ambientCG | CC0 | https://ambientcg.com/view?id=Rock028 |
+
 ## Code-generated content
 
-The maps, effects, hit-marker blip, melt sizzle and fallback sounds are all generated in code (`scripts/game.gd`, `scripts/fx.gd`, `scripts/level_data.gd`). They belong to this project.
+The maps (including the terrain hills), effects, hit-marker blip, melt sizzle and fallback sounds are all generated in code (`scripts/game.gd`, `scripts/fx.gd`, `scripts/level_data.gd`). They belong to this project.
