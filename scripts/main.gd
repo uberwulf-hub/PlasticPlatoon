@@ -204,6 +204,9 @@ func show_briefing(i: int) -> void:
     vb.add_child(UI.label("OBJECTIVES", 16, UI.ACCENT))
     for o in m["objectives"]:
         vb.add_child(UI.label("  ■  " + o, 19))
+    var fresh: Array = LevelData.new_on(i)
+    if not fresh.is_empty():
+        vb.add_child(UI.label("NEW THIS OPERATION:  " + ", ".join(fresh), 18, Color(1.0, 0.85, 0.35)))
     var hb := HBoxContainer.new()
     hb.add_theme_constant_override("separation", 16)
     hb.add_child(UI.button("DEPLOY", func(): start_level(i), 300))
@@ -213,68 +216,77 @@ func show_briefing(i: int) -> void:
 
 func show_settings() -> void:
     var root := _new_ui(0.4)
-    var vb := UI.centered_panel(root, 560)
+    var vb := UI.centered_panel(root, 1080)
     vb.add_child(UI.label("SETTINGS", 40, UI.ACCENT))
-    vb.add_child(UI.label("Difficulty", 18))
-    var diff := HBoxContainer.new()
-    for d in 3:
-        var b := UI.button(Game.DIFFICULTY_NAMES[d], func():
-            Game.difficulty = d
-            Game.save()
-            show_settings(), 160)
-        if d == Game.difficulty:
-            b.add_theme_color_override("font_color", UI.ACCENT)
-            b.text = "> " + b.text
-        diff.add_child(b)
-    vb.add_child(diff)
-    vb.add_child(UI.label("Mouse sensitivity", 18))
-    var slider := HSlider.new()
-    slider.min_value = 0.0005
-    slider.max_value = 0.008
-    slider.step = 0.0001
-    slider.value = Game.mouse_sensitivity
-    slider.custom_minimum_size = Vector2(480, 24)
-    slider.value_changed.connect(func(v): Game.mouse_sensitivity = v)
-    vb.add_child(slider)
-    for row in [["Music volume", "music_volume"], ["Effects volume", "sfx_volume"]]:
-        vb.add_child(UI.label(row[0], 18))
-        var vs := HSlider.new()
-        vs.min_value = 0.0
-        vs.max_value = 1.0
-        vs.step = 0.05
-        vs.value = Game.get(row[1])
-        vs.custom_minimum_size = Vector2(480, 24)
-        var prop: String = row[1]
-        vs.value_changed.connect(func(v):
-            Game.set(prop, v)
-            Game.apply_volumes())
-        vb.add_child(vs)
-    var nb := CheckBox.new()
-    nb.text = "PNN news breaks between operations"
-    nb.button_pressed = Game.show_news
-    nb.toggled.connect(func(on): Game.show_news = on)
-    vb.add_child(nb)
-    var narr := CheckBox.new()
-    narr.text = "Narrator voices (reads the news aloud with Windows speech)"
-    narr.button_pressed = Game.narration
-    narr.toggled.connect(func(on): Game.narration = on)
-    vb.add_child(narr)
-    vb.add_child(UI.label("AI squadmates (single-player)", 18))
-    var sq := HBoxContainer.new()
-    for k in 4:
-        var sb := UI.button(("> %d" if k == Game.squad_size else "%d") % k, func():
-            Game.squad_size = k
-            Game.save()
-            show_settings(), 110)
-        if k == Game.squad_size:
-            sb.add_theme_color_override("font_color", UI.ACCENT)
-        sq.add_child(sb)
-    vb.add_child(sq)
-    var inv := CheckBox.new()
-    inv.text = "Invert mouse Y"
-    inv.button_pressed = Game.invert_y
-    inv.toggled.connect(func(on): Game.invert_y = on)
-    vb.add_child(inv)
+    var cols := HBoxContainer.new()
+    cols.add_theme_constant_override("separation", 48)
+    vb.add_child(cols)
+    var left := VBoxContainer.new()
+    var right := VBoxContainer.new()
+    for c in [left, right]:
+        c.add_theme_constant_override("separation", 10)
+        c.custom_minimum_size = Vector2(500, 0)
+        cols.add_child(c)
+    var choice_row := func(parent: Control, title: String, opts: Array, current, pick: Callable, width := 160) -> void:
+        parent.add_child(UI.label(title, 18))
+        var row := HBoxContainer.new()
+        for o in opts:
+            var val = o[0]
+            var b := UI.button(("> " if val == current else "") + str(o[1]), func(): pick.call(val), width)
+            if val == current:
+                b.add_theme_color_override("font_color", UI.ACCENT)
+            row.add_child(b)
+        parent.add_child(row)
+    var check := func(parent: Control, text: String, on: bool, set_to: Callable) -> void:
+        var cb := CheckBox.new()
+        cb.text = text
+        cb.button_pressed = on
+        cb.toggled.connect(set_to)
+        parent.add_child(cb)
+    var slider_row := func(parent: Control, title: String, lo: float, hi: float, step: float, value: float, changed: Callable) -> void:
+        parent.add_child(UI.label(title, 18))
+        var sl := HSlider.new()
+        sl.min_value = lo
+        sl.max_value = hi
+        sl.step = step
+        sl.value = value
+        sl.custom_minimum_size = Vector2(480, 24)
+        sl.value_changed.connect(changed)
+        parent.add_child(sl)
+
+    # ---- left: gameplay ----
+    choice_row.call(left, "Difficulty", [[0, "Recruit"], [1, "Regular"], [2, "Veteran"]], Game.difficulty, func(v):
+        Game.difficulty = v
+        Game.save()
+        show_settings())
+    slider_row.call(left, "Mouse sensitivity", 0.0005, 0.008, 0.0001, Game.mouse_sensitivity, func(v): Game.mouse_sensitivity = v)
+    check.call(left, "Invert mouse Y", Game.invert_y, func(on): Game.invert_y = on)
+    choice_row.call(left, "AI squadmates (single-player)", [[0, 0], [1, 1], [2, 2], [3, 3]], Game.squad_size, func(v):
+        Game.squad_size = v
+        Game.save()
+        show_settings(), 110)
+    check.call(left, "PNN news breaks between operations", Game.show_news, func(on): Game.show_news = on)
+    check.call(left, "Narrator voices (reads the news aloud)", Game.narration, func(on): Game.narration = on)
+
+    # ---- right: sound + graphics ----
+    slider_row.call(right, "Music volume", 0.0, 1.0, 0.05, Game.music_volume, func(v):
+        Game.music_volume = v
+        Game.apply_volumes())
+    slider_row.call(right, "Effects volume", 0.0, 1.0, 0.05, Game.sfx_volume, func(v):
+        Game.sfx_volume = v
+        Game.apply_volumes())
+    choice_row.call(right, "Graphics quality  (Low if the game lags)", [[0, "Low"], [1, "Medium"], [2, "High"]], Game.graphics, func(v):
+        Game.graphics = v
+        Game.apply_graphics()
+        Game.save()
+        show_settings())
+    choice_row.call(right, "Frame rate", [[0, "Match screen"], [60, "60 cap"], [120, "120 cap"]], Game.fps_cap, func(v):
+        Game.fps_cap = v
+        Game.apply_graphics()
+        Game.save()
+        show_settings())
+    check.call(right, "Show FPS counter (in game)", Game.show_fps, func(on): Game.show_fps = on)
+
     vb.add_child(UI.button("Back", func():
         Game.save()
         show_main_menu(), 480))

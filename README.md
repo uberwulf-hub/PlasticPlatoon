@@ -26,6 +26,20 @@ The project uses the Forward+ renderer. On older GPUs or integrated graphics, sw
 
 **Editor → Manage Export Templates → Download**, then **Project → Export… → Add… → Windows Desktop → Export Project**.
 
+## Performance
+
+**Settings → Graphics quality:**
+
+| Preset | Anti-aliasing | Ambient occlusion | Glow | Shadows | 3D resolution |
+|---|---|---|---|---|---|
+| Low | Off | Off | Off | Short | 75%, FSR upscaled |
+| Medium (default) | 2× MSAA | Off | On | Medium | Full |
+| High | 4× MSAA | On | On | Long | Full |
+
+You can also cap the frame rate (match the screen, 60 or 120) and turn on an FPS counter.
+
+On laptops with two graphics chips, make sure Windows runs the game on the dedicated one: Settings → System → Display → Graphics → add `PlasticPlatoon.exe` → High performance.
+
 ## Controls
 
 | Key | Action |
@@ -217,6 +231,19 @@ The anchors **read their lines aloud** using the speech voices built into Window
 13. **Operation Beige Dawn**: the living room. General Beige has turned the couch into a fortress and is broadcasting his plan through TV antennas. Destroy them, defeat the General, then extract.
 
 Each operation gets its own PNN news break before and after, telling the story from the kitchen table to the couch.
+
+The campaign eases you in. The briefing and the start of each operation list anything new:
+
+| Operation | You can drive | Weapons that appear | Drone strikes | Tan vehicles |
+|---|---|---|---|---|
+| 1 | Nothing | M4A1 carbine, AT4 pickup | No | Jeeps |
+| 2 | Jeep | + shotgun, M249 | No | + tanks |
+| 3 | Jeep | (same) | Yes | |
+| 4 | + tank | + Mk 22 sniper | | |
+| 5 | + troop carrier | | | |
+| 7 | + helicopter | | | |
+
+The Tan Army also gets tougher each operation. Their damage, accuracy and reaction speed scale from ×0.70 on Op 1 to ×1.30 on Op 13, on top of the difficulty setting. LAN co-op and MELTDOWN have everything unlocked.
 
 Finishing an operation unlocks the next one. There are three difficulty levels (Recruit, Regular and Veteran), which change enemy damage, accuracy and reaction time.
 

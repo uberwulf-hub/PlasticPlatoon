@@ -14,6 +14,12 @@ var player_name := "Soldier"
 var narration := true           # PNN anchors read their lines with the speech voices on this PC
 var squad_size := 2             # friendly AI squadmates in single-player (0-3)
 var meltdown_best := {}         # MELTDOWN map index -> best wave reached
+var campaign_ramp := 1.0        # set per operation: early ops are gentler, late ones harder
+var free_play := false          # tests: ignore the campaign progression (everything unlocked)
+const GRAPHICS_NAMES := ["Low", "Medium", "High"]
+var graphics := 1               # 0 low, 1 medium, 2 high (see apply_graphics)
+var fps_cap := 0                # 0 = match the screen (vsync), else a frame cap
+var show_fps := false
 var difficulty := 1
 var unlocked_level := 0
 var current_level: Node = null
@@ -43,6 +49,7 @@ func _ready() -> void:
     _setup_inputs()
     _load()
     _setup_buses()
+    apply_graphics.call_deferred()
     _build_sfx()
     _load_sfx_files()
     _music = AudioStreamPlayer.new()
@@ -109,16 +116,32 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # ------------------------------------------------------------- settings ----
 
+## Applies the graphics preset and frame cap to the window, and to the level
+## that's running (its sky/lighting effects).
+##   Low:    no anti-aliasing, no ambient occlusion or glow, short shadows, 3D at 75% (FSR upscaled)
+##   Medium: 2x MSAA, glow, medium shadows, full resolution
+##   High:   4x MSAA, ambient occlusion, glow, long shadows
+func apply_graphics() -> void:
+    var vp := get_viewport()
+    vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][graphics]
+    vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if graphics == 0 else Viewport.SCALING_3D_MODE_BILINEAR
+    vp.scaling_3d_scale = 0.75 if graphics == 0 else 1.0
+    Engine.max_fps = fps_cap
+    DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if fps_cap == 0 else DisplayServer.VSYNC_DISABLED)
+    if current_level != null and is_instance_valid(current_level) and current_level.has_method("apply_graphics"):
+        current_level.apply_graphics()
+
+
 func enemy_damage_mult() -> float:
-    return [0.55, 1.0, 1.45][difficulty]
+    return [0.55, 1.0, 1.45][difficulty] * campaign_ramp
 
 
 func enemy_spread_mult() -> float:
-    return [1.6, 1.0, 0.7][difficulty]
+    return [1.6, 1.0, 0.7][difficulty] / campaign_ramp
 
 
 func enemy_reaction_mult() -> float:
-    return [1.6, 1.0, 0.65][difficulty]
+    return [1.6, 1.0, 0.65][difficulty] / campaign_ramp
 
 
 func unlock(level_index: int) -> void:
@@ -136,6 +159,9 @@ func save() -> void:
     cfg.set_value("settings", "player_name", player_name)
     cfg.set_value("settings", "narration", narration)
     cfg.set_value("settings", "squad_size", squad_size)
+    cfg.set_value("settings", "graphics", graphics)
+    cfg.set_value("settings", "fps_cap", fps_cap)
+    cfg.set_value("settings", "show_fps", show_fps)
     cfg.set_value("progress", "meltdown_best", meltdown_best)
     cfg.set_value("settings", "music_volume", music_volume)
     cfg.set_value("settings", "sfx_volume", sfx_volume)
@@ -154,6 +180,9 @@ func _load() -> void:
     player_name = cfg.get_value("settings", "player_name", player_name)
     narration = cfg.get_value("settings", "narration", narration)
     squad_size = clampi(cfg.get_value("settings", "squad_size", squad_size), 0, 3)
+    graphics = clampi(cfg.get_value("settings", "graphics", graphics), 0, 2)
+    fps_cap = cfg.get_value("settings", "fps_cap", fps_cap)
+    show_fps = cfg.get_value("settings", "show_fps", show_fps)
     meltdown_best = cfg.get_value("progress", "meltdown_best", {})
     music_volume = cfg.get_value("settings", "music_volume", music_volume)
     sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)

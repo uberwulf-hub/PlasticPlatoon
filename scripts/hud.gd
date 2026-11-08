@@ -227,6 +227,8 @@ func _process(delta: float) -> void:
         for m in level.squad:
             lines.append("%s  %s" % [m.display_name(), ("%d HP" % int(ceil(m.health))) if m.alive else "DOWN"])
         team_label.text = "\n".join(lines)
+    if Game.show_fps:
+        zone_label.text = ("FPS %d   " % Engine.get_frames_per_second()) + zone_label.text
     var secs := int(level.elapsed)
     info_label.text = "TAN FORCES: %d\nTIME %02d:%02d" % [level.enemies_alive(), secs / 60, secs % 60]
     if level.mode != null:

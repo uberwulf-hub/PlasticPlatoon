@@ -70,6 +70,7 @@ static var _scenes := {}
 func _ready() -> void:
     Game.current_level = self
     info = LevelData.build(level_index, self)
+    _apply_progression()
     if _ground_spec != null:
         _build_terrain()
     _build_environment()
@@ -445,13 +446,31 @@ func _build_environment() -> void:
     var we := WorldEnvironment.new()
     we.environment = env
     add_child(we)
+    _env = env
     var sun := DirectionalLight3D.new()
+    _sun = sun
     sun.rotation_degrees = info.get("sun_rot", Vector3(-50, 35, 0))
     sun.light_color = info.get("sun_color", Color(1, 0.96, 0.88))
     sun.light_energy = info.get("sun_energy", 1.2)
     sun.shadow_enabled = true
     sun.directional_shadow_max_distance = 140.0
     add_child(sun)
+    apply_graphics()
+
+
+var _env: Environment
+var _sun: DirectionalLight3D
+
+
+## Graphics quality (Settings): the expensive screen effects and shadow range.
+func apply_graphics() -> void:
+    if _env == null:
+        return
+    var q: int = Game.graphics
+    _env.ssao_enabled = q >= 2
+    _env.glow_enabled = q >= 1
+    _sun.directional_shadow_max_distance = [55.0, 100.0, 140.0][q]
+    _sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if q == 0 else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 
 
 # ------------------------------------------------------ builder helpers ----
@@ -1226,6 +1245,45 @@ func tex(name: String, tint := Color.WHITE, tile := 6.0, rough := 0.9) -> Standa
 ## list of Rect2 (x, z) areas that must stay flat too (beaches, roads...).
 func ground(size: float, m: Material, amp := 2.5, seed := 1, flat: Array = [], rim := 6.0) -> void:
     _ground_spec = {"size": size, "mat": m, "amp": amp, "seed": seed, "flat": flat, "rim": rim}
+
+
+## Campaign progression: keep only the vehicles, weapons and drone strikes this
+## operation has unlocked, and set how tough the Tan Army is.
+func _apply_progression() -> void:
+    var full: bool = Net.active or Game.free_play or info.get("mode", "") == "meltdown"
+    var pr: Dictionary = LevelData.FULL_PROGRESSION if full else LevelData.progression(level_index)
+    Game.campaign_ramp = pr["ramp"]
+    for v in vehicles.duplicate():
+        if not pr["vehicles"].has(v.kind):
+            vehicles.erase(v)
+            v.free()
+    for v in enemy_vehicles.duplicate():
+        if not pr["tan"].has(v.kind):
+            enemy_vehicles.erase(v)
+            v.free()
+    for id in pickups.keys():
+        var pk = pickups[id]
+        var k: String = pk.kind
+        var swap := ""
+        if LevelData.ALL_WEAPONS.has(k) and not pr["weapons"].has(k):
+            swap = "ammo"
+        elif k == "drone" and not pr["drones"]:
+            swap = "grenades"
+        if swap != "":
+            var pos: Vector3 = pk.position
+            pickups.erase(id)
+            pk.free()
+            add_pickup(pos, swap, id)
+    var start: Array = pr["start"] if not pr["start"].is_empty() else info.get("start_weapons", ["carbine"])
+    info["start_weapons"] = start.filter(func(w): return pr["weapons"].has(w))
+    if not pr["drones"]:
+        info["drones"] = 0
+    if not full:
+        var fresh: Array = LevelData.new_on(level_index)
+        if not fresh.is_empty():
+            get_tree().create_timer(4.0).timeout.connect(func():
+                if is_inside_tree():
+                    notify("NEW: " + ", ".join(fresh).to_upper(), 4.0))
 
 
 func _build_terrain() -> void:

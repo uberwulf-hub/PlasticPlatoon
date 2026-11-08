@@ -84,6 +84,11 @@ func _news(first: int, last: int) -> void:
     _check(played == total, "PNN: %d/%d news breaks play to the end" % [played, total])
     if first == 0 and last >= 12:
         _check(themes.size() >= 13, "PNN: %d different field sets" % themes.size())
+    var LD = load("res://scripts/level_data.gd")
+    var ramp_up := true
+    for k in range(1, LD.PROGRESSION.size()):
+        ramp_up = ramp_up and LD.PROGRESSION[k]["ramp"] > LD.PROGRESSION[k - 1]["ramp"]
+    _check(ramp_up, "Tan toughness rises every operation")
     # Each op's intro is its own story beat (no op falls back to another's script).
     var seen := {}
     for op in range(first, last + 1):
@@ -118,6 +123,33 @@ func _play(i: int) -> void:
     var tag := "L%d %s:" % [i + 1, L.info["name"].trim_prefix("Operation ")]
     _check(L.enemies.size() >= 15, "%s %d Tan soldiers" % [tag, L.enemies.size()])
     _check(L.objectives.size() >= 2, "%s %d objectives" % [tag, L.objectives.size()])
+    # Progression: only this op's vehicles, weapons and drone strikes, and its toughness.
+    var pr: Dictionary = load("res://scripts/level_data.gd").progression(i)
+    var bad: Array = []
+    for v in L.vehicles:
+        if not pr["vehicles"].has(v.kind):
+            bad.append(v.kind)
+    for v in L.enemy_vehicles:
+        if not pr["tan"].has(v.kind):
+            bad.append("tan " + v.kind)
+    for id in L.pickups:
+        var k: String = L.pickups[id].kind
+        if (["carbine", "lmg", "shotgun", "sniper", "launcher"].has(k) and not pr["weapons"].has(k)) or (k == "drone" and not pr["drones"]):
+            bad.append(k + " pickup")
+    for w in p.owned:
+        if not pr["weapons"].has(w):
+            bad.append("starts with " + w)
+    if not pr["drones"] and p.drones > 0:
+        bad.append("drone strikes")
+    _check(bad.is_empty(), "%s only unlocked gear %s" % [tag, str(bad)])
+    _check(is_equal_approx(Game.campaign_ramp, pr["ramp"]), "%s Tan toughness x%.2f" % [tag, Game.campaign_ramp])
+    var kinds := {}
+    for v in L.vehicles:
+        kinds[v.kind] = true
+    if i == 0:
+        _check(L.vehicles.is_empty(), "%s no vehicles yet on the first op" % tag)
+    if i == 6:
+        _check(kinds.has("heli"), "%s the helicopter arrives" % tag)
     # Nothing should start inside the scenery.
     var stuck: Array = []
     for e in L.enemies:

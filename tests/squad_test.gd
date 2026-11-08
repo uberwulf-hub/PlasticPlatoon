@@ -11,6 +11,7 @@ func _ready() -> void:
     var keep_news: bool = Game.show_news
     Game.squad_size = 2
     Game.show_news = false
+    Game.free_play = true          # the ride tests use Operation 1's carrier and helicopter
     main = load("res://scenes/main.tscn").instantiate()
     add_child(main)
     await _frames(10)
@@ -126,6 +127,7 @@ func _ready() -> void:
     _check(main.level.squad.is_empty(), "squad size 0: no AI squadmates")
     Game.squad_size = keep_size
     Game.show_news = keep_news
+    Game.free_play = false
     Game.save()
     main.show_main_menu()
     await _frames(5)
@@ -293,7 +295,11 @@ func _heli_tests(L, p) -> void:
     await _frames(240)
     _check(not h.alive and p.vehicle == null and p.is_on_floor(), "shot down: the pilot falls clear")
     _check(h.is_on_floor() or h.altitude() < 1.0, "the wreck falls to the ground (alt %.1fm)" % h.altitude())
-    _check(L.squad.all(func(m): return m.ride == null and m.alive and m.is_on_floor()), "shot down: door gunners land alive")
+    var landed: Callable = func(): return L.squad.all(func(m): return m.ride == null and m.alive and m.is_on_floor())
+    var tl := Time.get_ticks_msec()
+    while not landed.call() and Time.get_ticks_msec() - tl < 6000:
+        await get_tree().physics_frame
+    _check(landed.call(), "shot down: door gunners land alive %s" % str(L.squad.map(func(m): return [m.ride == null, m.alive, m.is_on_floor(), m.global_position.snapped(Vector3(0.1, 0.1, 0.1)), m.velocity.y])))
 
 
 func _press(action: String) -> void:

@@ -88,6 +88,58 @@ const META := [
 ]
 
 
+# ---------------------------------------------------- campaign progression ----
+# What the player gets on each operation, so the campaign eases in: no vehicles
+# on the first op, then the jeep, tank, troop carrier and finally the
+# helicopter; weapons and drone strikes arrive over the first few ops; Tan
+# tanks from op 2; and the Tan Army gets tougher every operation ("ramp" scales
+# their damage, accuracy and reaction speed on top of the difficulty setting).
+# Maps place their full motor pool; Level filters it through this table.
+# LAN co-op and MELTDOWN use everything (FULL_PROGRESSION).
+const ALL_WEAPONS := ["carbine", "lmg", "shotgun", "sniper", "launcher"]
+const ALL_VEHICLES := ["jeep", "tank", "apc", "heli"]
+const FULL_PROGRESSION := {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.0}
+const PROGRESSION := [
+    {"vehicles": [], "weapons": ["carbine", "launcher"], "start": ["carbine"], "drones": false, "tan": ["jeep"], "ramp": 0.7},
+    {"vehicles": ["jeep"], "weapons": ["carbine", "shotgun", "lmg", "launcher"], "start": ["carbine", "shotgun"], "drones": false, "tan": ["jeep", "tank"], "ramp": 0.75},
+    {"vehicles": ["jeep"], "weapons": ["carbine", "shotgun", "lmg", "launcher"], "start": ["carbine", "shotgun", "launcher"], "drones": true, "tan": ["jeep", "tank"], "ramp": 0.8},
+    {"vehicles": ["jeep", "tank"], "weapons": ALL_WEAPONS, "start": ["carbine", "shotgun"], "drones": true, "tan": ["jeep", "tank"], "ramp": 0.85},
+    {"vehicles": ["jeep", "tank", "apc"], "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 0.9},
+    {"vehicles": ["jeep", "tank", "apc"], "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 0.95},
+    {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.0},
+    {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.05},
+    {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.1},
+    {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.15},
+    {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.2},
+    {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.25},
+    {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.3},
+]
+const VEHICLE_NAMES := {"jeep": "Jeep", "tank": "Tank", "apc": "Troop carrier", "heli": "Helicopter"}
+const WEAPON_NAMES := {"carbine": "M4A1 Carbine", "lmg": "M249 SAW", "shotgun": "M1014 Shotgun", "sniper": "Mk 22 Sniper", "launcher": "AT4 Launcher"}
+
+
+static func progression(i: int) -> Dictionary:
+    if i < 0 or i >= PROGRESSION.size():
+        return FULL_PROGRESSION
+    return PROGRESSION[i]
+
+
+## What's new on operation i compared with the one before (for the briefing).
+static func new_on(i: int) -> Array:
+    var now := progression(i)
+    var before: Dictionary = progression(i - 1) if i > 0 else {"vehicles": [], "weapons": [], "drones": false}
+    var out: Array = []
+    for v in now["vehicles"]:
+        if not before["vehicles"].has(v):
+            out.append(VEHICLE_NAMES[v])
+    for w in now["weapons"]:
+        if not before["weapons"].has(w):
+            out.append(WEAPON_NAMES[w])
+    if now["drones"] and not before["drones"]:
+        out.append("Reaper drone strikes (F)")
+    return out
+
+
 static func build(i: int, L) -> Dictionary:
     if i >= MELTDOWN_BASE:
         return MeltdownMaps.build(i - MELTDOWN_BASE, L)

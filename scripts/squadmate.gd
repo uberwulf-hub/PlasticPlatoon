@@ -45,6 +45,7 @@ var _hurt_t := 0.0
 var _respawn_t := 0.0
 var kills := 0
 var ride = null                   # vehicle we're sitting in
+var walk_mask := 1 | 4            # what we collide with on foot (MELTDOWN adds its window blockers)
 var seat := -1
 
 
@@ -125,6 +126,9 @@ func _physics_process(delta: float) -> void:
         return
     var p = level.player
     if p == null or not is_instance_valid(p):
+        return
+    if global_position.y < -40.0 and ride == null:
+        _rescue(p)                # fell out of the world somehow: back next to the player
         return
     if ride != null:
         _ride(delta, p)
@@ -335,15 +339,29 @@ func dismount(thrown: bool) -> void:
     var car = ride
     if car == null:
         return
-    var spot: Vector3 = car.dismount_point(seat) if is_instance_valid(car) else global_position
+    # Somewhere clear beside the vehicle: our side, the other side, behind, in
+    # front, and as a last resort on the roof. Never inside it (the physics
+    # would push us out through the floor).
+    var spots: Array = []
     if is_instance_valid(car):
+        spots.append(car.dismount_point(seat))
+        var half: Vector3 = car.k["size"] * 0.5
+        for local in [Vector3(half.x + 1.2, 0.3, 0), Vector3(-half.x - 1.2, 0.3, 0), Vector3(0, 0.3, half.z + 1.3),
+                Vector3(0, 0.3, -half.z - 1.3)]:
+            spots.append(car.global_transform * local)
+        spots.append(car.global_position + Vector3(0, car.k["size"].y + 0.6, 0))
         car.unboard(self)
+    else:
+        spots.append(global_position + Vector3(0, 0.5, 0))
     ride = null
     seat = -1
     collision_layer = 2
-    collision_mask = 1 | 4
-    if not _clear(spot):
-        spot = global_position + Vector3(0, 0.5, 0)
+    collision_mask = walk_mask
+    var spot: Vector3 = spots[spots.size() - 1]
+    for c in spots:
+        if _clear(c):
+            spot = c
+            break
     global_position = spot
     velocity = Vector3.ZERO
     if thrown and alive:
@@ -377,6 +395,12 @@ func _go_down() -> void:
     level.notify("%s IS DOWN - reinforcement in %ds" % [display_name().to_upper(), int(RESPAWN)], 2.5)
     _respawn_t = RESPAWN
     _update_tag()
+
+
+func _rescue(p) -> void:
+    var spot: Vector3 = p.global_position + (SLOTS[slot % SLOTS.size()]).rotated(Vector3.UP, p.global_rotation.y) + Vector3(0, 0.5, 0)
+    global_position = spot if _clear(spot) else p.global_position + Vector3(0, 1.0, 0)
+    velocity = Vector3.ZERO
 
 
 ## Back in the fight: a fresh soldier arrives next to the player.

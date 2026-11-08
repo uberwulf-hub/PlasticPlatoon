@@ -62,6 +62,7 @@ func _ready() -> void:
     # The green side can't climb out through the windows.
     level.player.collision_mask |= Barricade.BLOCK_LAYER
     for m in level.squad:
+        m.walk_mask |= Barricade.BLOCK_LAYER
         m.collision_mask |= Barricade.BLOCK_LAYER
     _bake_nav()
 
