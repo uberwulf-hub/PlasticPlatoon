@@ -222,11 +222,15 @@ func _process(delta: float) -> void:
         team_label.text = "\n".join(lines)
     elif not level.squad.is_empty():
         var lines := ["SQUAD  -  %s  [T]" % ("HOLDING" if level.squad_hold else "FOLLOWING")]
+        if level.mode != null:
+            lines.insert(0, "\n")           # make room for the wave / coins lines above
         for m in level.squad:
             lines.append("%s  %s" % [m.display_name(), ("%d HP" % int(ceil(m.health))) if m.alive else "DOWN"])
         team_label.text = "\n".join(lines)
     var secs := int(level.elapsed)
     info_label.text = "TAN FORCES: %d\nTIME %02d:%02d" % [level.enemies_alive(), secs / 60, secs % 60]
+    if level.mode != null:
+        info_label.text = level.mode.info_text()
     if player.vehicle != null:
         _refresh_vehicle()
         prompt_label.text = ""
@@ -235,6 +239,8 @@ func _process(delta: float) -> void:
             ammo_label.text = "RELOADING"
         var near = level.nearest_vehicle(player.global_position, 4.5) if player.alive else null
         prompt_label.text = ("Press E to drive the %s" % near.kind.to_upper()) if near != null else ""
+        if near == null and level.mode != null and player.alive:
+            prompt_label.text = level.mode.prompt_text()
     overlay.queue_redraw()
 
 

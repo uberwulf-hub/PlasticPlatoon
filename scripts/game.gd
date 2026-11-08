@@ -13,6 +13,7 @@ var show_news := true
 var player_name := "Soldier"
 var narration := true           # PNN anchors read their lines with the speech voices on this PC
 var squad_size := 2             # friendly AI squadmates in single-player (0-3)
+var meltdown_best := {}         # MELTDOWN map index -> best wave reached
 var difficulty := 1
 var unlocked_level := 0
 var current_level: Node = null
@@ -135,6 +136,7 @@ func save() -> void:
     cfg.set_value("settings", "player_name", player_name)
     cfg.set_value("settings", "narration", narration)
     cfg.set_value("settings", "squad_size", squad_size)
+    cfg.set_value("progress", "meltdown_best", meltdown_best)
     cfg.set_value("settings", "music_volume", music_volume)
     cfg.set_value("settings", "sfx_volume", sfx_volume)
     cfg.set_value("progress", "unlocked_level", unlocked_level)
@@ -152,6 +154,7 @@ func _load() -> void:
     player_name = cfg.get_value("settings", "player_name", player_name)
     narration = cfg.get_value("settings", "narration", narration)
     squad_size = clampi(cfg.get_value("settings", "squad_size", squad_size), 0, 3)
+    meltdown_best = cfg.get_value("progress", "meltdown_best", {})
     music_volume = cfg.get_value("settings", "music_volume", music_volume)
     sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
     unlocked_level = clampi(cfg.get_value("progress", "unlocked_level", 0), 0, LEVEL_COUNT - 1)

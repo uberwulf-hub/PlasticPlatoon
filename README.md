@@ -68,6 +68,40 @@ Each operation starts inside a **safe zone**, shown as a faint green ring with a
 
 The HUD shows when you're protected. In co-op everyone respawns here too, so nobody gets spawn-camped.
 
+## MELTDOWN (wave survival)
+
+Something went wrong with General Beige's paint. The Tan soldiers it touched came back melted, and now they want green plastic. Pick **Meltdown** on the main menu and see how long you can hold **The Basement**.
+
+- **Waves.** Melties gather in the crawlspace outside, rip the boards off the windows, climb in and come for you. Each wave has more of them, with more health, more speed and harder swipes. From wave 4, some of them run.
+- **Coins.** You earn coins for:
+
+  | Action | Coins |
+  |---|---|
+  | Hit | 10 |
+  | Kill | 60 |
+  | Headshot kill | 100 |
+  | Board nailed back on a window (hold E) | 10, up to 100 per wave |
+
+  You start with 500.
+- **Spending.** Press E at a station:
+
+  | Room | Station | Cost |
+  |---|---|---|
+  | Toy Shelf (start) | M1014 Shotgun | 500 |
+  | Toy Shelf | Field Medic | 300 |
+  | Workshop | M249 SAW | 1250 |
+  | Workshop | MK 22 Sniper | 1000 |
+  | Workshop | Plate Armor | 400 |
+  | Workshop | Mystery Crate (random gun) | 950 |
+  | Boiler Room | AT4 Launcher | 2000 |
+  | Boiler Room | Re-Mold Press (double damage for the gun in your hands) | 3000 |
+
+  Buying a gun you already own refills its ammo for half price.
+- **Sections.** Junk piles block the way on. Clearing the one into the **Workshop** costs 750, and the one into the **Boiler Room** costs 1250. Each new room has better gear, and more windows the Melties can come through.
+- **Game over** when you melt. The end screen shows the wave you reached, and your best wave is saved.
+
+Your AI squad comes along if you have one set in Settings.
+
 ## AI squadmates
 
 In single-player, **Pvt. Sprue** and **Cpl. Rivets** deploy with you, and **Pvt. Pickles** joins if you set the squad to 3. You can pick 0 to 3 squadmates in Settings.

@@ -55,6 +55,7 @@ var owned := {}
 var mag := {}
 var reserve := {}
 var current := "carbine"
+var dmg_mult := {}             # MELTDOWN Re-Mold Press: weapon id -> damage multiplier
 var fire_cd := 0.0
 var reload_t := 0.0
 var grenades := 3
@@ -300,11 +301,11 @@ func _fire(w: Dictionary) -> void:
         var target := _aim_point(_spread_dir(fwd, cam_b, spread), cam_pos, w["range"])
         var r = Rocket.new()
         var rdir := (target - muzzle_pos).normalized()
-        r.setup(self, level, muzzle_pos, rdir, w["damage"], w["splash"])
+        r.setup(self, level, muzzle_pos, rdir, w["damage"] * dmg_mult.get(current, 1.0), w["splash"])
         r.visual_only = _net_client()
         level.add_child(r)
         if level.net:
-            level.net.send_projectile("rocket", muzzle_pos, rdir, w["damage"], w["splash"], r.speed)
+            level.net.send_projectile("rocket", muzzle_pos, rdir, w["damage"] * dmg_mult.get(current, 1.0), w["splash"], r.speed)
     else:
         var any_hit := false
         var killed := false
@@ -327,7 +328,7 @@ func _fire(w: Dictionary) -> void:
                     if ref.is_empty():
                         Fx.impact(level, end_point, hit["normal"])
                 net_segs.append_array([muzzle_pos, end_point])
-                net_dmgs.append(w["damage"] * _falloff(w, muzzle_pos.distance_to(end_point)))
+                net_dmgs.append(w["damage"] * dmg_mult.get(current, 1.0) * _falloff(w, muzzle_pos.distance_to(end_point)))
                 net_refs.append(ref)
                 if i == 0 or randf() < 0.3:
                     Fx.tracer(level, muzzle_pos, end_point, w["tracer"])
@@ -337,7 +338,7 @@ func _fire(w: Dictionary) -> void:
                 var recv = _receiver(hit["collider"])
                 if recv != null:
                     var dist := muzzle_pos.distance_to(end_point)
-                    var dmg: float = w["damage"] * _falloff(w, dist)
+                    var dmg: float = w["damage"] * dmg_mult.get(current, 1.0) * _falloff(w, dist)
                     if recv.take_damage(dmg, global_position, end_point, false):
                         killed = true
                     any_hit = true

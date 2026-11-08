@@ -19,6 +19,7 @@ const Vehicle = preload("res://scripts/vehicle.gd")
 const NetSync = preload("res://scripts/net_sync.gd")
 const RemotePlayer = preload("res://scripts/remote_player.gd")
 const Squadmate = preload("res://scripts/squadmate.gd")
+const Meltdown = preload("res://scripts/meltdown.gd")
 const Rocket = preload("res://scripts/rocket.gd")
 const Grenade = preload("res://scripts/grenade.gd")
 const DroneStrike = preload("res://scripts/drone_strike.gd")
@@ -42,6 +43,7 @@ var net = null                 # NetSync in a LAN game, else null
 var remotes := {}              # peer id -> RemotePlayer (teammates)
 var squad: Array = []          # friendly AI squadmates (single-player)
 var squad_hold := false
+var mode = null                # MELTDOWN controller in wave-survival mode
 var spawn_point := Vector3.ZERO
 # Safe zone around the start: Tan forces won't target, hurt or enter it.
 const SAFE_EXPOSE_MS := 3000      # firing from inside exposes you for this long
@@ -99,7 +101,12 @@ func _ready() -> void:
         _setup_net()
     else:
         _spawn_squad(Game.squad_size)
-    _begin_objective(0)
+    if info.get("mode", "") == "meltdown":
+        mode = Meltdown.new()
+        mode.setup(self, info["meltdown"])
+        add_child(mode)
+    else:
+        _begin_objective(0)
     notify(info["name"].to_upper(), 3.5)
     Game.play_music(info.get("music", ""), -8.0)
     Game.play_ambience(info.get("ambience", ""), info.get("ambience_db", -12.0))
@@ -861,7 +868,7 @@ func on_enemy_killed(e, headshot: bool) -> void:
     if headshot:
         headshots += 1
         notify("HEADSHOT", 0.8)
-    if randf() < 0.25 and is_server():
+    if randf() < (0.06 if mode != null else 0.25) and is_server():
         var kind: String = ["ammo", "ammo", "health", "grenades", "armor"].pick_random()
         var id := _next_pickup_id
         _next_pickup_id += 1
@@ -954,6 +961,8 @@ func _process(delta: float) -> void:
 
 
 func get_objective_text() -> String:
+    if mode != null:
+        return mode.objective_text()
     if obj_index >= objectives.size():
         return "Mission complete"
     var o: Dictionary = objectives[obj_index]
@@ -1057,6 +1066,9 @@ func _stats() -> Dictionary:
     return {
         "time": elapsed, "kills": kills, "total": enemies.size(),
         "headshots": headshots, "accuracy": acc, "level": level_index,
+        "mode": "meltdown" if mode != null else "campaign",
+        "wave": mode.wave if mode != null else 0,
+        "coins": mode.coins_total if mode != null else 0,
     }
 
 
@@ -1083,7 +1095,7 @@ func _on_player_died() -> void:
         notify("YOU MELTED!  BACK IN %d SECONDS" % int(RESPAWN_TIME), 3.0)
         return
     ended = true
-    notify("YOU MELTED.  MISSION FAILED", 3.0)
+    notify("YOU MELTED ON WAVE %d" % mode.wave if mode != null else "YOU MELTED.  MISSION FAILED", 3.0)
     Game.play_ui("fail")
     var t := get_tree().create_timer(3.0)
     t.timeout.connect(func():

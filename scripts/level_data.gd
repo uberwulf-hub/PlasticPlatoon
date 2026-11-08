@@ -3,6 +3,8 @@ extends RefCounted
 ## the Level's helper API and returns the level's settings dictionary.
 
 const Fx = preload("res://scripts/fx.gd")
+const MeltdownMaps = preload("res://scripts/meltdown_maps.gd")
+const MELTDOWN_BASE := 100         # level_index >= this = MELTDOWN map (index - 100)
 
 const META := [
     {
@@ -87,6 +89,8 @@ const META := [
 
 
 static func build(i: int, L) -> Dictionary:
+    if i >= MELTDOWN_BASE:
+        return MeltdownMaps.build(i - MELTDOWN_BASE, L)
     var d: Dictionary
     match i:
         0:

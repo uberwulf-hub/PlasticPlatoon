@@ -60,6 +60,9 @@ jobs:
       - name: Squad test (friendly AI follows, fights, holds, respawns)
         run: $GODOT --headless --path . res://tests/squad_test.tscn
 
+      - name: Meltdown test (waves, coins, stations, doors)
+        run: $GODOT --headless --path . res://tests/meltdown_test.tscn
+
       - name: Export Windows build
         run: |
           mkdir -p build/windows

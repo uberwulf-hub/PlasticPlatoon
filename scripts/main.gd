@@ -112,6 +112,7 @@ func show_main_menu() -> void:
     spacer.custom_minimum_size = Vector2(0, 30)
     vb.add_child(spacer)
     vb.add_child(UI.button("Campaign", show_campaign))
+    vb.add_child(UI.button("Meltdown (wave survival)", show_meltdown))
     vb.add_child(UI.button("Multiplayer (LAN)", show_multiplayer))
     vb.add_child(UI.button("Settings", show_settings))
     vb.add_child(UI.button("Controls", show_controls))
@@ -139,6 +140,54 @@ func show_campaign() -> void:
         grid.add_child(b)
     vb.add_child(grid)
     vb.add_child(UI.button("Back", show_main_menu, 420))
+
+
+func show_meltdown() -> void:
+    var MM = load("res://scripts/meltdown_maps.gd")
+    var root := _new_ui(0.55)
+    var vb := UI.centered_panel(root, 760)
+    vb.add_child(UI.label("MELTDOWN", 44, Color(1.0, 0.6, 0.25)))
+    vb.add_child(UI.label("Wave survival  -  how long can you hold out?", 19))
+    for i in MM.META.size():
+        var m: Dictionary = MM.META[i]
+        vb.add_child(UI.label(m["name"].to_upper(), 30, Color.WHITE))
+        vb.add_child(UI.label(m["location"], 17, Color(0.8, 0.82, 0.7)))
+        var body := UI.label(m["briefing"], 18)
+        body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        body.custom_minimum_size = Vector2(690, 0)
+        vb.add_child(body)
+        var best: int = Game.meltdown_best.get(i, 0)
+        vb.add_child(UI.label("Best: wave %d" % best if best > 0 else "Best: -", 18, UI.ACCENT))
+        vb.add_child(UI.label("Coins: hits +10, kills +60, headshot kills +100, boards +10.  Hold E to rebuild, tap E to buy.", 16, Color(0.85, 0.85, 0.75)))
+        vb.add_child(UI.button("START", func(): start_level(LevelData.MELTDOWN_BASE + i), 300))
+    vb.add_child(UI.button("Back", show_main_menu, 300))
+
+
+func _show_meltdown_end(stats: Dictionary) -> void:
+    var MM = load("res://scripts/meltdown_maps.gd")
+    var i: int = stats["level"] - LevelData.MELTDOWN_BASE
+    var wave: int = stats.get("wave", 0)
+    var prev: int = Game.meltdown_best.get(i, 0)
+    if wave > prev:
+        Game.meltdown_best[i] = wave
+        Game.save()
+    Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+    var root := _new_ui(0.6)
+    var vb := UI.centered_panel(root, 600)
+    vb.add_child(UI.label("MELTED DOWN", 42, Color(1.0, 0.5, 0.25)))
+    vb.add_child(UI.label("You survived to wave %d%s" % [wave, "  -  NEW BEST!" if wave > prev else ""], 24, Color.WHITE))
+    vb.add_child(UI.label(MM.META[clampi(i, 0, MM.META.size() - 1)]["name"], 20))
+    var secs := int(stats["time"])
+    var grid := GridContainer.new()
+    grid.columns = 2
+    grid.add_theme_constant_override("h_separation", 50)
+    for r in [["Time", "%02d:%02d" % [secs / 60, secs % 60]], ["Melties melted", str(stats["kills"])],
+            ["Headshots", str(stats["headshots"])], ["Coins earned", str(stats.get("coins", 0))], ["Best wave", str(maxi(wave, prev))]]:
+        grid.add_child(UI.label(r[0], 19, Color(0.8, 0.82, 0.7)))
+        grid.add_child(UI.label(r[1], 19, Color.WHITE))
+    vb.add_child(grid)
+    vb.add_child(UI.button("Try Again", func(): start_level(stats["level"]), 520))
+    vb.add_child(UI.button("Main Menu", show_main_menu, 520))
 
 
 func show_briefing(i: int) -> void:
@@ -297,6 +346,13 @@ func _news(d: Dictionary, then: Callable) -> void:
 
 func _on_level_finished(success: bool, stats: Dictionary) -> void:
     var i: int = stats["level"]
+    if stats.get("mode", "") == "meltdown":
+        get_tree().paused = true
+        if ui:
+            ui.queue_free()
+            ui = null
+        _show_meltdown_end(stats)
+        return
     if success:
         Game.unlock(i + 1)
         Game.play_ui("ui_confirm", -2.0)
