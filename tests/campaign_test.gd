@@ -58,6 +58,11 @@ func _news(first: int, last: int) -> void:
     var st := {"time": 321.0, "kills": 22, "total": 30, "headshots": 3, "accuracy": 44.0, "level": 0}
     var played := 0
     var total := 0
+    var voiced := 0
+    var total_beats := 0
+    var clip_played := false
+    var narr_was: bool = Game.narration
+    Game.narration = true
     var unfilled := 0
     var themes := {}
     for op in range(first, last + 1):
@@ -67,12 +72,17 @@ func _news(first: int, last: int) -> void:
             for b in d["beats"]:
                 if "{" in b.get("line", "") or "{" in b.get("headline", ""):
                     unfilled += 1
+            for b in d["beats"]:
+                total_beats += 1
+                if ResourceLoader.exists("res://assets/audio/voice/%s.ogg" % NB.clip_key(b.get("who", "both"), b.get("line", ""))):
+                    voiced += 1
             var nb = NB.new()
             nb.play(d)
             var got := [false]
             nb.finished.connect(func(): got[0] = true)
             add_child(nb)
             await _frames(2)
+            clip_played = clip_played or nb._clip_mode
             var guard := 0
             while not got[0] and guard < 40:
                 nb.skip_line()
@@ -82,6 +92,9 @@ func _news(first: int, last: int) -> void:
                 played += 1
     _check(unfilled == 0, "PNN: all placeholders filled (%d unfilled)" % unfilled)
     _check(played == total, "PNN: %d/%d news breaks play to the end" % [played, total])
+    Game.narration = narr_was
+    _check(voiced == total_beats, "PNN: every line has a recorded voice (%d/%d)" % [voiced, total_beats])
+    _check(clip_played, "PNN: the cutscene plays the recordings")
     if first == 0 and last >= 12:
         _check(themes.size() >= 13, "PNN: %d different field sets" % themes.size())
     var LD = load("res://scripts/level_data.gd")

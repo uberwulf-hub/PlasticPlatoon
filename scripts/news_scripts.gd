@@ -6,7 +6,8 @@ extends RefCounted
 ##
 ## A script is {"theme", "ticker": [..], "beats": [{"who", "line", "headline"?, "gesture"?}]}.
 ## who: "chip" (anchor), "brenda" (co-anchor), "gary" (field reporter), "both" (wide shot).
-## {kills}, {total}, {time}, {headshots}, {accuracy} are filled in from mission stats.
+## {kills}, {total}, {time}, {clock}, {headshots}, {accuracy} are filled in from mission stats.
+## Spoken lines must not use them (the narration is pre-recorded); put numbers in headlines.
 
 const THEMES := ["desert", "city", "table", "snow", "jungle", "bath", "beach", "yard", "port", "bedroom", "mountain", "garage", "couch"]
 const PLACES := ["the desert", "Port Varos", "the kitchen table", "the polar shelf", "the jungle", "the bathroom", "the Crumb Coast",
@@ -97,7 +98,7 @@ static func outro(op: int, success: bool, stats: Dictionary) -> Dictionary:
                     "beats": [
                         {"who": "chip", "line": "Breaking news: all three radar jammers are down!", "headline": "JAMMERS DOWN! WI-FI IS BACK!", "gesture": "Wave"},
                         {"who": "brenda", "line": "Within seconds the desert Wi-Fi was back, and every family immediately went back to not talking at dinner.", "headline": "NATION RETURNS TO STARING AT PHONES"},
-                        {"who": "chip", "line": "Our green soldier melted {kills} Tan troops in {time}. Command called it 'very efficient,' and then asked if he could also do their taxes."},
+                        {"who": "chip", "line": "Our green soldier melted Tan troops faster than they could say 'beige.' Command called it 'very efficient,' and then asked if he could also do their taxes.", "headline": "{kills} TAN TROOPS MELTED IN {clock}"},
                         "STATS",
                         {"who": "gary", "line": "Chip, the extraction helicopter is here to pick him up. And also me? No? Okay. I'll walk. It's only a hundred miles.", "headline": "LIVE: THE HELIPAD"},
                     ],
@@ -153,14 +154,14 @@ static func _stats_beat(stats: Dictionary) -> Dictionary:
     var hs: int = stats.get("headshots", 0)
     var secs: float = stats.get("time", 0.0)
     if hs >= 8:
-        return {"who": "brenda", "line": "He landed {headshots} headshots. Tan Army helmet sales are up four hundred percent.", "headline": "TAN HELMET SALES SKYROCKET"}
+        return {"who": "brenda", "line": "He landed so many headshots that Tan Army helmet sales are up four hundred percent.", "headline": "{headshots} HEADSHOTS: TAN HELMET SALES SKYROCKET"}
     if acc < 30.0:
-        return {"who": "brenda", "line": "Witnesses say he fired a lot of bullets. Experts estimate {accuracy} percent of them were on purpose.", "headline": "EXPERTS: 'HE SURE SHOT A LOT'"}
+        return {"who": "brenda", "line": "Witnesses say he fired a lot of bullets. Experts estimate only some of them were on purpose.", "headline": "EXPERTS: {accuracy}% WERE ON PURPOSE"}
     if acc > 60.0:
-        return {"who": "brenda", "line": "His accuracy was {accuracy} percent. Tan soldiers describe him as 'rude' and 'very, very good at aiming.'", "headline": "TAN ARMY FILES COMPLAINT"}
+        return {"who": "brenda", "line": "His aim was frighteningly good. Tan soldiers describe him as 'rude' and 'very, very good at aiming.'", "headline": "{accuracy}% ACCURACY: TAN ARMY FILES COMPLAINT"}
     if secs < 300.0:
-        return {"who": "brenda", "line": "The whole thing took {time}. That's faster than most people take to pick a show to watch.", "headline": "RECORD TIME, SAY EXPERTS"}
-    return {"who": "brenda", "line": "It took {time}, which officials call 'about what we budgeted,' which is to say, not much.", "headline": "MISSION 'ON BUDGET,' SAYS BUDGET"}
+        return {"who": "brenda", "line": "The whole thing was over faster than most people take to pick a show to watch.", "headline": "DONE IN {clock}: RECORD TIME, SAY EXPERTS"}
+    return {"who": "brenda", "line": "It took about as long as officials budgeted, which is to say, not very long, because the budget was small.", "headline": "MISSION 'ON BUDGET' ({clock}), SAYS BUDGET"}
 
 
 static func _fail(op: int) -> Dictionary:
@@ -190,6 +191,7 @@ static func fill(d: Dictionary, stats: Dictionary) -> Dictionary:
         "{headshots}": str(stats.get("headshots", 0)),
         "{accuracy}": str(int(stats.get("accuracy", 0.0))),
         "{time}": ("%d minutes and %d seconds" % [secs / 60, secs % 60]) if secs >= 60 else ("%d seconds" % secs),
+        "{clock}": "%d:%02d" % [secs / 60, secs % 60],
     }
     for b in d["beats"]:
         for key in ["line", "headline"]:

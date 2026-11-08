@@ -169,6 +169,12 @@
       "author": "ambientCG",
       "license": "CC0",
       "source": "https://ambientcg.com"
+    },
+    {
+      "asset": "PNN news narration (pre-recorded voices)",
+      "author": "Kokoro-82M by hexgrad",
+      "license": "Apache-2.0",
+      "source": "https://huggingface.co/hexgrad/Kokoro-82M"
     }
   ]
 }

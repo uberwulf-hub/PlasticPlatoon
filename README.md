@@ -212,7 +212,22 @@ Before and after each operation, the Plastic News Network breaks in with the hea
 
 The after-action report reacts to how you played. Lots of headshots, spraying everywhere, a speed run and failing each get their own segment.
 
-The anchors **read their lines aloud** using the speech voices built into Windows: Chip and Gary get male voices and Brenda a female one, each with its own pitch and pace. If a PC has no speech voices, you get cartoon gibberish instead. Space or click skips ahead a line, and Esc skips the whole segment. You can turn news breaks or narration off in Settings. The scripts live in `scripts/news_scripts.gd` if you want to write more.
+The anchors **read their lines aloud** with pre-recorded neural voices (Kokoro-82M):
+
+- Chip: a warm American anchorman.
+- Brenda: a crisp British co-anchor.
+- Gary: an excitable British field reporter.
+
+Any line without a recording falls back to the PC's own speech voices, or cartoon gibberish if it has none.
+
+To re-record after editing `scripts/news_scripts.gd`:
+
+```
+godot --headless --path . res://tests/export_voice_lines.tscn -- lines.json
+python tools/make_voices.py lines.json assets/audio/voice
+```
+
+Spoken lines must not contain `{placeholders}`. Put live numbers in the headlines instead. Space or click skips ahead a line, and Esc skips the whole segment. You can turn news breaks or narration off in Settings. The scripts live in `scripts/news_scripts.gd` if you want to write more.
 
 ## Campaign
 

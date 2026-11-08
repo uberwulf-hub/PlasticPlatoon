@@ -75,6 +75,18 @@ Colour and normal maps at 1K, projected onto the procedural maps with triplanar 
 | `tiles` | Tiles107 | ambientCG | CC0 | https://ambientcg.com/view?id=Tiles107 |
 | `rock` | Rock028 | ambientCG | CC0 | https://ambientcg.com/view?id=Rock028 |
 
+## PNN narration (`assets/audio/voice/`)
+
+The news anchors' lines were pre-recorded with the **Kokoro-82M** neural text-to-speech model by hexgrad (Apache-2.0, https://huggingface.co/hexgrad/Kokoro-82M). The cast:
+
+| Character | Kokoro voice |
+|---|---|
+| Chip | `am_michael` |
+| Brenda | `bf_emma` |
+| Gary | `bm_george` |
+
+`tools/make_voices.py` re-records any new or changed lines.
+
 ## Code-generated content
 
 The maps (including the terrain hills), effects, hit-marker blip, melt sizzle and fallback sounds are all generated in code (`scripts/game.gd`, `scripts/fx.gd`, `scripts/level_data.gd`). They belong to this project.

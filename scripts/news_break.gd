@@ -72,6 +72,11 @@ const FEMALE_HINTS := ["Zira", "Aria", "Jenny", "Hazel", "Susan", "Michelle", "H
 # pitch (1.0 = normal), rate (1.0 = normal) per character
 const TTS_STYLE := {"chip": [0.85, 1.0], "brenda": [1.05, 1.0], "gary": [1.15, 1.15], "both": [0.9, 1.0]}
 var narrate := false
+# ---- Recorded narration (assets/audio/voice, made by tools/make_voices.py) ----
+const VOICE_DIR := "res://assets/audio/voice/"
+var clip: AudioStreamPlayer
+var _clip_mode := false         # the current line has a recording
+var _type_rate := 0.0           # subtitle typing speed matched to the recording
 var tts_voice := {}             # who -> voice id
 var _utter := 0
 var _speak_wait := 0.0          # safety timeout while a line is being read
@@ -94,6 +99,10 @@ func _ready() -> void:
     voice.bus = "SFX"
     voice.volume_db = -10.0
     add_child(voice)
+    clip = AudioStreamPlayer.new()
+    clip.bus = "SFX"
+    clip.volume_db = 2.0
+    add_child(clip)
     _setup_narration()
     Game.play_ui("news_sting", -4.0)
     _next()
@@ -451,7 +460,9 @@ func _next() -> void:
     name_label.text = nm[0]
     title_label.text = nm[1]
     _cut_to(who)
-    _speak(who, subtitle.text)
+    _clip_mode = _play_clip(who, subtitle.text)
+    if not _clip_mode:
+        _speak(who, subtitle.text)
     var speaker = {"chip": chip, "brenda": brenda, "gary": gary}.get(who)
     if speaker != null:
         var g: String = b.get("gesture", "")
@@ -499,10 +510,10 @@ func _process(delta: float) -> void:
         ticker_label.position.x += ticker_w
     var total := subtitle.text.length()
     if typed < total:
-        typed += CHARS_PER_SEC * delta
+        typed += (_type_rate if _clip_mode else CHARS_PER_SEC) * delta
         subtitle.visible_characters = int(typed)
         _blip_t -= delta
-        if not narrate and _blip_t <= 0.0 and voice.stream != null:
+        if not narrate and not _clip_mode and _blip_t <= 0.0 and voice.stream != null:
             _blip_t = 0.075
             var who: String = beats[idx].get("who", "both")
             voice.pitch_scale = VOICE.get(who, 1.0) * randf_range(0.85, 1.2)
@@ -510,8 +521,9 @@ func _process(delta: float) -> void:
     else:
         subtitle.visible_characters = -1
         hold += delta
-        var speaking := narrate and DisplayServer.tts_is_speaking() and hold < _speak_wait
-        if auto_advance and not speaking and hold > (0.6 if narrate else 1.4 + total * 0.025):
+        var speaking := (narrate and not _clip_mode and DisplayServer.tts_is_speaking() and hold < _speak_wait) \
+            or (_clip_mode and clip.playing and hold < 20.0)
+        if auto_advance and not speaking and hold > (0.5 if (narrate or _clip_mode) else 1.4 + total * 0.025):
             _next()
 
 
@@ -541,6 +553,7 @@ func skip_line() -> void:
 func _finish() -> void:
     if done:
         return
+    clip.stop()
     if narrate:
         DisplayServer.tts_stop()
     done = true
@@ -549,6 +562,26 @@ func _finish() -> void:
 
 
 # ------------------------------------------------------------- narration ----
+
+## Recorded clips are named by speaker + line, so a rewritten line simply
+## falls back to the PC's speech until it's re-recorded.
+static func clip_key(who: String, line: String) -> String:
+    return (who + "|" + line).md5_text().substr(0, 16)
+
+
+func _play_clip(who: String, text: String) -> bool:
+    clip.stop()
+    if not Game.narration:
+        return false
+    var path := VOICE_DIR + clip_key(who, text) + ".ogg"
+    if not ResourceLoader.exists(path):
+        return false
+    var st: AudioStream = load(path)
+    clip.stream = st
+    clip.play()
+    _type_rate = text.length() / maxf(0.4, st.get_length() * 0.9)
+    return true
+
 
 func _setup_narration() -> void:
     if not Game.narration or DisplayServer.get_name() == "headless":
