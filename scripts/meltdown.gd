@@ -36,6 +36,11 @@ var _plank_coins := 0
 var _rebuild_t := 0.0
 var _crate_busy := false
 var _focus = null                  # what E would use right now
+var boss = null                   # the boss Melty while one is alive
+var _boss_due := -1.0             # seconds until this wave's boss arrives
+var _boss_ui: CanvasLayer
+var _boss_bar: ProgressBar
+var _boss_label: Label
 var _wave_hp := 50.0
 var _wave_speed := 1.8
 var _wave_damage := 18.0
@@ -60,6 +65,7 @@ func _ready() -> void:
     for s in layout["stations"]:
         stations.append(_build_station(s))
     # The green side can't climb out through the windows.
+    _build_boss_ui()
     level.player.collision_mask |= Barricade.BLOCK_LAYER
     for m in level.squad:
         m.walk_mask |= Barricade.BLOCK_LAYER
@@ -199,7 +205,11 @@ func _physics_process(delta: float) -> void:
     if level.ended or not level.player.alive:
         return
     _interact(delta)
-    if to_spawn == 0 and alive == 0:
+    if _boss_due >= 0.0:
+        _boss_due -= delta
+        if _boss_due < 0.0:
+            _spawn_boss()
+    if to_spawn == 0 and alive == 0 and _boss_due < 0.0:
         break_t -= delta
         if break_t <= 0.0:
             _start_wave(wave + 1)
@@ -219,13 +229,16 @@ func _start_wave(n: int) -> void:
     wave = n
     best_wave = maxi(best_wave, n)
     to_spawn = 5 + 3 * n
+    if n % 5 == 0:
+        to_spawn = int(to_spawn * 0.6)    # boss waves: fewer regulars, plus the boss
+        _boss_due = 4.0
     var hp_mult: float = [0.8, 1.0, 1.25][clampi(Game.difficulty, 0, 2)]
     _wave_hp = (45.0 + 28.0 * (n - 1) * (1.0 + 0.05 * (n - 1))) * hp_mult
     _wave_speed = minf(1.7 + 0.32 * (n - 1), 5.2)
     _wave_damage = minf(18.0 + 2.0 * (n - 1), 45.0) * Game.enemy_damage_mult()
     _plank_coins = 0
     spawn_t = 0.5
-    level.notify("WAVE %d" % n, 3.0)
+    level.notify("WAVE %d%s" % [n, "  -  BOSS WAVE" if n % 5 == 0 else ""], 3.0)
     Game.play_ui("objective", -2.0)
 
 
@@ -233,10 +246,31 @@ func start_wave_now() -> void:      # tests
     break_t = 0.0
 
 
-func _spawn_one() -> void:
+## Which kind of Melty to send on wave n (tests call it too).
+func pick_kind(n: int) -> String:
+    var r := randf()
+    var brutes := 0
+    for e in level.enemies:
+        if is_instance_valid(e) and e.alive and e.get("kind") == "brute":
+            brutes += 1
+    if n >= 6 and r < 0.12:
+        return "spitter"
+    r -= 0.12 if n >= 6 else 0.0
+    if n >= 5 and r < 0.1 and brutes < 3:
+        return "brute"
+    r -= 0.1 if n >= 5 else 0.0
+    if n >= 4 and r < 0.12:
+        return "popper"
+    r -= 0.12 if n >= 4 else 0.0
+    if n >= 3 and r < 0.2:
+        return "sprinter"
+    return "shambler"
+
+
+func _spawn_one(what := "") -> Node:
     var open: Array = barricades.filter(func(b): return sections[b.section]["open"])
     if open.is_empty():
-        return
+        return null
     # Mostly the windows near the player, sometimes any open one.
     var p: Vector3 = level.player.global_position
     open.sort_custom(func(a, b): return a.global_position.distance_to(p) < b.global_position.distance_to(p))
@@ -244,21 +278,114 @@ func _spawn_one() -> void:
     var side: Vector3 = b.normal.cross(Vector3.UP) * randf_range(-1.6, 1.6)
     var pos: Vector3 = b.global_position + b.normal * randf_range(3.2, 4.4) + side + Vector3(0, 0.3, 0)
     var spd := _wave_speed * randf_range(0.85, 1.15)
-    if wave >= 4 and randf() < 0.3:
-        spd *= 1.35               # a runner
+    var kind: String = what if what != "" else pick_kind(wave)
     var m = Melty.new()
-    m.setup(level, self, b, pos, _wave_hp, spd, _wave_damage)
+    m.setup(level, self, b, pos, _wave_hp, spd, _wave_damage, kind)
     level.add_child(m)
     level.enemies.append(m)
-    to_spawn -= 1
+    if what == "":
+        to_spawn -= 1
     alive += 1
+    return m
+
+
+func _spawn_boss() -> void:
+    var kind := "big_melt" if (wave / 5) % 2 == 1 else "molten_major"
+    boss = _spawn_one(kind)
+    if boss != null:
+        _boss_label.text = boss.k["name"]
+        level.notify("%s IS COMING!" % boss.k["name"], 3.5)
+        Game.play_sfx("explosion", level.player.global_position + Vector3(0, 0, -20), -6.0)
+
+
+## A boss rips every board off a window in one swing.
+func boss_smash(m) -> void:
+    Game.play_sfx("explosion", m.global_position, -4.0)
+    if level.player.global_position.distance_to(m.global_position) < 25.0:
+        level.player.shake = maxf(level.player.shake, 0.8)
+
+
+## A boss calls in two Sprinters right beside it.
+func boss_summon(m) -> void:
+    for i in 2:
+        var pos: Vector3 = m.global_position + Vector3(randf_range(-2.5, 2.5), 0.3, randf_range(-2.5, 2.5))
+        var s = Melty.new()
+        s.setup(level, self, m.barricade, pos, _wave_hp, _wave_speed, _wave_damage, "sprinter")
+        s.state = s.HUNTING
+        level.add_child(s)
+        level.enemies.append(s)
+        alive += 1
+    level.notify("%s CALLED FOR BACKUP" % m.k["name"], 1.6)
+
+
+## Green soldiers on foot (what Melty splashes and slams can hurt).
+func green_targets() -> Array:
+    var out: Array = []
+    var p = level.player
+    if p.alive and p.vehicle == null:
+        out.append(p)
+    for m in level.squad:
+        if m.alive and m.ride == null:
+            out.append(m)
+    return out
+
+
+func popper_damage() -> float:
+    return (30.0 + 3.0 * wave) * Game.enemy_damage_mult()
+
+
+func _build_boss_ui() -> void:
+    _boss_ui = CanvasLayer.new()
+    _boss_ui.layer = 5
+    add_child(_boss_ui)
+    var box := VBoxContainer.new()
+    box.anchor_left = 0.5
+    box.anchor_right = 0.5
+    box.offset_left = -260
+    box.offset_right = 260
+    box.offset_top = 205           # below the on-screen announcements
+    _boss_ui.add_child(box)
+    _boss_label = Label.new()
+    _boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _boss_label.add_theme_font_size_override("font_size", 22)
+    _boss_label.add_theme_color_override("font_color", Color(1.0, 0.55, 0.3))
+    _boss_label.add_theme_constant_override("outline_size", 6)
+    _boss_label.add_theme_color_override("font_outline_color", Color.BLACK)
+    box.add_child(_boss_label)
+    _boss_bar = ProgressBar.new()
+    _boss_bar.custom_minimum_size = Vector2(520, 16)
+    _boss_bar.show_percentage = false
+    var fill := StyleBoxFlat.new()
+    fill.bg_color = Color(0.9, 0.35, 0.15)
+    _boss_bar.add_theme_stylebox_override("fill", fill)
+    var bg := StyleBoxFlat.new()
+    bg.bg_color = Color(0.1, 0.06, 0.05, 0.8)
+    _boss_bar.add_theme_stylebox_override("background", bg)
+    box.add_child(_boss_bar)
+    _boss_ui.visible = false
+
+
+func _process(_delta: float) -> void:
+    if _boss_ui == null:
+        return
+    var on: bool = boss != null and is_instance_valid(boss) and boss.alive
+    _boss_ui.visible = on
+    if on:
+        _boss_bar.max_value = boss.max_hp
+        _boss_bar.value = boss.hp
 
 
 func on_melty_died(m) -> void:
     alive = maxi(0, alive - 1)
     killed += 1
     level.enemies.erase(m)
-    if to_spawn == 0 and alive == 0:
+    if m == boss:
+        boss = null
+        level.notify("%s IS DOWN!" % m.k["name"], 3.5)
+        Game.play_ui("objective", -2.0)
+        for kind in ["ammo", "armor", "health"]:
+            level.add_pickup(m.global_position + Vector3(randf_range(-2, 2), 0.1, randf_range(-2, 2)), kind)
+    if to_spawn == 0 and alive == 0 and _boss_due < 0.0:
         break_t = BREAK_TIME
         level.notify("WAVE %d SURVIVED" % wave, 3.0)
         Game.play_ui("radio", -6.0)
@@ -471,6 +598,8 @@ func info_text() -> String:
 
 
 func objective_text() -> String:
+    if boss != null and is_instance_valid(boss) and boss.alive:
+        return "Defeat %s" % boss.k["name"].capitalize()
     if wave == 0:
         return "Get ready - the Melties are coming  (%d s)" % int(ceil(break_t))
     if to_spawn == 0 and alive == 0:

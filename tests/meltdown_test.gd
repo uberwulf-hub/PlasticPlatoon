@@ -185,6 +185,7 @@ func _ready() -> void:
     _check(shown, "end screen: 'You survived to wave 2'")
     _check(Game.meltdown_best.get(0, 0) >= 2, "best wave saved")
     get_tree().paused = false
+    await _kinds_tests()
     var MM = load("res://scripts/meltdown_maps.gd")
     for i in MM.META.size():
         await _map_checks(i, MM.META[i]["name"])
@@ -249,6 +250,129 @@ func _map_checks(i: int, title: String) -> void:
             if is_instance_valid(e) and e.alive and e.state == e.HUNTING:
                 inside = true
     _check(inside, "%s Melties break in on wave 1" % tag)
+
+
+## The Melty kinds and the bosses, each tested against the player.
+func _kinds_tests() -> void:
+    main.start_level(100)
+    await _frames(10)
+    var L = main.level
+    var M = L.mode
+    var p = L.player
+    p.invulnerable = true
+    M.coins = 99999
+    for d in M.doors.duplicate():
+        M.use(d)
+    await _frames(30)
+    M._start_wave(8)
+    M.to_spawn = 0
+    M._boss_due = -1.0
+    # Wave mix: plain Melties early, every kind later.
+    var early := {}
+    var late := {}
+    for k in 400:
+        early[M.pick_kind(1)] = true
+        late[M.pick_kind(8)] = true
+    _check(early.keys() == ["shambler"], "kinds: wave 1 is all plain Melties %s" % str(early.keys()))
+    _check(late.has("sprinter") and late.has("popper") and late.has("brute") and late.has("spitter") and late.has("shambler"), "kinds: wave 8 mixes all five %s" % str(late.keys()))
+    # Stats per kind.
+    var made := {}
+    for kind in ["shambler", "sprinter", "brute", "popper", "spitter"]:
+        var m = M._spawn_one(kind)
+        m.set_physics_process(false)
+        made[kind] = m
+    _check(made["brute"].max_hp > made["shambler"].max_hp * 3.0 and made["brute"].k["planks"] == 2, "kinds: brutes are tanky and rip 2 boards a swing")
+    _check(made["sprinter"].speed > made["shambler"].speed * 1.4 and made["sprinter"].max_hp < made["shambler"].max_hp, "kinds: sprinters are fast and fragile")
+    _check(made["brute"].model.scale.x > 1.4 and made["sprinter"].model.scale.x < 1.0, "kinds: each kind looks different")
+    for m in made.values():
+        m.take_damage(99999.0, Vector3(500, 0, 500), m.global_position, false)
+    await _frames(10)
+    # Kill payouts.
+    var c0: int = M.coins
+    var b = M._spawn_one("brute")
+    b.take_damage(99999.0, p.global_position, b.global_position + Vector3(0, 0.5, 0), false)
+    _check(M.coins == c0 + 120, "kinds: a brute pays 120 coins (+%d)" % (M.coins - c0))
+    await _frames(5)
+    # Popper: walks up and bursts.
+    var spot := Vector3(0, 0.5, 0)
+    p.global_position = spot
+    p.invulnerable = false
+    p.health = 100000.0
+    var pop = M._spawn_one("popper")
+    pop.global_position = spot + Vector3(4, 0, 0)
+    pop.state = pop.HUNTING
+    var t0 := Time.get_ticks_msec()
+    while pop.alive and Time.get_ticks_msec() - t0 < 6000:
+        await get_tree().physics_frame
+    _check(not pop.alive and p.health < 100000.0, "popper: reaches you and bursts (%.0f damage)" % (100000.0 - p.health))
+    # Shooting a popper up close still splashes you.
+    p.health = 100000.0
+    var pop2 = M._spawn_one("popper")
+    pop2.global_position = spot + Vector3(2.5, 0, 0)
+    pop2.set_physics_process(false)
+    pop2.take_damage(99999.0, p.global_position, pop2.global_position + Vector3(0, 0.6, 0), false)
+    await _frames(30)
+    _check(p.health < 100000.0, "popper: shooting one up close still splashes you")
+    # Spitter: hangs back and lobs molten plastic.
+    p.health = 100000.0
+    var sp = M._spawn_one("spitter")
+    sp.global_position = spot + Vector3(0, 0, 12)
+    sp.state = sp.HUNTING
+    t0 = Time.get_ticks_msec()
+    while p.health >= 100000.0 and Time.get_ticks_msec() - t0 < 10000:
+        await get_tree().physics_frame
+    _check(p.health < 100000.0 and sp.global_position.distance_to(p.global_position) > 5.0, "spitter: hits you from range (%.1fm away)" % sp.global_position.distance_to(p.global_position))
+    sp.take_damage(99999.0, Vector3(500, 0, 500), sp.global_position, false)
+    p.invulnerable = true
+    for e in L.enemies.duplicate():
+        if is_instance_valid(e) and e.alive:
+            e.take_damage(99999.0, Vector3(500, 0, 500), e.global_position, false)
+    await _frames(10)
+
+    # Boss wave 5: The Big Melt.
+    M._start_wave(5)
+    M.to_spawn = 0
+    t0 = Time.get_ticks_msec()
+    while M.boss == null and Time.get_ticks_msec() - t0 < 8000:
+        await get_tree().physics_frame
+    var boss = M.boss
+    _check(boss != null and boss.kind == "big_melt" and boss.is_boss, "boss: wave 5 brings The Big Melt")
+    await _frames(5)
+    _check(M._boss_ui.visible and M._boss_label.text == "THE BIG MELT", "boss: health bar on screen")
+    _check(boss.max_hp > M._wave_hp * 15.0 and boss.model.scale.x > 2.0, "boss: huge, with %.0f health" % boss.max_hp)
+    _check(L.get_objective_text().begins_with("Defeat"), "boss: objective says to defeat it ('%s')" % L.get_objective_text())
+    var a0: int = M.alive
+    M.boss_summon(boss)
+    _check(M.alive == a0 + 2, "boss: calls in two sprinters")
+    boss.set_physics_process(false)
+    p.invulnerable = false
+    p.health = 100000.0
+    p.global_position = boss.global_position + Vector3(3, 0.3, 0)
+    await _frames(2)
+    boss._slam()
+    _check(p.health < 100000.0, "boss: ground slam hurts you nearby (%.0f)" % (100000.0 - p.health))
+    p.invulnerable = true
+    boss.take_damage(boss.max_hp * 0.5, p.global_position, boss.global_position + Vector3(0, 1, 0), false)
+    await _frames(2)
+    _check(absf(M._boss_bar.value - boss.max_hp * 0.5) < 1.0, "boss: health bar tracks damage")
+    c0 = M.coins
+    var pk0: int = L.pickups.size()
+    boss.take_damage(99999.0, p.global_position, boss.global_position + Vector3(0, 1, 0), false)
+    await _frames(5)
+    _check(M.coins >= c0 + 500 and M.boss == null and not M._boss_ui.visible, "boss: pays 500 coins and the bar goes away (+%d)" % (M.coins - c0))
+    _check(L.pickups.size() >= pk0 + 3, "boss: drops ammo, armor and health")
+    for e in L.enemies.duplicate():
+        if is_instance_valid(e) and e.alive:
+            e.take_damage(99999.0, Vector3(500, 0, 500), e.global_position, false)
+    await _frames(10)
+    # Wave 10: the other boss.
+    M._start_wave(10)
+    M.to_spawn = 0
+    t0 = Time.get_ticks_msec()
+    while M.boss == null and Time.get_ticks_msec() - t0 < 8000:
+        await get_tree().physics_frame
+    _check(M.boss != null and M.boss.kind == "molten_major", "boss: wave 10 brings The Molten Major")
+    p.global_position = Vector3(0, 0.5, 30)
 
 
 func _clear(L, pos: Vector3) -> bool:

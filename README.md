@@ -97,7 +97,21 @@ The toy store's sniper is on the checkout wall, so it's available from the start
 
 New maps go in `scripts/meltdown_maps.gd`. `_rooms()` builds a row of rooms with window gaps and junk-pile doors. `tests/meltdown_test` checks every map's windows, stations and paths automatically.
 
-- **Waves.** Melties gather in the crawlspace outside, rip the boards off the windows, climb in and come for you. Each wave has more of them, with more health, more speed and harder swipes. From wave 4, some of them run.
+- **Waves.** Melties gather in the crawlspace outside, rip the boards off the windows, climb in and come for you. Each wave has more of them, with more health, more speed and harder swipes.
+- **Kinds of Melty:**
+
+  | Kind | From wave | What it does | Coins per kill |
+  |---|---|---|---|
+  | Melty | 1 | The basic shambler | 60 |
+  | Sprinter | 3 | Thin, fast and fragile | 50 |
+  | Popper | 4 | Glowing orange belly; it bursts when it reaches you, or when it dies, so shoot it from a distance | 70 |
+  | Brute | 5 | Huge, slow, hits hard and rips two boards per swing (at most three at a time) | 120 |
+  | Spitter | 6 | Hangs back about 11 m and lobs molten plastic | 90 |
+
+  A headshot adds 40 coins.
+- **Bosses** arrive every 5th wave, with fewer regular Melties that wave. Each boss has a health bar at the top of the screen. When it's beaten it pays 500 coins and drops ammo, armor and health.
+  - **The Big Melt** (waves 5, 15, ...): a giant. It smashes a window open in one swing, ground-slams anyone close, and calls in Sprinters.
+  - **The Molten Major** (waves 10, 20, ...): stands off and fires volleys of molten blobs, and also calls in Sprinters.
 - **Coins.** You earn coins for:
 
   | Action | Coins |
