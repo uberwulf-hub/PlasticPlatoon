@@ -95,6 +95,8 @@ func _play_level(i: int) -> void:
     _safe_zone_test(i, L, p)
     if i == 0:
         await _vehicle_zone_test(L)
+    if i == 0:
+        await _jeep_point_blank_test(L, p)
     _one_gun_test(i, L, p)
     _invisible_wall_test(i, L)
     if i == 0:
@@ -434,6 +436,36 @@ func _one_gun_test(i: int, L, p) -> void:
 ## The start point is a safe zone: no Tan units start inside it, players
 ## there can't be hurt or targeted, firing exposes you briefly, and stepping
 ## out makes you a target again.
+## Regression (found by CI): a Tan jeep that ended up right on top of the
+## player couldn't depress its gun that far and sat there without firing.
+func _jeep_point_blank_test(L, p) -> void:
+    var j = null
+    for v in L.enemy_vehicles:
+        if v.alive and v.kind == "jeep":
+            j = v
+            break
+    if j == null:
+        return
+    var keep: Vector3 = p.global_position
+    var spot: Vector3 = L.safe_center + Vector3(L.safe_radius + 30.0, 0.5, 0)
+    p.global_position = spot
+    p.invulnerable = true
+    j.global_position = spot + Vector3(0, 0, -2.5)
+    j.rotation.y = 0.0                               # nose toward the player
+    j.velocity = Vector3.ZERO
+    j.speed = 0.0
+    var shots0: int = j.ai_shots
+    var t0 := Time.get_ticks_msec()
+    while j.ai_shots == shots0 and Time.get_ticks_msec() - t0 < 10000:
+        j.ai_alert = 6.0
+        j.ai_last_seen = p.global_position + Vector3(0, 1, 0)
+        j._ai_charge_t = 4.0                           # it keeps trying to charge in (fails without the fix)
+        p.global_position = spot                       # stay put
+        await get_tree().physics_frame
+    _check(j.ai_shots > shots0, "L0 a Tan jeep on top of you backs off and opens fire (%.1fs)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+    p.global_position = keep
+
+
 ## Regression: a Tan jeep chasing someone at the zone's edge used to drive in
 ## and park inside (found by CI).
 func _vehicle_zone_test(L) -> void:

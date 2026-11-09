@@ -980,7 +980,12 @@ func _ai_update(delta: float) -> Vector2:
             else:
                 hold = true
         else:
-            if d > pref + 12.0 or _ai_charge_t > 0.0:
+            if d < 8.0:
+                # Right on top of them: the gun can't depress that far, so pull
+                # away to firing range (and stop charging) before circling back.
+                _ai_charge_t = 0.0
+                dest = _ai_clear_point(global_position, global_position - to_t.normalized() * (pref - d))
+            elif d > pref + 12.0 or _ai_charge_t > 0.0:
                 dest = ai_last_seen
             else:
                 # Circle the target at roughly the preferred distance, but keep the
