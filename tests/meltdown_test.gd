@@ -16,9 +16,9 @@ func _ready() -> void:
     main.show_meltdown()
     await _frames(2)
     var start: Button = null
-    for b in main.ui.find_children("*", "Button", true, false):
-        if b.text == "START":
-            start = b
+    var starts: Array = main.ui.find_children("*", "Button", true, false).filter(func(b): return b.text == "START")
+    _check(starts.size() == load("res://scripts/meltdown_maps.gd").META.size(), "menu: a START button per map (%d)" % starts.size())
+    start = starts[0]          # The Basement
     _check(start != null, "menu: Meltdown screen has a START button")
     start.pressed.emit()
     await _frames(10)
@@ -185,6 +185,9 @@ func _ready() -> void:
     _check(shown, "end screen: 'You survived to wave 2'")
     _check(Game.meltdown_best.get(0, 0) >= 2, "best wave saved")
     get_tree().paused = false
+    var MM = load("res://scripts/meltdown_maps.gd")
+    for i in MM.META.size():
+        await _map_checks(i, MM.META[i]["name"])
     main.show_main_menu()
     await _frames(5)
     Game.squad_size = keep_squad
@@ -194,6 +197,69 @@ func _ready() -> void:
     for r in results:
         print(("PASS " if r[1] else "FAIL ") + r[0])
     get_tree().quit(1 if fails.size() > 0 else 0)
+
+
+## Every map: layout sane, everything reachable once the rooms are open,
+## and a wave actually gets Melties inside.
+func _map_checks(i: int, title: String) -> void:
+    main.start_level(100 + i)
+    await _frames(10)
+    var L = main.level
+    var M = L.mode
+    var p = L.player
+    p.invulnerable = true
+    var tag := "[%s]" % title
+    _check(M != null and M.barricades.size() >= 6 and M.doors.size() == 2 and M.stations.size() == 8,
+        "%s layout: %d windows, %d junk piles, %d stations" % [tag, M.barricades.size(), M.doors.size(), M.stations.size()])
+    _check(_clear(L, p.global_position), "%s start point is clear" % tag)
+    var bad: Array = []
+    for s in M.stations:
+        var stand: Vector3 = s["pos"] - Vector3(0, 1.0, 0) + s["node"].global_transform.basis.z * 0.9   # where you'd stand to use it
+        if not _clear(L, stand):
+            bad.append("%s %s" % [s["kind"], s["weapon"]])
+        for b in M.barricades:
+            if b.inside_point.distance_to(s["pos"] - Vector3(0, 1.0, 0)) < 3.0:
+                bad.append("%s too close to a window" % s["kind"])
+    _check(bad.is_empty(), "%s stations stand clear %s" % [tag, str(bad)])
+    var wbad: Array = []
+    for b in M.barricades:
+        if not _clear(L, b.inside_point) or not _clear(L, b.outside_point):
+            wbad.append(str(b.global_position.snapped(Vector3.ONE)))
+    _check(wbad.is_empty(), "%s every window has room inside and out %s" % [tag, str(wbad)])
+    # Open every room, then everything must be reachable on the navmesh.
+    M.coins = 99999
+    for d in M.doors.duplicate():
+        M.use(d)
+    await _frames(30)
+    var unreachable: Array = []
+    for b in M.barricades:
+        if not _path_exists(L, p.global_position, b.inside_point):
+            unreachable.append("window " + str(b.global_position.snapped(Vector3.ONE)))
+    for s in M.stations:
+        if not _path_exists(L, p.global_position, s["pos"] - Vector3(0, 0.5, 0)):
+            unreachable.append(s["kind"])
+    _check(unreachable.is_empty(), "%s every window and station is reachable %s" % [tag, str(unreachable)])
+    # A wave gets Melties inside.
+    M.start_wave_now()
+    var t0 := Time.get_ticks_msec()
+    var inside := false
+    while Time.get_ticks_msec() - t0 < 30000 and not inside:
+        await get_tree().physics_frame
+        for e in L.enemies:
+            if is_instance_valid(e) and e.alive and e.state == e.HUNTING:
+                inside = true
+    _check(inside, "%s Melties break in on wave 1" % tag)
+
+
+func _clear(L, pos: Vector3) -> bool:
+    var cap := CapsuleShape3D.new()
+    cap.radius = 0.3
+    cap.height = 1.4
+    var q := PhysicsShapeQueryParameters3D.new()
+    q.shape = cap
+    q.transform = Transform3D(Basis(), pos + Vector3(0, 0.95, 0))
+    q.collision_mask = 1
+    return L.get_world_3d().direct_space_state.intersect_shape(q, 1).is_empty()
 
 
 func _path_exists(L, a: Vector3, b: Vector3) -> bool:

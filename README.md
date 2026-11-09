@@ -84,7 +84,18 @@ The HUD shows when you're protected. In co-op everyone respawns here too, so nob
 
 ## MELTDOWN (wave survival)
 
-Something went wrong with General Beige's paint. The Tan soldiers it touched came back melted, and now they want green plastic. Pick **Meltdown** on the main menu and see how long you can hold **The Basement**.
+Something went wrong with General Beige's paint. The Tan soldiers it touched came back melted, and now they want green plastic. Pick **Meltdown** on the main menu, choose a map, and see how long you can hold out. Each map keeps its own best wave.
+
+| Map | Rooms | Junk piles cost |
+|---|---|---|
+| **The Basement** | Toy Shelf → Workshop → Boiler Room | 750, 1250 |
+| **The Attic** | Storage Corner → Rafters (extra wide) → Toy Chest Loft | 750, 1500 |
+| **The Garden Shed** | Potting Shed → glass-walled Greenhouse → Compost Corner, at night | 750, 1250 |
+| **Toy Store After Hours** | Checkout → Action Figure Aisle (shelving rows) → Stockroom | 1000, 1250 |
+
+The toy store's sniper is on the checkout wall, so it's available from the start.
+
+New maps go in `scripts/meltdown_maps.gd`. `_rooms()` builds a row of rooms with window gaps and junk-pile doors. `tests/meltdown_test` checks every map's windows, stations and paths automatically.
 
 - **Waves.** Melties gather in the crawlspace outside, rip the boards off the windows, climb in and come for you. Each wave has more of them, with more health, more speed and harder swipes. From wave 4, some of them run.
 - **Coins.** You earn coins for:
@@ -111,7 +122,7 @@ Something went wrong with General Beige's paint. The Tan soldiers it touched cam
   | Boiler Room | Re-Mold Press (double damage for the gun in your hands) | 3000 |
 
   Buying a gun you already own refills its ammo for half price.
-- **Sections.** Junk piles block the way on. Clearing the one into the **Workshop** costs 750, and the one into the **Boiler Room** costs 1250. Each new room has better gear, and more windows the Melties can come through.
+- **Sections.** Junk piles block the way into the next room; prices are in the map table above. Each new room has better gear, and more windows the Melties can come through.
 - **Game over** when you melt. The end screen shows the wave you reached, and your best wave is saved.
 
 Your AI squad comes along if you have one set in Settings.
