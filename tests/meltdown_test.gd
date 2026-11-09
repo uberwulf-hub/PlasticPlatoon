@@ -282,7 +282,8 @@ func _kinds_tests() -> void:
         m.set_physics_process(false)
         made[kind] = m
     _check(made["brute"].max_hp > made["shambler"].max_hp * 3.0 and made["brute"].k["planks"] == 2, "kinds: brutes are tanky and rip 2 boards a swing")
-    _check(made["sprinter"].speed > made["shambler"].speed * 1.4 and made["sprinter"].max_hp < made["shambler"].max_hp, "kinds: sprinters are fast and fragile")
+    # (each Melty's speed also varies +-15%, so compare the kinds' base speeds)
+    _check(made["sprinter"].k["speed"] >= made["shambler"].k["speed"] * 1.5 and made["sprinter"].speed > made["shambler"].speed and made["sprinter"].max_hp < made["shambler"].max_hp, "kinds: sprinters are fast and fragile")
     _check(made["brute"].model.scale.x > 1.4 and made["sprinter"].model.scale.x < 1.0, "kinds: each kind looks different")
     for m in made.values():
         m.take_damage(99999.0, Vector3(500, 0, 500), m.global_position, false)
