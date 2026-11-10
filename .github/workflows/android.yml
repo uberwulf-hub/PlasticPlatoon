@@ -1,4 +1,5 @@
-# Builds the Android APK (arm64, sideload). Run it from the Actions tab:
+# Builds the Android APK (arm64, sideload). Every Release runs this and attaches
+# PlasticPlatoon-android.apk; you can also run it alone from the Actions tab:
 # "Android" -> "Run workflow". The APK is kept as a workflow artifact, and when
 # "release" names an existing GitHub release (e.g. v1.10.0) it is attached there too.
 #
@@ -18,6 +19,15 @@ on:
         default: "v1.0.0"
       release:
         description: "Attach the APK to this existing release tag (leave empty to skip)"
+        required: false
+        default: ""
+  workflow_call:          # the Release workflow builds the APK too
+    inputs:
+      version:
+        type: string
+        required: true
+      release:
+        type: string
         required: false
         default: ""
 
