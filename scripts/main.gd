@@ -150,26 +150,26 @@ func show_meltdown() -> void:
     vb.add_child(UI.label("Wave survival  -  how long can you hold out?", 19))
     vb.add_child(UI.label("Coins: hits +10, kills +60, headshot kills +100, boards +10.  Hold E to rebuild, tap E to buy.", 16, Color(0.85, 0.85, 0.75)))
     var grid := GridContainer.new()
-    grid.columns = 2
-    grid.add_theme_constant_override("h_separation", 24)
-    grid.add_theme_constant_override("v_separation", 14)
+    grid.columns = 3
+    grid.add_theme_constant_override("h_separation", 22)
+    grid.add_theme_constant_override("v_separation", 12)
     vb.add_child(grid)
     for i in MM.META.size():
         var m: Dictionary = MM.META[i]
         var card := VBoxContainer.new()
-        card.custom_minimum_size = Vector2(500, 0)
-        card.add_theme_constant_override("separation", 4)
-        card.add_child(UI.label(m["name"].to_upper(), 26, Color.WHITE))
-        card.add_child(UI.label(m["location"], 15, Color(0.8, 0.82, 0.7)))
-        var blurb := UI.label(m.get("blurb", ""), 16)
+        card.custom_minimum_size = Vector2(330, 0)
+        card.add_theme_constant_override("separation", 2)
+        card.tooltip_text = m["location"]
+        card.add_child(UI.label(m["name"].to_upper(), 20, Color.WHITE))
+        var blurb := UI.label(m.get("blurb", ""), 14)
         blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-        blurb.custom_minimum_size = Vector2(490, 0)
+        blurb.custom_minimum_size = Vector2(330, 0)
         card.add_child(blurb)
         var best: int = Game.meltdown_best.get(i, 0)
         var row := HBoxContainer.new()
         row.add_theme_constant_override("separation", 16)
-        row.add_child(UI.button("START", func(): start_level(LevelData.MELTDOWN_BASE + i), 200))
-        row.add_child(UI.label("Best: wave %d" % best if best > 0 else "Best: -", 18, UI.ACCENT))
+        row.add_child(UI.button("START", func(): start_level(LevelData.MELTDOWN_BASE + i), 150))
+        row.add_child(UI.label("Best: wave %d" % best if best > 0 else "Best: -", 16, UI.ACCENT))
         card.add_child(row)
         grid.add_child(card)
     vb.add_child(UI.button("Back", show_main_menu, 300))

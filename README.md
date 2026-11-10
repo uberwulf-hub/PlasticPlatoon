@@ -92,6 +92,9 @@ Something went wrong with General Beige's paint. The Tan soldiers it touched cam
 | **The Attic** | Storage Corner → Rafters (extra wide) → Toy Chest Loft | 750, 1500 |
 | **The Garden Shed** | Potting Shed → glass-walled Greenhouse → Compost Corner, at night | 750, 1250 |
 | **Toy Store After Hours** | Checkout → Action Figure Aisle (shelving rows) → Stockroom | 1000, 1250 |
+| **Midnight Kitchen** | Kitchen Floor (open fridge, island) → narrow Pantry → Laundry Room | 750, 1250 |
+| **Recess Is Cancelled** | Classroom (rows of desks) → long locker Hallway → Gym | 750, 1000 |
+| **Sandcastle Beach at Dusk** | Lifeguard Hut → Sandcastle Courtyard → the Pier over the sea | 750, 1250 |
 
 The toy store's sniper is on the checkout wall, so it's available from the start.
 
