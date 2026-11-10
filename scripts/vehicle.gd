@@ -561,11 +561,16 @@ func exit_vehicle() -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if driver == null or get_tree().paused:
         return
-    if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-        var s: float = Game.mouse_sensitivity
-        cam_yaw -= event.relative.x * s
-        cam_pitch -= event.relative.y * s * (-1.0 if Game.invert_y else 1.0)
-        cam_pitch = clampf(cam_pitch, -1.3 if k.get("flies", false) else -0.9, 0.35)
+    if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not Game.touch_mode:
+        look(event.relative)
+
+
+## Turn the driver's camera (and gun) from a mouse move or touch drag.
+func look(rel: Vector2) -> void:
+    var s: float = Game.mouse_sensitivity
+    cam_yaw -= rel.x * s
+    cam_pitch -= rel.y * s * (-1.0 if Game.invert_y else 1.0)
+    cam_pitch = clampf(cam_pitch, -1.3 if k.get("flies", false) else -0.9, 0.35)
 
 
 ## Host snapshot (non-host PCs): position, turret, health and who's driving.
@@ -630,7 +635,7 @@ func _physics_process(delta: float) -> void:
                 level.notify("LAND FIRST  -  hold C to descend", 1.5)
             else:
                 exit_vehicle()
-        elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+        elif Game.aiming_input():
             if Input.is_action_pressed("fire"):
                 fire_primary()
             if Input.is_action_pressed("aim"):

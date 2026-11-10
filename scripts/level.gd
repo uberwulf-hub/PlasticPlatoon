@@ -20,6 +20,7 @@ const NetSync = preload("res://scripts/net_sync.gd")
 const RemotePlayer = preload("res://scripts/remote_player.gd")
 const Squadmate = preload("res://scripts/squadmate.gd")
 const Meltdown = preload("res://scripts/meltdown.gd")
+const TouchControls = preload("res://scripts/touch_controls.gd")
 const Rocket = preload("res://scripts/rocket.gd")
 const Grenade = preload("res://scripts/grenade.gd")
 const DroneStrike = preload("res://scripts/drone_strike.gd")
@@ -95,6 +96,9 @@ func _ready() -> void:
         _add_snowfall()
     hud = HUD.new()
     add_child(hud)
+    var touch = TouchControls.new()
+    touch.setup(self)
+    add_child(touch)
     hud.bind(player, self)
     objectives = info["objectives"]
     Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

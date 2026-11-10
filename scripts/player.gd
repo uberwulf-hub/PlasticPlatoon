@@ -118,14 +118,21 @@ func is_scoped() -> bool:
 
 # ---------------------------------------------------------------- input ----
 
+## Turn and pitch from a mouse move or a touch drag (in pixels).
+func look(rel: Vector2) -> void:
+    if not alive or vehicle != null:
+        return
+    var s: float = Game.mouse_sensitivity * (0.3 if is_scoped() else (0.6 if aiming else 1.0))
+    rotation.y -= rel.x * s
+    pitch -= rel.y * s * (-1.0 if Game.invert_y else 1.0)
+    pitch = clampf(pitch, -1.25, 0.95)
+
+
 func _unhandled_input(event: InputEvent) -> void:
     if not alive or get_tree().paused or vehicle != null:
         return
-    if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-        var s: float = Game.mouse_sensitivity * (0.3 if is_scoped() else (0.6 if aiming else 1.0))
-        rotation.y -= event.relative.x * s
-        pitch -= event.relative.y * s * (-1.0 if Game.invert_y else 1.0)
-        pitch = clampf(pitch, -1.25, 0.95)
+    if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not Game.touch_mode:
+        look(event.relative)
     elif event.is_action_pressed("next_weapon"):
         _cycle(1)
     elif event.is_action_pressed("prev_weapon"):
@@ -239,7 +246,7 @@ func _combat(delta: float) -> void:
         if reload_t <= 0.0:
             _finish_reload()
     var want_fire := Input.is_action_pressed("fire") if w["auto"] else Input.is_action_just_pressed("fire")
-    if want_fire and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+    if want_fire and Game.aiming_input():
         _fire(w)
     if Input.is_action_just_pressed("reload"):
         _start_reload()

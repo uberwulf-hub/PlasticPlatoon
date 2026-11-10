@@ -95,6 +95,7 @@ func _play_level(i: int) -> void:
     _safe_zone_test(i, L, p)
     if i == 0:
         await _plastic_damage_test(L, p)
+        await _touch_test(L, p)
     if i == 0:
         await _vehicle_zone_test(L)
     if i == 0:
@@ -477,6 +478,49 @@ func _plastic_damage_test(L, p) -> void:
     _check(p.model.damage_marks() == 0 and p.model._wear == 0.0, "L0 healing to full clears the damage")
     p.invulnerable = keep_inv
     p.global_position = keep_pos
+
+
+## Phone controls: the joystick walks, a right-side drag turns, FIRE holds.
+func _touch_test(L, p) -> void:
+    var tc = null
+    for c in L.get_children():
+        if c.get_script() == L.TouchControls:
+            tc = c
+    _check(tc != null, "L0 touch controls are part of the level")
+    if tc == null:
+        return
+    var keep: bool = Game.touch_mode
+    Game.touch_mode = false
+    await _frames(2)
+    _check(not tc.visible, "L0 touch controls stay hidden on desktop")
+    Game.touch_mode = true
+    await _frames(2)
+    _check(tc.visible, "L0 touch controls show in touch mode")
+    var s: Vector2 = tc._screen()
+    var o := Vector2(s.x * 0.2, s.y * 0.7)
+    tc._on_touch(0, o, true)
+    tc._on_drag(0, o + Vector2(0, -90), Vector2(0, -90))
+    await _frames(2)
+    _check(Input.is_action_pressed("move_forward") and Input.get_action_strength("move_forward") > 0.5, "L0 pushing the joystick up walks forward")
+    tc._on_touch(0, o + Vector2(0, -90), false)
+    await _frames(2)
+    _check(not Input.is_action_pressed("move_forward"), "L0 letting go of the joystick stops")
+    var yaw: float = p.rotation.y
+    var r := Vector2(s.x * 0.55, s.y * 0.3)
+    if tc._button_at(r) == null:
+        tc._on_touch(1, r, true)
+        tc._on_drag(1, r + Vector2(120, 0), Vector2(120, 0))
+        tc._on_touch(1, r + Vector2(120, 0), false)
+    _check(absf(p.rotation.y - yaw) > 0.1, "L0 dragging on the right turns the soldier")
+    var fire: Vector2 = tc.buttons[0]["pos"] * s
+    tc._on_touch(2, fire, true)
+    await _frames(2)
+    _check(Input.is_action_pressed("fire") and Game.aiming_input(), "L0 holding FIRE fires without a captured mouse")
+    tc._on_touch(2, fire, false)
+    await _frames(2)
+    _check(not Input.is_action_pressed("fire"), "L0 releasing FIRE stops")
+    Game.touch_mode = keep
+    await _frames(1)
 
 
 ## Regression (found by CI): a Tan jeep that ended up right on top of the

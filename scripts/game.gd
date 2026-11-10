@@ -20,6 +20,8 @@ const GRAPHICS_NAMES := ["Low", "Medium", "High"]
 var graphics := 1               # 0 low, 1 medium, 2 high (see apply_graphics)
 var fps_cap := 0                # 0 = match the screen (vsync), else a frame cap
 var show_fps := false
+var touch_controls := OS.has_feature("mobile")   # on-screen joystick + buttons
+var touch_mode := false                          # touch controls are in use right now
 var difficulty := 1
 var unlocked_level := 0
 var current_level: Node = null
@@ -121,6 +123,12 @@ func _unhandled_input(event: InputEvent) -> void:
 ##   Low:    no anti-aliasing, no ambient occlusion or glow, short shadows, 3D at 75% (FSR upscaled)
 ##   Medium: 2x MSAA, glow, medium shadows, full resolution
 ##   High:   4x MSAA, ambient occlusion, glow, long shadows
+## True when gameplay input should drive the soldier: the mouse is captured
+## (desktop) or the on-screen touch controls are up (phones).
+func aiming_input() -> bool:
+    return touch_mode or Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+
+
 func apply_graphics() -> void:
     var vp := get_viewport()
     vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][graphics]
@@ -162,6 +170,7 @@ func save() -> void:
     cfg.set_value("settings", "graphics", graphics)
     cfg.set_value("settings", "fps_cap", fps_cap)
     cfg.set_value("settings", "show_fps", show_fps)
+    cfg.set_value("settings", "touch_controls", touch_controls)
     cfg.set_value("progress", "meltdown_best", meltdown_best)
     cfg.set_value("settings", "music_volume", music_volume)
     cfg.set_value("settings", "sfx_volume", sfx_volume)
@@ -171,7 +180,10 @@ func save() -> void:
 
 func _load() -> void:
     var cfg := ConfigFile.new()
+    if OS.has_feature("mobile"):
+        graphics = 0                  # phones start on Low (changeable in Settings)
     if cfg.load(SAVE_PATH) != OK:
+        touch_mode = touch_controls
         return
     mouse_sensitivity = cfg.get_value("settings", "mouse_sensitivity", mouse_sensitivity)
     invert_y = cfg.get_value("settings", "invert_y", invert_y)
@@ -183,6 +195,8 @@ func _load() -> void:
     graphics = clampi(cfg.get_value("settings", "graphics", graphics), 0, 2)
     fps_cap = cfg.get_value("settings", "fps_cap", fps_cap)
     show_fps = cfg.get_value("settings", "show_fps", show_fps)
+    touch_controls = cfg.get_value("settings", "touch_controls", touch_controls)
+    touch_mode = touch_controls
     meltdown_best = cfg.get_value("progress", "meltdown_best", {})
     music_volume = cfg.get_value("settings", "music_volume", music_volume)
     sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
