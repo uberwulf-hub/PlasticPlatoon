@@ -210,3 +210,117 @@ func melt() -> void:
     for i in mats.size():
         tw.tween_property(mats[i], "albedo_color", base_colors[i].darkened(0.35), 1.5)
         tw.tween_property(mats[i], "roughness", 0.1, 1.5)
+
+
+# ------------------------------------------------------------ mouth (PNN) ----
+
+var mouth: MeshInstance3D
+
+## A dark mouth on the face (news anchors). set_mouth(0..1) opens it.
+func add_mouth() -> void:
+    if torso == null or mouth != null:
+        return
+    mouth = MeshInstance3D.new()
+    var sm := SphereMesh.new()
+    sm.radius = 0.11
+    sm.height = 0.22
+    mouth.mesh = sm
+    var m := StandardMaterial3D.new()
+    m.albedo_color = Color(0.12, 0.05, 0.04)
+    m.roughness = 0.6
+    mouth.material_override = m
+    mouth.position = MOUTH_POS
+    mouth.scale = Vector3(1.0, 0.18, 0.35)
+    torso.add_child(mouth)
+
+
+const MOUTH_POS := Vector3(0, 0.2, 0.48)       # head-bone space: in front of the face
+
+
+func set_mouth(open: float) -> void:
+    if mouth != null:
+        mouth.scale.y = lerpf(mouth.scale.y, 0.18 + clampf(open, 0.0, 1.0) * 0.75, 0.5)
+
+
+# --------------------------------------------------------- plastic damage ----
+# Hits leave dark, glossy melted blobs stuck to the nearest bone (so they move
+# with the body), and the whole soldier darkens and gets glossier ("wear") as
+# its health drops. Healing back to full clears it.
+
+const MAX_MARKS := 12
+var _marks: Array = []
+var _attach := {}                 # bone index -> BoneAttachment3D
+var _mark_mat: StandardMaterial3D
+var _wear := 0.0
+
+
+func damage_mark(world_pos: Vector3, explosive := false) -> void:
+    if skeleton == null or _dead or not is_inside_tree():
+        return
+    var best := -1
+    var best_d := INF
+    for i in skeleton.get_bone_count():
+        var bp: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(i).origin
+        var d := bp.distance_to(world_pos)
+        if d < best_d:
+            best_d = d
+            best = i
+    if best < 0:
+        return
+    var at: BoneAttachment3D = _attach.get(best)
+    if at == null:
+        at = BoneAttachment3D.new()
+        at.bone_idx = best
+        skeleton.add_child(at)
+        _attach[best] = at
+    # A fresh attachment only follows its bone from the next frame: place it now
+    # so the mark is computed against the bone, not the skeleton's origin.
+    at.global_transform = skeleton.global_transform * skeleton.get_bone_global_pose(best)
+    if _mark_mat == null:
+        _mark_mat = StandardMaterial3D.new()
+        _mark_mat.albedo_color = Color(0.13, 0.08, 0.05).lerp(body_color, 0.1)    # scorched plastic
+        _mark_mat.roughness = 0.45
+        _mark_mat.metallic_specular = 0.3
+    var blob := MeshInstance3D.new()
+    var sm := SphereMesh.new()
+    var r := randf_range(0.1, 0.15) * (1.35 if explosive else 1.0)
+    sm.radius = r
+    sm.height = r * 2.0
+    blob.mesh = sm
+    blob.material_override = _mark_mat
+    at.add_child(blob)
+    # Sit the mark on the surface: from the bone toward the hit point, no
+    # further out than the body is thick (hits are reported on the capsule).
+    var local: Vector3 = at.global_transform.affine_inverse() * world_pos
+    var sc := maxf(0.01, at.global_transform.basis.get_scale().x)
+    var d := local.length()
+    var surface := clampf(d, 0.16 / sc, 0.24 / sc)         # about where the plastic is
+    var n := local.normalized() if d > 0.001 else Vector3(0, 0, 1)
+    blob.position = n * surface
+    # A flat splash lying on the surface (its thin axis along the surface normal).
+    blob.basis = Basis(Quaternion(Vector3.UP, n)).rotated(n, randf() * TAU).scaled(Vector3(1.0, 0.3, 0.8) / sc)
+    _marks.append(blob)
+    if _marks.size() > MAX_MARKS:
+        _marks.pop_front().queue_free()
+
+
+## 0 = fresh plastic, 1 = nearly melted.
+func set_wear(w: float) -> void:
+    _wear = clampf(w, 0.0, 1.0)
+    if _dead:
+        return
+    for i in mats.size():
+        mats[i].albedo_color = base_colors[i].darkened(_wear * 0.25)
+        mats[i].roughness = lerpf(0.38, 0.12, _wear)
+
+
+func clear_damage() -> void:
+    for b in _marks:
+        if is_instance_valid(b):
+            b.queue_free()
+    _marks.clear()
+    set_wear(0.0)
+
+
+func damage_marks() -> int:
+    return _marks.size()

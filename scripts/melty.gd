@@ -351,6 +351,8 @@ func take_damage(amount: float, source: Vector3, hit_pos: Vector3, explosive := 
         amount *= 2.0
     hp -= amount
     model.hit_flash()
+    model.damage_mark(hit_pos if hit_pos.distance_to(global_position) < 3.0 * k["size"].y else global_position + Vector3(0, 1.0, 0), explosive)
+    model.set_wear(1.0 - hp / max_hp)
     Fx.blood_plastic(level, hit_pos, MELT_TAN)
     var by_player: bool = mode.is_player_damage(source, explosive)
     if hp <= 0.0:

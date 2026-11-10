@@ -518,6 +518,7 @@ func use(f) -> bool:
             if not _spend(f["cost"]):
                 return false
             p.health = p.max_health
+            p.show_damage(Vector3.ZERO, false, false)
             level.notify("HEALTH RESTORED", 1.4)
             return true
         "armor":

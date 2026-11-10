@@ -210,3 +210,28 @@ func _cyl(parent: Node3D, pos: Vector3, r: float, h: float, m: Material, rot := 
     mi.rotation = rot
     parent.add_child(mi)
     return mi
+
+
+# Fallback model: no mouth or damage marks (same interface as plastic_soldier).
+func add_mouth() -> void:
+    pass
+
+
+func set_mouth(_open: float) -> void:
+    pass
+
+
+func damage_mark(_world_pos: Vector3, _explosive := false) -> void:
+    pass
+
+
+func set_wear(_w: float) -> void:
+    pass
+
+
+func clear_damage() -> void:
+    pass
+
+
+func damage_marks() -> int:
+    return 0

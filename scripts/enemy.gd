@@ -368,6 +368,8 @@ func take_damage(amount: float, source: Vector3, hit_pos: Vector3, explosive := 
         amount *= 2.2
     hp -= amount
     model.hit_flash()
+    model.damage_mark(hit_pos if hit_pos.distance_to(global_position) < 3.0 else global_position + Vector3(0, 1.1, 0), explosive)
+    model.set_wear(1.0 - hp / s["hp"])
     Fx.blood_plastic(level, hit_pos, TAN)
     if state != COMBAT:
         state = COMBAT

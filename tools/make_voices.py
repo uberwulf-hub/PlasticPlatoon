@@ -21,7 +21,7 @@ from kokoro import KPipeline
 RATE = 24000
 # Cast: (Kokoro language code, voice, speed)
 CAST = {
-    "chip": ("a", "am_michael", 0.95),     # warm American anchorman
+    "chip": ("a", "am_michael", 1.15),     # warm American anchorman (brisk)
     "brenda": ("b", "bf_emma", 1.0),       # crisp British co-anchor
     "gary": ("b", "bm_george", 1.08),      # excitable British field reporter
 }

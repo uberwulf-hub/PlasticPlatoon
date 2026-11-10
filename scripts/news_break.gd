@@ -100,7 +100,7 @@ func _ready() -> void:
     voice.volume_db = -10.0
     add_child(voice)
     clip = AudioStreamPlayer.new()
-    clip.bus = "SFX"
+    clip.bus = VOICE_BUS if _voice_bus() >= 0 else "SFX"
     clip.volume_db = 2.0
     add_child(clip)
     _setup_narration()
@@ -257,27 +257,7 @@ func _build_world() -> void:
             _cyl(o + Vector3(-6.0, 3.0, -7.0), 0.25, 6.0, Color(0.45, 0.35, 0.22))           # palm trunk
             _box(o + Vector3(-6.0, 6.1, -7.0), Vector3(3.5, 0.1, 0.8), Color(0.3, 0.5, 0.2))
     gary = _person(o, Color(0.85, 0.68, 0.2))
-    var mic := Node3D.new()
-    mic.position = Vector3(-0.3, 1.3, -0.45)      # in front of him (he's turned to face the camera)
-    gary.add_child(mic)
-    var stick := MeshInstance3D.new()
-    var sm := CylinderMesh.new()
-    sm.top_radius = 0.03
-    sm.bottom_radius = 0.03
-    sm.height = 0.3
-    stick.mesh = sm
-    stick.rotation.x = deg_to_rad(-30)
-    mic.add_child(stick)
-    var head := MeshInstance3D.new()
-    var hm := SphereMesh.new()
-    hm.radius = 0.07
-    hm.height = 0.14
-    head.mesh = hm
-    head.position = Vector3(0, 0.15, -0.08)
-    var hmat := StandardMaterial3D.new()
-    hmat.albedo_color = Color(0.1, 0.1, 0.1)
-    head.material_override = hmat
-    mic.add_child(head)
+    _build_boom(o)
     var live := Label3D.new()
     live.text = "PNN LIVE"
     live.font_size = 90
@@ -293,10 +273,130 @@ func _build_world() -> void:
     cam.current = true
 
 
+## Gary's boom mic: a fuzzy mic on a long pole poking in from off-screen.
+## The operator can't hold it still, and every so often it bonks Gary.
+var boom: Node3D
+var _boom_rest := Vector3.ZERO
+var _boom_t := 0.0
+var _bump_t := 6.0               # seconds until the next bonk
+var _bumping := -1.0             # >= 0 while a bonk is under way
+var bonks := 0
+
+
+func _build_boom(o: Vector3) -> void:
+    boom = Node3D.new()
+    _boom_rest = o + Vector3(0.0, 2.02, 0.12)
+    boom.position = _boom_rest
+    vp.add_child(boom)
+    var grey := _mat(Color(0.35, 0.35, 0.37))
+    var fuzz := _mat(Color(0.32, 0.32, 0.33), 1.0)
+    var mic := MeshInstance3D.new()
+    var cm := CapsuleMesh.new()
+    cm.radius = 0.13
+    cm.height = 0.6
+    mic.mesh = cm
+    mic.material_override = fuzz
+    mic.rotation.z = PI / 2
+    boom.add_child(mic)
+    # The pole runs up and out to the left, out of shot.
+    var dir := Vector3(-1.0, 0.55, 0.25).normalized()
+    var pole := MeshInstance3D.new()
+    var pm := CylinderMesh.new()
+    pm.top_radius = 0.025
+    pm.bottom_radius = 0.025
+    pm.height = 4.5
+    pole.mesh = pm
+    pole.material_override = grey
+    pole.position = dir * 2.45
+    pole.basis = Basis(Quaternion(Vector3.UP, dir))
+    boom.add_child(pole)
+    _bump_t = randf_range(4.0, 8.0)
+
+
+func _update_boom(delta: float) -> void:
+    if boom == null:
+        return
+    _boom_t += delta
+    var wobble := Vector3(sin(_boom_t * 1.3) * 0.09 + sin(_boom_t * 3.7) * 0.03,
+        sin(_boom_t * 1.9) * 0.05 + sin(_boom_t * 5.3) * 0.015, sin(_boom_t * 2.3) * 0.05)
+    var dip := 0.0
+    if _bumping >= 0.0:
+        _bumping += delta
+        # Down onto his head (0.22 s), a beat, then a guilty yank back up.
+        dip = smoothstep(0.0, 0.22, _bumping) * (1.0 - smoothstep(0.35, 0.8, _bumping))
+        if _bumping > 0.22 and _bumping - delta <= 0.22:
+            _bonk()
+        if _bumping > 0.8:
+            _bumping = -1.0
+            _bump_t = randf_range(5.0, 12.0)
+    else:
+        _bump_t -= delta
+        if _bump_t <= 0.0:
+            _bumping = 0.0
+    boom.position = _boom_rest + wobble * (1.0 - dip) + Vector3(0.0, -0.42, -0.1) * dip
+    boom.rotation.z = sin(_boom_t * 1.1) * 0.06 - dip * 0.25
+
+
+func _bonk() -> void:
+    bonks += 1
+    if gary != null:
+        gary.gesture("HitReact")
+    Game.play_ui("hit", -2.0)
+
+
+# ------------------------------------------------------------ mouths ----
+
+const VOICE_BUS := "PNNVoice"
+
+
+func _voice_bus() -> int:
+    var idx := AudioServer.get_bus_index(VOICE_BUS)
+    if idx == -1:
+        AudioServer.add_bus()
+        idx = AudioServer.bus_count - 1
+        AudioServer.set_bus_name(idx, VOICE_BUS)
+        AudioServer.set_bus_send(idx, "SFX")
+        AudioServer.add_bus_effect(idx, AudioEffectSpectrumAnalyzer.new())
+    return idx
+
+
+## How loud the recorded line is right now (0..1), for lip flap.
+func _voice_level() -> float:
+    var idx := AudioServer.get_bus_index(VOICE_BUS)
+    if idx == -1:
+        return 0.0
+    var inst = AudioServer.get_bus_effect_instance(idx, 0)
+    if inst == null:
+        return 0.0
+    var m: Vector2 = inst.get_magnitude_for_frequency_range(80.0, 4000.0)
+    var db := linear_to_db(maxf(0.00001, (m.x + m.y) * 0.5))
+    return clampf((db + 62.0) / 28.0, 0.0, 1.0)
+
+
+var mouth_open := 0.0            # the current speaker's mouth (tests read it)
+
+
+func _update_mouths() -> void:
+    if idx < 0 or idx >= beats.size():
+        return
+    var who: String = beats[idx].get("who", "both")
+    var open := 0.0
+    if _clip_mode and clip.playing:
+        open = _voice_level()
+    elif typed < subtitle.text.length():
+        open = absf(sin(shot_t * 15.0)) * 0.8          # TTS / blips: flap while the line types out
+    mouth_open = open
+    for pair in [["chip", chip], ["brenda", brenda], ["gary", gary]]:
+        if pair[1] != null:
+            var talking: bool = who == pair[0] or (who == "both" and pair[0] != "gary")
+            pair[1].set_mouth(open if talking else 0.0)
+
+
 func _person(pos: Vector3, color: Color) -> Node3D:
     var p = Soldier.create()
     vp.add_child(p)
     p.build(color, "none")
+    p.add_mouth()
     p.position = pos
     p.rotation.y = PI        # face the camera (+Z)
     return p
@@ -505,6 +605,8 @@ func _process(delta: float) -> void:
         return
     shot_t += delta
     _place_camera()
+    _update_boom(delta)
+    _update_mouths()
     ticker_label.position.x -= 110.0 * delta
     if ticker_w > 0.0 and ticker_label.position.x < -ticker_w:
         ticker_label.position.x += ticker_w

@@ -94,6 +94,8 @@ func _play_level(i: int) -> void:
     _check(p.shots_fired > 0, "L%d weapons fired (%d shots)" % [i, p.shots_fired])
     _safe_zone_test(i, L, p)
     if i == 0:
+        await _plastic_damage_test(L, p)
+    if i == 0:
         await _vehicle_zone_test(L)
     if i == 0:
         await _jeep_point_blank_test(L, p)
@@ -393,6 +395,24 @@ func _news_tests() -> void:
             guard += 1
         if got[0]:
             played += 1
+    # Mouths flap while a line plays (no recording -> typing flap), and the
+    # boom mic bonks Gary.
+    var narr_was: bool = Game.narration
+    Game.narration = false
+    var nb2 = NB.new()
+    nb2.auto_advance = false
+    nb2.play(NS.intro(0))
+    add_child(nb2)
+    var flapped := false
+    for f in 40:
+        await _frames(1)
+        flapped = flapped or nb2.mouth_open > 0.2
+    _check(flapped and nb2.chip.mouth != null, "PNN: anchors' mouths move while they talk")
+    nb2._bump_t = 0.0
+    await _frames(60)
+    _check(nb2.bonks >= 1, "PNN: the boom mic bonks Gary")
+    nb2._finish()
+    Game.narration = narr_was
     _check(unfilled == 0, "PNN: all placeholders filled (%d unfilled)" % unfilled)
     _check(played == scripts.size(), "PNN: %d/%d news breaks play to the end" % [played, scripts.size()])
     # Menu -> Campaign -> Operation 1 shows the news, then the briefing.
@@ -436,6 +456,29 @@ func _one_gun_test(i: int, L, p) -> void:
 ## The start point is a safe zone: no Tan units start inside it, players
 ## there can't be hurt or targeted, firing exposes you briefly, and stepping
 ## out makes you a target again.
+## Hits leave melted marks and wear on the plastic; healing to full clears it.
+func _plastic_damage_test(L, p) -> void:
+    var e = null
+    for x in L.enemies:
+        if x.alive:
+            e = x
+            break
+    var m0: int = e.model.damage_marks()
+    e.take_damage(1.0, p.global_position, e.global_position + Vector3(0.2, 1.2, 0.3), false)
+    _check(e.model.damage_marks() == m0 + 1 and e.model._wear > 0.0, "L0 a hit leaves a melted mark on a Tan soldier")
+    var keep_inv: bool = p.invulnerable
+    var keep_pos: Vector3 = p.global_position
+    p.global_position = L.safe_center + Vector3(L.safe_radius + 12.0, 0.5, 0)
+    p.invulnerable = false
+    p.take_damage(20.0, e.global_position, Vector3.ZERO, true)
+    _check(p.model.damage_marks() >= 1 and p.model._wear > 0.0, "L0 the player's plastic shows damage")
+    p.health = p.max_health - 5.0
+    p.give_pickup("health")
+    _check(p.model.damage_marks() == 0 and p.model._wear == 0.0, "L0 healing to full clears the damage")
+    p.invulnerable = keep_inv
+    p.global_position = keep_pos
+
+
 ## Regression (found by CI): a Tan jeep that ended up right on top of the
 ## player couldn't depress its gun that far and sat there without firing.
 func _jeep_point_blank_test(L, p) -> void:

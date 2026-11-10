@@ -150,6 +150,10 @@ func _physics_process(delta: float) -> void:
     _hurt_t -= delta
     if _hurt_t <= 0.0 and health < MAX_HP:
         health = minf(MAX_HP, health + 6.0 * delta)
+        if health >= MAX_HP:
+            model.clear_damage()
+        else:
+            model.set_wear(1.0 - health / MAX_HP)
 
     # Look for something to shoot a few times a second.
     _scan_t -= delta
@@ -376,6 +380,8 @@ func take_damage(amount: float, _source: Vector3, hit_pos: Vector3, explosive :=
     health -= amount
     _hurt_t = 6.0
     model.hit_flash()
+    model.damage_mark(hit_pos if hit_pos.distance_to(global_position) < 3.0 else global_position + Vector3(0, 1.1, 0), explosive)
+    model.set_wear(1.0 - health / MAX_HP)
     Fx.blood_plastic(level, hit_pos, COLORS[slot % COLORS.size()])
     if health <= 0.0:
         _go_down()

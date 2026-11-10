@@ -475,6 +475,7 @@ func take_damage(amount: float, _source: Vector3, _hit_pos: Vector3, _explosive 
         armor -= absorbed
         amount -= absorbed
     health -= amount
+    show_damage(_hit_pos, _explosive)
     shake = maxf(shake, 0.35)
     took_damage.emit(amount)
     stats_changed.emit()
@@ -491,6 +492,22 @@ func _net_client() -> bool:
 
 
 ## Co-op respawn: a fresh soldier back at the start point.
+## Plastic damage: a melted mark where the hit landed (unless `mark` is false)
+## and wear that tracks health; fully healed clears it.
+func show_damage(hit_pos: Vector3, explosive := false, mark := true) -> void:
+    if model == null or not model.has_method("damage_mark"):
+        return
+    if health >= max_health:
+        model.clear_damage()
+        return
+    if mark:
+        var p := hit_pos
+        if p == Vector3.ZERO or p.distance_to(global_position + Vector3(0, 1, 0)) > 2.5:
+            p = global_position + Vector3(randf_range(-0.3, 0.3), randf_range(0.6, 1.5), randf_range(-0.3, 0.3))
+        model.damage_mark(p, explosive)
+    model.set_wear(1.0 - health / max_health)
+
+
 func respawn(pos: Vector3) -> void:
     model.queue_free()
     model = preload("res://scripts/plastic_soldier.gd").create()
@@ -524,6 +541,7 @@ func give_pickup(kind: String) -> bool:
             if health >= max_health:
                 return false
             health = minf(max_health, health + 40.0)
+            show_damage(Vector3.ZERO, false, false)
         "armor":
             if armor >= max_armor:
                 return false
