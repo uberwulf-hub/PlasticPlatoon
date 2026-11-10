@@ -3,7 +3,7 @@
 # "release" names an existing GitHub release (e.g. v1.10.0) it is attached there too.
 #
 # Signing: set the repository secrets ANDROID_KEYSTORE_BASE64 (base64 of a .jks/.keystore),
-# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD so every build is signed with the same key and
+# ANDROID_KEYSTORE_ALIAS and ANDROID_KEYSTORE_PASSWORD (same names as Race Track Mayhem) so every build is signed with the same key and
 # installs over the last one. Without them a throwaway key is made for each build, which
 # works, but phones then need the old version uninstalled before updating.
 name: Android
@@ -64,8 +64,8 @@ jobs:
       - name: Signing key
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KS_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           KS="$RUNNER_TEMP/release.keystore"
           if [ -n "$KS_B64" ]; then
