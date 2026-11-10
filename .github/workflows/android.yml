@@ -2,10 +2,11 @@
 # "Android" -> "Run workflow". The APK is kept as a workflow artifact, and when
 # "release" names an existing GitHub release (e.g. v1.10.0) it is attached there too.
 #
-# Signing: set the repository secrets ANDROID_KEYSTORE_BASE64 (base64 of a .jks/.keystore),
-# ANDROID_KEYSTORE_ALIAS and ANDROID_KEYSTORE_PASSWORD (same names as Race Track Mayhem) so every build is signed with the same key and
-# installs over the last one. Without them a throwaway key is made for each build, which
-# works, but phones then need the old version uninstalled before updating.
+# Signing: Android only installs an update over an older copy when both were
+# signed with the same key. The first build makes a key and keeps it in this
+# repository's Actions cache (keep-android-key.yml stops GitHub expiring it).
+# To use your own key instead, set the repository secrets ANDROID_KEYSTORE_BASE64
+# (base64 of a .jks/.keystore), ANDROID_KEYSTORE_ALIAS and ANDROID_KEYSTORE_PASSWORD.
 name: Android
 
 on:
@@ -61,21 +62,37 @@ jobs:
           cat ~/.config/godot/editor_settings-4.3.tres
           ls "$ANDROID_HOME/build-tools"
 
+      - name: Keep the signing key between builds
+        uses: actions/cache@v4
+        with:
+          path: ~/android-key
+          key: android-signing-key-v1
+
       - name: Signing key
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KS_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          KS="$RUNNER_TEMP/release.keystore"
           if [ -n "$KS_B64" ]; then
+            KS="$RUNNER_TEMP/release.keystore"
             echo "$KS_B64" | base64 -d > "$KS"
             ALIAS="$KS_ALIAS"; PASS="$KS_PASS"
+            echo "Using the signing key from the repository secrets."
           else
-            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret; signing with a throwaway key."
-            ALIAS=platoon; PASS=$(openssl rand -hex 16)
-            keytool -genkeypair -v -keystore "$KS" -alias "$ALIAS" -keyalg RSA -keysize 2048 \
-              -validity 10000 -storepass "$PASS" -keypass "$PASS" -dname "CN=Plastic Platoon"
+            mkdir -p ~/android-key
+            KS=~/android-key/release.keystore
+            ALIAS=plasticplatoon
+            if [ ! -f "$KS" ]; then
+              openssl rand -hex 16 > ~/android-key/password
+              keytool -genkeypair -v -keystore "$KS" -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+                -storepass "$(cat ~/android-key/password)" -keypass "$(cat ~/android-key/password)" \
+                -dname "CN=Plastic Platoon, O=uberwulf, C=US"
+              echo "::warning::Made a new signing key. Phones with an older copy must uninstall it before installing this one."
+            else
+              echo "Using the cached signing key."
+            fi
+            PASS=$(cat ~/android-key/password)
           fi
           echo "::add-mask::$PASS"
           {
