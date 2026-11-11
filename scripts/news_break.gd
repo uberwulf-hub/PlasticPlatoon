@@ -100,7 +100,7 @@ func _ready() -> void:
     voice.volume_db = -10.0
     add_child(voice)
     clip = AudioStreamPlayer.new()
-    clip.bus = VOICE_BUS if _voice_bus() >= 0 else "SFX"
+    clip.bus = "SFX"
     clip.volume_db = 2.0
     add_child(clip)
     _setup_narration()
@@ -274,13 +274,26 @@ func _build_world() -> void:
 
 
 ## Gary's boom mic: a fuzzy mic on a long pole poking in from off-screen.
-## The operator can't hold it still, and every so often it bonks Gary.
+## The operator can't hold it still, and every so often it dips onto Gary's
+## helmet: it stops on contact (never passes through him), bonks him once and
+## knocks him back a step, then gets yanked guiltily back up.
 var boom: Node3D
 var _boom_rest := Vector3.ZERO
 var _boom_t := 0.0
 var _bump_t := 6.0               # seconds until the next bonk
 var _bumping := -1.0             # >= 0 while a bonk is under way
+var _bump_hit := false           # this bump has already bonked him
+var _bump_y := 0.0               # how far the mic has come down (m)
 var bonks := 0
+var _gary_home := Vector3.ZERO
+var _knock := -1.0               # >= 0 while Gary staggers back
+var _head0 := Vector3.ZERO       # head bone at rest, and the helmet top above it
+var _helmet_top0 := 0.0
+var _measured := 0               # frames until the helmet is measured (the rig poses first)
+var boom_gap := 1.0              # smallest mic-to-helmet gap seen (tests read it)
+
+const MIC_R := 0.13              # the fuzzy mic is a capsule this thick...
+const MIC_HALF := 0.3            # ...and this long either side of its middle
 
 
 func _build_boom(o: Vector3) -> void:
@@ -292,8 +305,8 @@ func _build_boom(o: Vector3) -> void:
     var fuzz := _mat(Color(0.32, 0.32, 0.33), 1.0)
     var mic := MeshInstance3D.new()
     var cm := CapsuleMesh.new()
-    cm.radius = 0.13
-    cm.height = 0.6
+    cm.radius = MIC_R
+    cm.height = MIC_HALF * 2.0
     mic.mesh = cm
     mic.material_override = fuzz
     mic.rotation.z = PI / 2
@@ -311,92 +324,113 @@ func _build_boom(o: Vector3) -> void:
     pole.basis = Basis(Quaternion(Vector3.UP, dir))
     boom.add_child(pole)
     _bump_t = randf_range(4.0, 8.0)
+    if gary != null:
+        _gary_home = gary.position
+
+
+## Where the top of Gary's helmet is: the highest point of his model at rest,
+## then it follows his head bone as he moves (HitReact, the stagger).
+func _measure_helmet() -> void:
+    _helmet_top0 = gary.global_position.y + 1.8
+    var top := -INF
+    for mi in gary.find_children("*", "MeshInstance3D", true, false):
+        if not mi.is_visible_in_tree():
+            continue                                # stowed weapons etc.
+        var bb: AABB = mi.global_transform * mi.get_aabb()
+        top = maxf(top, bb.end.y)
+    if top > -INF:
+        _helmet_top0 = top
+    _head0 = gary.torso.global_position if gary.get("torso") != null else gary.global_position
+
+
+func helmet_top() -> float:
+    if gary == null:
+        return -INF
+    var head: Vector3 = gary.torso.global_position if gary.get("torso") != null else gary.global_position
+    return _helmet_top0 + (head.y - _head0.y)
 
 
 func _update_boom(delta: float) -> void:
     if boom == null:
         return
+    if gary != null and _measured < 3:
+        _measured += 1
+        if _measured < 3:
+            return
+        _measure_helmet()
+        # Hover a hand's width above his helmet, so only a bonk touches him.
+        _boom_rest.y = _helmet_top0 + MIC_R + 0.3
     _boom_t += delta
     var wobble := Vector3(sin(_boom_t * 1.3) * 0.09 + sin(_boom_t * 3.7) * 0.03,
         sin(_boom_t * 1.9) * 0.05 + sin(_boom_t * 5.3) * 0.015, sin(_boom_t * 2.3) * 0.05)
-    var dip := 0.0
+    var tilt := sin(_boom_t * 1.1) * 0.06
+    # How low the mic may go: resting on the helmet, never into it (a tilted
+    # mic's low end hangs further down).
+    var floor_y := helmet_top() + MIC_R + absf(sin(tilt)) * MIC_HALF + 0.01
     if _bumping >= 0.0:
         _bumping += delta
-        # Down onto his head (0.22 s), a beat, then a guilty yank back up.
-        dip = smoothstep(0.0, 0.22, _bumping) * (1.0 - smoothstep(0.35, 0.8, _bumping))
-        if _bumping > 0.22 and _bumping - delta <= 0.22:
-            _bonk()
-        if _bumping > 0.8:
-            _bumping = -1.0
-            _bump_t = randf_range(5.0, 12.0)
+        if not _bump_hit:
+            _bump_y += delta * 2.4                      # the operator's arm sags...
+            var y := _boom_rest.y + wobble.y - _bump_y
+            if y <= floor_y:                            # ...until it lands on his helmet
+                _bump_hit = true
+                _bumping = 0.0
+                _bonk()
+            elif _bumping > 1.0:                        # missed (he moved): give up
+                _bump_hit = true
+                _bumping = 0.0
+        else:
+            # A beat on contact, then yanked back up.
+            _bump_y *= 1.0 - smoothstep(0.12, 0.6, _bumping) * minf(1.0, delta * 10.0)
+            if _bumping > 0.9:
+                _bumping = -1.0
+                _bump_y = 0.0
+                _bump_t = randf_range(5.0, 12.0)
     else:
         _bump_t -= delta
         if _bump_t <= 0.0:
             _bumping = 0.0
-    boom.position = _boom_rest + wobble * (1.0 - dip) + Vector3(0.0, -0.42, -0.1) * dip
-    boom.rotation.z = sin(_boom_t * 1.1) * 0.06 - dip * 0.25
+            _bump_hit = false
+            _bump_y = 0.0
+    var pos := _boom_rest + wobble - Vector3(0.0, _bump_y, 0.0)
+    pos.y = maxf(pos.y, floor_y)
+    boom.position = pos
+    boom.rotation.z = tilt
+    boom_gap = minf(boom_gap, pos.y - MIC_R - absf(sin(tilt)) * MIC_HALF - helmet_top())
+    _update_knock(delta)
 
 
 func _bonk() -> void:
     bonks += 1
+    _knock = 0.0
     if gary != null:
         gary.gesture("HitReact")
     Game.play_ui("hit", -2.0)
 
 
-# ------------------------------------------------------------ mouths ----
-
-const VOICE_BUS := "PNNVoice"
-
-
-func _voice_bus() -> int:
-    var idx := AudioServer.get_bus_index(VOICE_BUS)
-    if idx == -1:
-        AudioServer.add_bus()
-        idx = AudioServer.bus_count - 1
-        AudioServer.set_bus_name(idx, VOICE_BUS)
-        AudioServer.set_bus_send(idx, "SFX")
-        AudioServer.add_bus_effect(idx, AudioEffectSpectrumAnalyzer.new())
-    return idx
-
-
-## How loud the recorded line is right now (0..1), for lip flap.
-func _voice_level() -> float:
-    var idx := AudioServer.get_bus_index(VOICE_BUS)
-    if idx == -1:
-        return 0.0
-    var inst = AudioServer.get_bus_effect_instance(idx, 0)
-    if inst == null:
-        return 0.0
-    var m: Vector2 = inst.get_magnitude_for_frequency_range(80.0, 4000.0)
-    var db := linear_to_db(maxf(0.00001, (m.x + m.y) * 0.5))
-    return clampf((db + 62.0) / 28.0, 0.0, 1.0)
-
-
-var mouth_open := 0.0            # the current speaker's mouth (tests read it)
-
-
-func _update_mouths() -> void:
-    if idx < 0 or idx >= beats.size():
+## The bonk knocks Gary a step away from the mic (it comes in from the left)
+## and he leans with it, then he steps back to his mark.
+func _update_knock(delta: float) -> void:
+    if gary == null or _knock < 0.0:
         return
-    var who: String = beats[idx].get("who", "both")
-    var open := 0.0
-    if _clip_mode and clip.playing:
-        open = _voice_level()
-    elif typed < subtitle.text.length():
-        open = absf(sin(shot_t * 15.0)) * 0.8          # TTS / blips: flap while the line types out
-    mouth_open = open
-    for pair in [["chip", chip], ["brenda", brenda], ["gary", gary]]:
-        if pair[1] != null:
-            var talking: bool = who == pair[0] or (who == "both" and pair[0] != "gary")
-            pair[1].set_mouth(open if talking else 0.0)
+    _knock += delta
+    var k := smoothstep(0.0, 0.12, _knock) * (1.0 - smoothstep(0.45, 1.3, _knock))
+    # (He faces the camera, so +z tilt leans his head to screen-right and +x
+    # leans him back.)
+    gary.position = _gary_home + Vector3(0.32, 0.0, -0.12) * k
+    gary.rotation.x = 0.1 * k
+    gary.rotation.z = 0.2 * k
+    if _knock > 1.3:
+        _knock = -1.0
+        gary.position = _gary_home
+        gary.rotation.x = 0.0
+        gary.rotation.z = 0.0
 
 
 func _person(pos: Vector3, color: Color) -> Node3D:
     var p = Soldier.create()
     vp.add_child(p)
     p.build(color, "none")
-    p.add_mouth()
     p.position = pos
     p.rotation.y = PI        # face the camera (+Z)
     return p
@@ -606,7 +640,6 @@ func _process(delta: float) -> void:
     shot_t += delta
     _place_camera()
     _update_boom(delta)
-    _update_mouths()
     ticker_label.position.x -= 110.0 * delta
     if ticker_w > 0.0 and ticker_label.position.x < -ticker_w:
         ticker_label.position.x += ticker_w

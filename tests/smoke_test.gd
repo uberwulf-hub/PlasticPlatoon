@@ -396,22 +396,26 @@ func _news_tests() -> void:
             guard += 1
         if got[0]:
             played += 1
-    # Mouths flap while a line plays (no recording -> typing flap), and the
-    # boom mic bonks Gary.
+    # The boom mic bonks Gary exactly once per dip, stops on his helmet
+    # (never through him) and knocks him back a step.
     var narr_was: bool = Game.narration
     Game.narration = false
     var nb2 = NB.new()
     nb2.auto_advance = false
     nb2.play(NS.intro(0))
     add_child(nb2)
-    var flapped := false
-    for f in 40:
-        await _frames(1)
-        flapped = flapped or nb2.mouth_open > 0.2
-    _check(flapped and nb2.chip.mouth != null, "PNN: anchors' mouths move while they talk")
+    await _frames(5)
+    var home: Vector3 = nb2.gary.position
     nb2._bump_t = 0.0
+    var knocked := 0.0
+    for f in 70:
+        await _frames(1)
+        knocked = maxf(knocked, nb2.gary.position.distance_to(home))
+    _check(nb2.bonks == 1, "PNN: one dip of the boom mic bonks Gary once (%d)" % nb2.bonks)
+    _check(nb2.boom_gap > -0.005, "PNN: the boom mic never goes through Gary (closest %.3f m)" % nb2.boom_gap)
+    _check(knocked > 0.1, "PNN: the bonk knocks Gary back (%.2f m)" % knocked)
     await _frames(60)
-    _check(nb2.bonks >= 1, "PNN: the boom mic bonks Gary")
+    _check(nb2.gary.position.distance_to(home) < 0.01, "PNN: Gary steps back to his mark")
     nb2._finish()
     Game.narration = narr_was
     _check(unfilled == 0, "PNN: all placeholders filled (%d unfilled)" % unfilled)
@@ -495,7 +499,7 @@ func _touch_test(L, p) -> void:
     _check(not tc.visible, "L0 touch controls stay hidden on desktop")
     Game.touch_mode = true
     await _frames(2)
-    _check(tc.visible, "L0 touch controls show in touch mode")
+    _check(tc.visible, "L0 touch controls show in touch mode (playing %s, paused %s)" % [L.is_playing(), get_tree().paused])
     var s: Vector2 = tc._screen()
     var o := Vector2(s.x * 0.2, s.y * 0.7)
     tc._on_touch(0, o, true)

@@ -212,36 +212,6 @@ func melt() -> void:
         tw.tween_property(mats[i], "roughness", 0.1, 1.5)
 
 
-# ------------------------------------------------------------ mouth (PNN) ----
-
-var mouth: MeshInstance3D
-
-## A dark mouth on the face (news anchors). set_mouth(0..1) opens it.
-func add_mouth() -> void:
-    if torso == null or mouth != null:
-        return
-    mouth = MeshInstance3D.new()
-    var sm := SphereMesh.new()
-    sm.radius = 0.11
-    sm.height = 0.22
-    mouth.mesh = sm
-    var m := StandardMaterial3D.new()
-    m.albedo_color = Color(0.12, 0.05, 0.04)
-    m.roughness = 0.6
-    mouth.material_override = m
-    mouth.position = MOUTH_POS
-    mouth.scale = Vector3(1.0, 0.18, 0.35)
-    torso.add_child(mouth)
-
-
-const MOUTH_POS := Vector3(0, 0.2, 0.48)       # head-bone space: in front of the face
-
-
-func set_mouth(open: float) -> void:
-    if mouth != null:
-        mouth.scale.y = lerpf(mouth.scale.y, 0.18 + clampf(open, 0.0, 1.0) * 0.75, 0.5)
-
-
 # --------------------------------------------------------- plastic damage ----
 # Hits leave dark, glossy melted blobs stuck to the nearest bone (so they move
 # with the body), and the whole soldier darkens and gets glossier ("wear") as

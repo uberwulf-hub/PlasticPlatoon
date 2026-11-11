@@ -212,15 +212,7 @@ func _cyl(parent: Node3D, pos: Vector3, r: float, h: float, m: Material, rot := 
     return mi
 
 
-# Fallback model: no mouth or damage marks (same interface as plastic_soldier).
-func add_mouth() -> void:
-    pass
-
-
-func set_mouth(_open: float) -> void:
-    pass
-
-
+# Fallback model: no damage marks (same interface as plastic_soldier).
 func damage_mark(_world_pos: Vector3, _explosive := false) -> void:
     pass
 
