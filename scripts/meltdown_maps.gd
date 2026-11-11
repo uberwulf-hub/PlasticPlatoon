@@ -64,6 +64,24 @@ const META := [
         "briefing": "The sleepover is over: the Melties want in. Hold the pillow fort, take back the living room around the sofa and the TV, and dig in by the fireplace.",
         "blurb": "A blanket-and-cushion fort, the living room, and the fireplace den.",
     },
+    {
+        "name": "Model Railway",
+        "location": "The loft - Grandpa's train set",
+        "briefing": "The Melties have taken over Grandpa's model railway. Hold the station platform, fight through the train yard around the parked locomotive and dig in at the engine shed.",
+        "blurb": "A station platform, the train yard with a parked train, and the engine shed.",
+    },
+    {
+        "name": "Birthday Party",
+        "location": "The dining room - the party nobody cleaned up",
+        "briefing": "Cake, balloons and presents everywhere - and the Melties want all of it. Hold the party table, fight through the games room and make your last stand around the bouncy castle.",
+        "blurb": "The party table and cake, a games room full of presents, and the bouncy castle.",
+    },
+    {
+        "name": "Snow Day",
+        "location": "The back yard - school's cancelled",
+        "briefing": "It snowed overnight, and the Melties are slipping in over the drifts. Hold the snow fort, cross the snowman yard and fall back to the sled shed.",
+        "blurb": "A snow fort, a yard full of snowmen, and the sled shed.",
+    },
 ]
 
 
@@ -88,6 +106,12 @@ static func build(i: int, L) -> Dictionary:
             d = _garage(L)
         9:
             d = _pillow_fort(L)
+        10:
+            d = _railway(L)
+        11:
+            d = _party(L)
+        12:
+            d = _snow_day(L)
         _:
             d = _basement(L)
     d["name"] = META[clampi(i, 0, META.size() - 1)]["name"]
@@ -881,6 +905,224 @@ static func _pillow_fort(L) -> Dictionary:
                 {"kind": "crate", "cost": 950, "pos": Vector3(-8, 0, 0), "facing": Vector3(0, 0, 1)},
                 {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(13.55, 0, -24), "facing": Vector3(-1, 0, 0)},
                 {"kind": "press", "cost": 3000, "pos": Vector3(-4, 0, -32), "facing": Vector3(0, 0, 1)},
+            ],
+        },
+    }
+
+
+# ===================================================== MODEL RAILWAY ====
+#   A  Station Platform  z  18..40
+#   B  Train Yard        z -14..18   (a parked train on the tracks; 1000)
+#   C  Engine Shed       z -40..-14  (1250)
+
+static func _railway(L) -> Dictionary:
+    var rooms := [
+        {"id": "A", "x0": -18, "x1": 18, "z0": 18, "z1": 40, "win_s": [-10, 10], "win_w": [29], "win_e": [29], "door_x": 0, "door_cost": 1000},
+        {"id": "B", "x0": -18, "x1": 18, "z0": -14, "z1": 18, "win_w": [2], "win_e": [-6], "door_x": 10, "door_cost": 1250},
+        {"id": "C", "x0": -14, "x1": 14, "z0": -40, "z1": -14, "win_w": [-26], "win_e": [-34], "win_n": [0]},
+    ]
+    _floors(L, rooms, L.tex("grass", Color(0.55, 0.75, 0.45), 5.0), 24, 46,
+        {"A": L.tex("concrete", Color(0.9, 0.88, 0.85), 5.0), "B": L.tex("rock", Color(0.65, 0.6, 0.55), 5.0), "C": L.tex("concrete", Color(0.7, 0.7, 0.72), 5.0)})
+    L.bounds(24, 46)
+    var lay := _rooms(L, rooms, 5.0, L.tex("wall", Color(0.95, 0.85, 0.7), 5.0),
+        {"B": L.tex("wall", Color(0.75, 0.85, 0.7), 5.0), "C": L.tex("table_wood", Color(0.7, 0.5, 0.35), 3.0)})
+    # Platform: yellow edge line, benches, the station clock and the ticket booth.
+    L.box(Vector3(0, 0.05, 19.5), Vector3(36, 0.04, 0.4), Color(0.95, 0.8, 0.1), 0.0, false)
+    for x in [-8.0, 8.0]:
+        L.box(Vector3(x, 0.45, 24), Vector3(3.0, 0.15, 0.8), Color.BROWN, 0.0, true, L.tex("table_wood", Color(0.8, 0.6, 0.4), 1.5))
+        L.box(Vector3(x, 0.8, 24.35), Vector3(3.0, 0.6, 0.1), Color(0.5, 0.35, 0.2), 0.0, false)
+    L.cyl(Vector3(12, 1.6, 30), 0.1, 3.2, Color(0.15, 0.25, 0.15))
+    L.cyl(Vector3(12, 3.4, 30), 0.55, 0.15, Color.WHITE, false, Vector3(PI / 2, 0, 0))
+    L.box(Vector3(-10, 1.2, 21), Vector3(3.0, 2.4, 2.0), Color(0.6, 0.2, 0.2), 0.0, true, L.mat(Color(0.65, 0.2, 0.18), 0.6))
+    # Train yard: two tracks with sleepers, a locomotive and two wagons.
+    var rail: Material = L.mat(Color(0.45, 0.45, 0.48), 0.3, 0.8)
+    var tie: Material = L.mat(Color(0.35, 0.25, 0.18), 0.9)
+    for tx in [-7.0, 5.0]:
+        for off in [-0.7, 0.7]:
+            L.box(Vector3(tx + off, 0.08, 2), Vector3(0.12, 0.12, 31.0), Color.GRAY, 0.0, false, rail)
+        for k in 15:
+            L.box(Vector3(tx, 0.04, -12.5 + k * 2.1), Vector3(2.2, 0.08, 0.4), Color.BROWN, 0.0, false, tie)
+    var loco: Material = L.mat(Color(0.1, 0.35, 0.2), 0.35, 0.4)
+    L.box(Vector3(-7, 1.3, 8), Vector3(2.4, 2.2, 5.0), Color.GREEN, 0.0, true, loco)
+    L.cyl(Vector3(-7, 2.8, 9.5), 0.3, 1.0, Color(0.1, 0.1, 0.1))
+    L.box(Vector3(-7, 2.9, 6.4), Vector3(2.4, 1.0, 1.8), Color.GREEN, 0.0, true, loco)
+    for wz in [1.5, -4.5]:
+        L.box(Vector3(-7, 1.1, wz), Vector3(2.4, 1.8, 4.5), Color(0.6, 0.3, 0.15), 0.0, true, L.mat([Color(0.6, 0.3, 0.15), Color(0.2, 0.3, 0.6)][int(wz < 0)], 0.5))
+    # Engine shed: oil drums, a workbench, a spare wheel set.
+    for p in [Vector3(8, 0, -36), Vector3(9.2, 0, -36.6), Vector3(-8, 0, -37)]:
+        L.cyl(p + Vector3(0, 0.6, 0), 0.5, 1.2, Color(0.2, 0.35, 0.6))
+    L.box(Vector3(-6, 0.9, -15.2), Vector3(5.0, 0.15, 1.6), Color.BROWN, 0.0, true, L.tex("table_wood", Color(0.75, 0.55, 0.4), 2.0))
+    for x in [-1.0, 1.0]:
+        L.cyl(Vector3(x, 0.6, -36), 0.6, 0.2, Color(0.3, 0.3, 0.32), true, Vector3(0, 0, PI / 2))
+    for p in [Vector3(-8, 4.6, 32), Vector3(8, 4.6, 26), Vector3(-10, 4.6, 4), Vector3(8, 4.6, -6), Vector3(-6, 4.6, -24), Vector3(6, 4.6, -34)]:
+        L.lamp(p, Color(1.0, 0.9, 0.75), 18.0, 2.5)
+    return {
+        "spawn": Vector3(0, 0.5, 32), "spawn_yaw": 0.0, "drones": 0, "safe_radius": 0.0,
+        "start_weapons": ["carbine"],
+        "sky_top": Color(0.05, 0.05, 0.1), "sky_horizon": Color(0.18, 0.15, 0.2),
+        "sun_color": Color(0.7, 0.75, 1.0), "sun_energy": 0.35, "sun_rot": Vector3(-55, 70, 0),
+        "fog": 0.008, "ambient": 1.0, "exposure": 1.15,
+        "music": "res://assets/audio/music/determined_pursuit.ogg", "ambience": "res://assets/audio/ambience/clock_tick.ogg", "ambience_db": -14.0,
+        "objectives": [],
+        "meltdown": {
+            "start": "A",
+            "sections": {"A": "STATION PLATFORM", "B": "TRAIN YARD", "C": "ENGINE SHED"},
+            "windows": lay["windows"], "doors": lay["doors"],
+            "stations": [
+                {"kind": "weapon", "weapon": "shotgun", "cost": 500, "pos": Vector3(-17.55, 0, 35), "facing": Vector3(1, 0, 0)},
+                {"kind": "medic", "cost": 300, "pos": Vector3(17.55, 0, 22), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "sniper", "cost": 1000, "pos": Vector3(17.55, 0, 35), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "lmg", "cost": 1250, "pos": Vector3(-17.55, 0, 10), "facing": Vector3(1, 0, 0)},
+                {"kind": "armor", "cost": 400, "pos": Vector3(17.55, 0, 8), "facing": Vector3(-1, 0, 0)},
+                {"kind": "crate", "cost": 950, "pos": Vector3(-13, 0, -6), "facing": Vector3(1, 0, 0)},
+                {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(-13.55, 0, -22), "facing": Vector3(1, 0, 0)},
+                {"kind": "press", "cost": 3000, "pos": Vector3(4, 0, -30), "facing": Vector3(0, 0, 1)},
+            ],
+        },
+    }
+
+
+# ==================================================== BIRTHDAY PARTY ====
+#   A  Party Table     z  14..36
+#   B  Games Room      z -12..14   (presents and a pinata; 750)
+#   C  Bouncy Castle   z -36..-12  (1500)
+
+static func _party(L) -> Dictionary:
+    var rooms := [
+        {"id": "A", "x0": -14, "x1": 14, "z0": 14, "z1": 36, "win_s": [-7, 7], "win_w": [25], "win_e": [20], "door_x": 0, "door_cost": 750},
+        {"id": "B", "x0": -20, "x1": 20, "z0": -12, "z1": 14, "win_w": [6, -6], "win_e": [0], "door_x": -8, "door_cost": 1500},
+        {"id": "C", "x0": -12, "x1": 12, "z0": -36, "z1": -12, "win_w": [-24], "win_e": [-30], "win_n": [0]},
+    ]
+    _floors(L, rooms, L.tex("grass", Color(0.6, 0.8, 0.5), 6.0), 26, 42,
+        {"A": L.tex("wood_floor", Color(1.0, 0.85, 0.7), 8.0), "B": L.tex("carpet", Color(0.8, 1.0, 1.2), 3.0), "C": L.tex("carpet", Color(1.2, 1.1, 0.6), 3.0)})
+    L.bounds(26, 42)
+    var lay := _rooms(L, rooms, 4.6, L.tex("wall", Color(1.0, 0.85, 0.9), 5.0),
+        {"B": L.tex("wall", Color(0.85, 0.95, 1.0), 5.0), "C": L.tex("wall", Color(1.0, 1.0, 0.8), 5.0)})
+    var party := [Color(0.95, 0.3, 0.35), Color(0.3, 0.6, 0.95), Color(0.98, 0.8, 0.2), Color(0.4, 0.85, 0.4), Color(0.8, 0.45, 0.9)]
+    # Party table with the cake (candles lit), cups and hats; balloons above.
+    L.box(Vector3(0, 0.9, 22), Vector3(6.0, 0.15, 2.4), Color.WHITE, 0.0, true, L.mat(Color(0.97, 0.97, 0.97), 0.7))
+    for x in [-2.7, 2.7]:
+        for z in [21.0, 23.0]:
+            L.box(Vector3(x, 0.45, z), Vector3(0.15, 0.9, 0.15), Color(0.6, 0.45, 0.3), 0.0, false)
+    L.cyl(Vector3(0, 1.4, 22), 0.8, 0.85, Color(0.98, 0.7, 0.8), false)
+    L.cyl(Vector3(0, 1.84, 22), 0.82, 0.06, Color(0.98, 0.95, 0.95), false)
+    var flame: Material = L.glow_mat(Color(1.0, 0.7, 0.2), 4.0)
+    for k in 5:
+        var a := k * TAU / 5.0
+        var c := Vector3(cos(a) * 0.45, 0, sin(a) * 0.45) + Vector3(0, 0, 22)
+        L.cyl(c + Vector3(0, 2.05, 0), 0.04, 0.35, party[k], false)
+        L.sphere(c + Vector3(0, 2.27, 0), 0.06, Color.ORANGE, Vector3(1, 1.6, 1), flame)
+    L.lamp(Vector3(0, 2.6, 22), Color(1.0, 0.75, 0.4), 8.0, 1.4, false)
+    for k in 6:
+        L.cyl(Vector3(-2.2 + k * 0.9, 1.25, 23.0 if k % 2 == 0 else 21.0), 0.12, 0.5, party[k % 5], false, Vector3.ZERO, null, 0.0)
+    for k in 9:
+        var bp := Vector3(-10 + (k % 5) * 5.0, 3.5 + (k % 3) * 0.3, 18 + int(k / 5) * 12.0 + (k % 2) * 2.0)
+        L.sphere(bp, 0.45, party[k % 5], Vector3(1, 1.2, 1), L.mat(party[k % 5], 0.25))
+        L.cyl(bp - Vector3(0, 1.1, 0), 0.01, 1.7, Color.WHITE, false)
+    # Games room: stacks of presents, a pinata hanging from the ceiling.
+    for p in [Vector3(12, 0, 8), Vector3(13.4, 0, 9.4), Vector3(-12, 0, -8), Vector3(10, 0, -8)]:
+        var sz := 1.2 + absf(p.x) * 0.03
+        L.box(p + Vector3(0, sz * 0.5, 0), Vector3(sz, sz, sz), party[int(absf(p.x + p.z)) % 5], 0.3, true, L.mat(party[int(absf(p.x + p.z)) % 5], 0.4))
+        L.box(p + Vector3(0, sz * 0.5, 0), Vector3(sz + 0.02, sz + 0.02, 0.15), Color.WHITE, 0.3, false)
+    L.sphere(Vector3(-4, 3.3, 4), 0.7, Color(0.95, 0.5, 0.2), Vector3(1.4, 1.0, 1.0), L.mat(Color(0.95, 0.5, 0.2), 0.8))
+    L.cyl(Vector3(-4, 4.1, 4), 0.02, 0.9, Color.WHITE, false)
+    # Bouncy castle: an inflatable block with turrets in the middle of the room.
+    var vinyl: Material = L.mat(Color(0.95, 0.35, 0.3), 0.3)
+    L.box(Vector3(0, 1.25, -24), Vector3(6.0, 2.5, 6.0), Color.RED, 0.0, true, vinyl)
+    L.box(Vector3(0, 2.6, -24), Vector3(6.2, 0.3, 6.2), Color.BLUE, 0.0, false, L.mat(Color(0.3, 0.5, 0.95), 0.3))
+    for tx in [-3.0, 3.0]:
+        for tz in [-21.0, -27.0]:
+            L.cyl(Vector3(tx, 1.8, tz), 0.8, 3.6, Color.YELLOW, true, Vector3.ZERO, L.mat(Color(0.98, 0.85, 0.2), 0.3))
+            L.sphere(Vector3(tx, 3.7, tz), 0.8, Color.BLUE, Vector3(1, 0.7, 1), L.mat(Color(0.3, 0.5, 0.95), 0.3))
+    for p in [Vector3(-6, 4.2, 30), Vector3(6, 4.2, 18), Vector3(-12, 4.2, 4), Vector3(12, 4.2, -4), Vector3(-6, 4.2, -18), Vector3(6, 4.2, -32)]:
+        L.lamp(p, Color(1.0, 0.92, 0.85), 18.0, 2.5)
+    return {
+        "spawn": Vector3(0, 0.5, 30), "spawn_yaw": 0.0, "drones": 0, "safe_radius": 0.0,
+        "start_weapons": ["carbine"],
+        "sky_top": Color(0.2, 0.35, 0.65), "sky_horizon": Color(0.85, 0.65, 0.55),
+        "sun_color": Color(1.0, 0.75, 0.55), "sun_energy": 0.7, "sun_rot": Vector3(-20, 150, 0),
+        "fog": 0.006, "ambient": 0.9, "exposure": 1.05,
+        "music": "res://assets/audio/music/battle_theme_a.ogg", "ambience": "res://assets/audio/ambience/clock_tick.ogg", "ambience_db": -18.0,
+        "objectives": [],
+        "meltdown": {
+            "start": "A",
+            "sections": {"A": "PARTY TABLE", "B": "GAMES ROOM", "C": "BOUNCY CASTLE"},
+            "windows": lay["windows"], "doors": lay["doors"],
+            "stations": [
+                {"kind": "weapon", "weapon": "shotgun", "cost": 500, "pos": Vector3(-13.55, 0, 31), "facing": Vector3(1, 0, 0)},
+                {"kind": "medic", "cost": 300, "pos": Vector3(13.55, 0, 30), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "lmg", "cost": 1250, "pos": Vector3(19.55, 0, 8), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "sniper", "cost": 1000, "pos": Vector3(19.55, 0, -7), "facing": Vector3(-1, 0, 0)},
+                {"kind": "armor", "cost": 400, "pos": Vector3(-19.55, 0, 0), "facing": Vector3(1, 0, 0)},
+                {"kind": "crate", "cost": 950, "pos": Vector3(6, 0, -3), "facing": Vector3(0, 0, 1)},
+                {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(-11.55, 0, -19), "facing": Vector3(1, 0, 0)},
+                {"kind": "press", "cost": 3000, "pos": Vector3(6, 0, -31), "facing": Vector3(0, 0, 1)},
+            ],
+        },
+    }
+
+
+# ========================================================== SNOW DAY ====
+#   A  Snow Fort      z  16..38   (packed-snow walls)
+#   B  Snowman Yard   z -10..16   (750)
+#   C  Sled Shed      z -38..-10  (1250)
+
+static func _snow_day(L) -> Dictionary:
+    var rooms := [
+        {"id": "A", "x0": -12, "x1": 12, "z0": 16, "z1": 38, "win_s": [0], "win_w": [27], "win_e": [22, 33], "door_x": 4, "door_cost": 750},
+        {"id": "B", "x0": -18, "x1": 18, "z0": -10, "z1": 16, "win_w": [8, -4], "win_e": [2], "door_x": -6, "door_cost": 1250},
+        {"id": "C", "x0": -16, "x1": 16, "z0": -38, "z1": -10, "win_w": [-24], "win_e": [-30], "win_n": [-6, 8]},
+    ]
+    var snow = L.tex("snow", Color(1.0, 1.0, 1.05), 6.0)
+    _floors(L, rooms, snow, 24, 44, {"C": L.tex("wood_floor", Color(0.75, 0.6, 0.45), 8.0)})
+    L.bounds(24, 44)
+    var lay := _rooms(L, rooms, 4.0, L.tex("snow", Color(0.95, 0.97, 1.05), 3.0),
+        {"C": L.tex("table_wood", Color(0.75, 0.5, 0.35), 3.0)})
+    var white: Material = L.mat(Color(0.97, 0.98, 1.0), 0.6)
+    # Snow fort: a pile of snowballs, a little flag.
+    for k in 7:
+        L.sphere(Vector3(-6 + (k % 4) * 0.55, 0.3 + int(k / 4) * 0.45, 20 + (k % 2) * 0.3), 0.3, Color.WHITE, Vector3.ONE, white)
+    L.cyl(Vector3(8, 2.0, 35), 0.05, 4.0, Color(0.4, 0.3, 0.2), false)
+    L.box(Vector3(8.6, 3.6, 35), Vector3(1.2, 0.7, 0.04), Color(0.2, 0.6, 0.25), 0.0, false)
+    # Snowmen: a solid base, two snowballs, coal eyes, a carrot nose, a scarf.
+    for p in [Vector3(8, 0, -4), Vector3(-8, 0, 6), Vector3(4, 0, 9)]:
+        L.cyl(p + Vector3(0, 0.6, 0), 0.9, 1.2, Color.WHITE, true, Vector3.ZERO, white)
+        L.sphere(p + Vector3(0, 1.3, 0), 1.0, Color.WHITE, Vector3.ONE, white)
+        L.sphere(p + Vector3(0, 2.6, 0), 0.7, Color.WHITE, Vector3.ONE, white)
+        L.sphere(p + Vector3(0, 3.5, 0), 0.5, Color.WHITE, Vector3.ONE, white)
+        for ex in [-0.18, 0.18]:
+            L.sphere(p + Vector3(ex, 3.62, 0.45), 0.06, Color(0.05, 0.05, 0.05))
+        L.cyl(p + Vector3(0, 3.48, 0.6), 0.07, 0.4, Color(1.0, 0.5, 0.1), false, Vector3(PI / 2, 0, 0), null, 0.0)
+        L.cyl(p + Vector3(0, 3.05, 0), 0.62, 0.22, Color(0.85, 0.15, 0.15), false)
+    # Sled shed: sleds, skis on the wall, a firewood stack.
+    for x in [-10.0, -7.0]:
+        L.box(Vector3(x, 0.15, -34), Vector3(1.0, 0.15, 2.4), Color(0.8, 0.2, 0.15), 0.0, false)
+    for k in 3:
+        L.box(Vector3(-15.5, 1.6, -14 - k * 0.6), Vector3(0.05, 3.0, 0.15), [Color(0.2, 0.4, 0.9), Color(0.95, 0.8, 0.2), Color(0.3, 0.8, 0.4)][k], 0.0, false)
+    L.box(Vector3(10, 0.6, -14), Vector3(2.0, 1.2, 1.5), Color(0.5, 0.35, 0.2), 0.0, true, L.tex("forest", Color(0.8, 0.6, 0.45), 1.5))
+    for p in [Vector3(0, 3.6, 30), Vector3(-10, 3.6, 4), Vector3(10, 3.6, 2), Vector3(-6, 3.6, -22), Vector3(8, 3.6, -30)]:
+        L.lamp(p, Color(1.0, 0.95, 0.85), 18.0, 1.8)
+    return {
+        "spawn": Vector3(0, 0.5, 30), "spawn_yaw": 0.0, "drones": 0, "safe_radius": 0.0,
+        "start_weapons": ["carbine"],
+        "sky_top": Color(0.55, 0.65, 0.8), "sky_horizon": Color(0.88, 0.9, 0.95),
+        "sun_color": Color(0.95, 0.97, 1.0), "sun_energy": 0.9, "sun_rot": Vector3(-35, 60, 0),
+        "fog": 0.012, "ambient": 1.0, "exposure": 0.95, "snow": true,
+        "music": "res://assets/audio/music/determined_pursuit.ogg", "ambience": "res://assets/audio/ambience/desert_wind.ogg", "ambience_db": -14.0,
+        "objectives": [],
+        "meltdown": {
+            "start": "A",
+            "sections": {"A": "SNOW FORT", "B": "SNOWMAN YARD", "C": "SLED SHED"},
+            "windows": lay["windows"], "doors": lay["doors"],
+            "stations": [
+                {"kind": "weapon", "weapon": "shotgun", "cost": 500, "pos": Vector3(-11.55, 0, 33), "facing": Vector3(1, 0, 0)},
+                {"kind": "medic", "cost": 300, "pos": Vector3(11.55, 0, 28), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "sniper", "cost": 1000, "pos": Vector3(-17.55, 0, 2), "facing": Vector3(1, 0, 0)},
+                {"kind": "weapon", "weapon": "lmg", "cost": 1250, "pos": Vector3(17.55, 0, 10), "facing": Vector3(-1, 0, 0)},
+                {"kind": "armor", "cost": 400, "pos": Vector3(17.55, 0, -5), "facing": Vector3(-1, 0, 0)},
+                {"kind": "crate", "cost": 950, "pos": Vector3(-2, 0, 1), "facing": Vector3(0, 0, 1)},
+                {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(15.55, 0, -20), "facing": Vector3(-1, 0, 0)},
+                {"kind": "press", "cost": 3000, "pos": Vector3(4, 0, -30), "facing": Vector3(0, 0, 1)},
             ],
         },
     }

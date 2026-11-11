@@ -153,7 +153,12 @@ func show_meltdown() -> void:
     grid.columns = 3
     grid.add_theme_constant_override("h_separation", 22)
     grid.add_theme_constant_override("v_separation", 12)
-    vb.add_child(grid)
+    # More maps than fit on one screen: the list scrolls (wheel, drag or touch).
+    var scroll := ScrollContainer.new()
+    scroll.custom_minimum_size = Vector2(1040, 560)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.add_child(grid)
+    vb.add_child(scroll)
     for i in MM.META.size():
         var m: Dictionary = MM.META[i]
         var card := VBoxContainer.new()
