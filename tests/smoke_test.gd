@@ -93,6 +93,8 @@ func _play_level(i: int) -> void:
     await _frames(240)
     _check(p.shots_fired > 0, "L%d weapons fired (%d shots)" % [i, p.shots_fired])
     _safe_zone_test(i, L, p)
+    if i == 0:
+        await _edge_test(L, p)
     if i == 1:
         # Concrete Jungle lag fix: far soldiers/vehicles skip shadows, and flat or
         # small scenery is cheap to draw.
@@ -487,6 +489,29 @@ func _plastic_damage_test(L, p) -> void:
     _check(p.model.damage_marks() == 0 and p.model._wear == 0.0, "L0 healing to full clears the damage")
     p.invulnerable = keep_inv
     p.global_position = keep_pos
+
+
+## The map edge used to be an invisible wall: now a barrier fades in near it,
+## and touching it says so. Also: auto resolution steps down when it's slow.
+func _edge_test(L, p) -> void:
+    var keep: Vector3 = p.global_position
+    var lim: float = L._bounds.y
+    p.global_position = Vector3(20, keep.y + 6.0, -lim + 1.2)
+    p.velocity = Vector3.ZERO
+    await _frames(12)
+    _check(L.edge_alpha > 0.4, "L0 the map edge shows a barrier up close (%.2f)" % L.edge_alpha)
+    _check("EDGE" in L.hud.msg_label.text, "L0 touching the map edge says turn back")
+    p.global_position = keep
+    await _frames(6)
+    _check(L.edge_alpha < 0.01, "L0 the barrier is hidden away from the edge")
+    # Auto resolution: a slow 2 s window drops the 3D scale a step.
+    var was: float = Game.res_scale
+    Game.auto_res = true
+    Game._res_win = 2.5
+    Game._res_frames = 40          # = 16 fps
+    Game._process(0.0)
+    _check(Game.res_scale < was, "auto resolution steps down when the game is slow (%.2f -> %.2f)" % [was, Game.res_scale])
+    Game.apply_graphics()
 
 
 ## Phone controls: the joystick walks, a right-side drag turns, FIRE holds.

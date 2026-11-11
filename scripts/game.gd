@@ -19,6 +19,12 @@ var free_play := false          # tests: ignore the campaign progression (everyt
 const GRAPHICS_NAMES := ["Low", "Medium", "High"]
 var graphics := 1               # 0 low, 1 medium, 2 high (see apply_graphics)
 var fps_cap := 0                # 0 = match the screen (vsync), else a frame cap
+var auto_res := true            # drop the 3D resolution when the frame rate dips
+var res_scale := 1.0            # current 3D resolution scale (auto_res moves it)
+var _res_base := 1.0
+var _res_win := 0.0
+var _res_frames := 0
+var _res_good := 0
 var show_fps := false
 var touch_controls := OS.has_feature("mobile")   # on-screen joystick + buttons
 var touch_mode := false                          # touch controls are in use right now
@@ -132,12 +138,51 @@ func aiming_input() -> bool:
 func apply_graphics() -> void:
     var vp := get_viewport()
     vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][graphics]
-    vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if graphics == 0 else Viewport.SCALING_3D_MODE_BILINEAR
-    vp.scaling_3d_scale = 0.75 if graphics == 0 else 1.0
+    _res_base = 0.75 if graphics == 0 else 1.0
+    res_scale = _res_base
+    _apply_res()
     Engine.max_fps = fps_cap
     DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if fps_cap == 0 else DisplayServer.VSYNC_DISABLED)
     if current_level != null and is_instance_valid(current_level) and current_level.has_method("apply_graphics"):
         current_level.apply_graphics()
+
+
+## FSR upscaling where the renderer has it (Forward+/Mobile), else bilinear.
+func _apply_res() -> void:
+    var vp := get_viewport()
+    var fsr := RenderingServer.get_rendering_device() != null
+    vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if fsr and res_scale < 0.99 else Viewport.SCALING_3D_MODE_BILINEAR
+    vp.scaling_3d_scale = res_scale
+
+
+## Auto resolution: every 2 seconds in a level, if the game ran under ~50 fps,
+## render the 3D view a step smaller (down to 60%); after 8 smooth seconds,
+## step back up. The HUD and menus stay full resolution.
+func _process(delta: float) -> void:
+    if not auto_res or current_level == null or not is_instance_valid(current_level) or get_tree().paused:
+        _res_win = 0.0
+        _res_frames = 0
+        return
+    _res_win += delta
+    _res_frames += 1
+    if _res_win < 2.0:
+        return
+    var fps := _res_frames / _res_win
+    _res_win = 0.0
+    _res_frames = 0
+    var floor_fps: float = 50.0 if fps_cap == 0 or fps_cap >= 60 else fps_cap * 0.85
+    if fps < floor_fps and res_scale > 0.61:
+        res_scale = maxf(0.6, res_scale - 0.1)
+        _res_good = 0
+        _apply_res()
+    elif fps >= floor_fps + 8.0 and res_scale < _res_base:
+        _res_good += 1
+        if _res_good >= 4:
+            _res_good = 0
+            res_scale = minf(_res_base, res_scale + 0.05)
+            _apply_res()
+    else:
+        _res_good = 0
 
 
 func enemy_damage_mult() -> float:
@@ -170,6 +215,7 @@ func save() -> void:
     cfg.set_value("settings", "graphics", graphics)
     cfg.set_value("settings", "fps_cap", fps_cap)
     cfg.set_value("settings", "show_fps", show_fps)
+    cfg.set_value("settings", "auto_res", auto_res)
     cfg.set_value("settings", "touch_controls", touch_controls)
     cfg.set_value("progress", "meltdown_best", meltdown_best)
     cfg.set_value("settings", "music_volume", music_volume)
@@ -195,6 +241,7 @@ func _load() -> void:
     graphics = clampi(cfg.get_value("settings", "graphics", graphics), 0, 2)
     fps_cap = cfg.get_value("settings", "fps_cap", fps_cap)
     show_fps = cfg.get_value("settings", "show_fps", show_fps)
+    auto_res = cfg.get_value("settings", "auto_res", auto_res)
     touch_controls = cfg.get_value("settings", "touch_controls", touch_controls)
     touch_mode = touch_controls
     meltdown_best = cfg.get_value("progress", "meltdown_best", {})

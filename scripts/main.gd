@@ -298,6 +298,9 @@ func show_settings() -> void:
         Game.save()
         show_settings())
     check.call(right, "Show FPS counter (in game)", Game.show_fps, func(on): Game.show_fps = on)
+    check.call(right, "Auto resolution (smooth when busy)", Game.auto_res, func(on):
+        Game.auto_res = on
+        Game.apply_graphics())
     check.call(right, "On-screen touch controls", Game.touch_controls, func(on):
         Game.touch_controls = on
         Game.touch_mode = on)

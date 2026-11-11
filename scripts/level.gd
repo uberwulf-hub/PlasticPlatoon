@@ -741,6 +741,9 @@ func wall(a: Vector3, b: Vector3, h: float, thick: float, color: Color, m: Mater
 
 
 func bounds(half_x: float, half_z: float, y := 0.0) -> void:
+    _bounds = Vector2(half_x, half_z)
+    if level_index < LevelData.MELTDOWN_BASE:
+        _build_edges(half_x, half_z, y)
     for s in [-1.0, 1.0]:
         var w1 := StaticBody3D.new()
         w1.position = Vector3(half_x * s, y + 25.0, 0)
@@ -758,6 +761,77 @@ func bounds(half_x: float, half_z: float, y := 0.0) -> void:
         c2.shape = b2
         w2.add_child(c2)
         add_child(w2)
+
+
+# ------------------------------------------------- edge of the battlefield ----
+# The map's edge used to be an invisible wall (the ground carries on past it).
+# Now a striped barrier fades in as you get close, and touching it says so.
+
+var _bounds := Vector2.ZERO
+var _edges: Array = []            # [MeshInstance3D, axis (0 = x, 1 = z), sign]
+var _edge_mat: StandardMaterial3D
+var _edge_msg_t := 0.0
+var edge_alpha := 0.0             # strongest edge right now (tests read it)
+
+
+func _build_edges(hx: float, hz: float, y: float) -> void:
+    _edge_mat = StandardMaterial3D.new()
+    _edge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    _edge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    _edge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    _edge_mat.albedo_texture = _stripe_texture()
+    _edge_mat.uv1_scale = Vector3(1, 1, 1)
+    _edge_mat.albedo_color = Color(1, 1, 1, 0)
+    for axis in 2:
+        for sgn in [-1.0, 1.0]:
+            var mi := MeshInstance3D.new()
+            var qm := QuadMesh.new()
+            var length: float = (hz if axis == 0 else hx) * 2.0
+            qm.size = Vector2(length, 24.0)          # tall: dunes and hills rise along the edge
+            mi.mesh = qm
+            mi.material_override = _edge_mat.duplicate()
+            mi.material_override.uv1_scale = Vector3(length / 6.0, 4, 1)
+            mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+            mi.position = Vector3(hx * sgn, y + 2.0, 0) if axis == 0 else Vector3(0, y + 2.0, hz * sgn)
+            mi.rotation.y = PI / 2 if axis == 0 else 0.0
+            mi.visible = false
+            add_child(mi)
+            _edges.append([mi, axis, sgn])
+
+
+## Diagonal yellow/black hazard stripes (made once, shared).
+static var _stripes: ImageTexture
+static func _stripe_texture() -> ImageTexture:
+    if _stripes == null:
+        var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+        for px in 64:
+            for py in 64:
+                var band := int((px + py) / 16) % 2 == 0
+                img.set_pixel(px, py, Color(1.0, 0.8, 0.1, 0.9) if band else Color(0.08, 0.08, 0.08, 0.75))
+        _stripes = ImageTexture.create_from_image(img)
+    return _stripes
+
+
+func _update_edges(delta: float) -> void:
+    edge_alpha = 0.0
+    if _edges.is_empty() or player == null:
+        return
+    var who: Node3D = player.vehicle if player.vehicle != null else player
+    var p: Vector3 = who.global_position
+    _edge_msg_t = maxf(0.0, _edge_msg_t - delta)
+    for e in _edges:
+        var mi: MeshInstance3D = e[0]
+        var lim: float = _bounds.x if e[1] == 0 else _bounds.y
+        var coord: float = p.x if e[1] == 0 else p.z
+        var d: float = lim - coord * e[2]                   # metres to this edge
+        var a: float = clampf(1.0 - (d - 1.5) / 10.0, 0.0, 1.0) * 0.6
+        mi.visible = a > 0.01
+        if mi.visible:
+            mi.material_override.albedo_color.a = a
+        edge_alpha = maxf(edge_alpha, a)
+        if d < 2.2 and _edge_msg_t <= 0.0 and hud != null:
+            hud.show_message("EDGE OF THE BATTLEFIELD - TURN BACK", 2.0)
+            _edge_msg_t = 4.0
 
 
 func add_enemy(pos: Vector3, type := "rifleman", hvt := false) -> Node:
@@ -1019,6 +1093,7 @@ func _process(delta: float) -> void:
     if ended:
         return
     elapsed += delta
+    _update_edges(delta)
     _shadow_t -= delta
     if _shadow_t <= 0.0:
         _shadow_t = 0.25
