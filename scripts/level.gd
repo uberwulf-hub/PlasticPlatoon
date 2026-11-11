@@ -75,6 +75,7 @@ func _ready() -> void:
     if _ground_spec != null:
         _build_terrain()
     _build_environment()
+    optimize_static()
     player = Player.new()
     player.level = self
     spawn_point = info["spawn"]
@@ -478,6 +479,82 @@ func apply_graphics() -> void:
 
 
 # ------------------------------------------------------ builder helpers ----
+
+## Cheaper rendering for the level's fixed scenery (not soldiers, vehicles,
+## targets or pickups, which have scripts). Every mesh is drawn once for the
+## camera and again for each shadow split, so:
+##  - flat pieces (road paint, rugs, floor slabs) don't cast shadows nobody
+##    could see;
+##  - small props stop drawing (and shadowing) once they're far enough away to
+##    be a few pixels.
+## Returns how many meshes were changed (tests read it).
+func optimize_static() -> int:
+    var changed := 0
+    for g in find_children("*", "MeshInstance3D", true, false):
+        var mi: MeshInstance3D = g
+        if mi.mesh == null or _is_dynamic(mi):
+            continue
+        var ab: AABB = mi.global_transform * mi.get_aabb()
+        var longest: float = maxf(ab.size.x, maxf(ab.size.y, ab.size.z))
+        var hit := false
+        if ab.size.y < 0.15:
+            mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+            hit = true
+        var reach := 0.0
+        if longest < 1.2:
+            reach = 55.0
+        elif longest < 3.5:
+            reach = 95.0
+        elif ab.size.y < 0.15 and longest < 6.0:
+            reach = 80.0
+        if reach > 0.0:
+            mi.visibility_range_end = reach
+            mi.visibility_range_end_margin = 4.0
+            hit = true
+        if hit:
+            changed += 1
+    return changed
+
+
+## Soldiers and vehicles further than this from the camera stop casting
+## shadows (they're still drawn): each shadow costs a draw per shadow split,
+## and from that far away it's a dot nobody can see.
+const SHADOW_REACH := 45.0
+var _shadow_t := 0.0
+var far_shadow_off := 0           # how many movers had their shadow off last check (tests read it)
+
+
+func _update_far_shadows() -> void:
+    var cam := get_viewport().get_camera_3d()
+    if cam == null:
+        return
+    var eye := cam.global_position
+    far_shadow_off = 0
+    for list in [enemies, enemy_vehicles, vehicles, squad]:
+        for n in list:
+            if not is_instance_valid(n) or not n is Node3D:
+                continue
+            var on: bool = eye.distance_to(n.global_position) < SHADOW_REACH
+            if n.get_meta("shadow_on", true) == on:
+                if not on:
+                    far_shadow_off += 1
+                continue
+            n.set_meta("shadow_on", on)
+            if not on:
+                far_shadow_off += 1
+            var mode := GeometryInstance3D.SHADOW_CASTING_SETTING_ON if on else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+            for g in n.find_children("*", "GeometryInstance3D", true, false):
+                if g is MeshInstance3D:
+                    g.cast_shadow = mode
+
+
+func _is_dynamic(n: Node) -> bool:
+    while n != null and n != self:
+        if n.get_script() != null:
+            return true
+        n = n.get_parent()
+    return false
+
 
 func mat(color: Color, rough := 0.85, metal := 0.0) -> StandardMaterial3D:
     var key := "%s_%s_%s" % [color.to_html(), rough, metal]
@@ -942,6 +1019,10 @@ func _process(delta: float) -> void:
     if ended:
         return
     elapsed += delta
+    _shadow_t -= delta
+    if _shadow_t <= 0.0:
+        _shadow_t = 0.25
+        _update_far_shadows()
     if info.get("distant_booms", false):
         _boom_t -= delta
         if _boom_t <= 0.0:

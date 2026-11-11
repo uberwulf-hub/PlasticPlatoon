@@ -46,6 +46,24 @@ const META := [
         "briefing": "The tide brought the Melties in. Hold the lifeguard hut, take the sandcastle courtyard and fall back down the pier with nowhere left to run.",
         "blurb": "Lifeguard hut, a sandcastle courtyard, and a narrow pier over the sea.",
     },
+    {
+        "name": "Bath Time",
+        "location": "The upstairs bathroom - long after bedtime",
+        "briefing": "The Melties came up the drain. Hold the bathroom, push out across the landing and make your last stand in the kids' bedroom, between the bed and the toy box.",
+        "blurb": "A tiled bathroom with a full tub, the upstairs landing, and the kids' bedroom.",
+    },
+    {
+        "name": "The Garage",
+        "location": "The garage - where Dad keeps the good tools",
+        "briefing": "Something tan is oozing under the garage door. Hold the workbench, fight round the family car and fall back into the paint store.",
+        "blurb": "Dad's workbench, a car bay with the family car in it, and the paint store.",
+    },
+    {
+        "name": "Pillow Fort",
+        "location": "The living room - sleepover night",
+        "briefing": "The sleepover is over: the Melties want in. Hold the pillow fort, take back the living room around the sofa and the TV, and dig in by the fireplace.",
+        "blurb": "A blanket-and-cushion fort, the living room, and the fireplace den.",
+    },
 ]
 
 
@@ -64,6 +82,12 @@ static func build(i: int, L) -> Dictionary:
             d = _school(L)
         6:
             d = _beach_md(L)
+        7:
+            d = _bathroom(L)
+        8:
+            d = _garage(L)
+        9:
+            d = _pillow_fort(L)
         _:
             d = _basement(L)
     d["name"] = META[clampi(i, 0, META.size() - 1)]["name"]
@@ -644,6 +668,219 @@ static func _beach_md(L) -> Dictionary:
                 {"kind": "crate", "cost": 950, "pos": Vector3(-2, 0, 6), "facing": Vector3(0, 0, 1)},
                 {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(-9.55, 0, -28), "facing": Vector3(1, 0, 0)},
                 {"kind": "press", "cost": 3000, "pos": Vector3(3, 0, -22), "facing": Vector3(0, 0, 1)},
+            ],
+        },
+    }
+
+
+# ========================================================= BATH TIME ====
+#   A  Bathroom       z  16..38
+#   B  Landing        z   2..16   (wide and shallow; 750)
+#   C  Kids' Bedroom  z -38..2    (1000)
+
+static func _bathroom(L) -> Dictionary:
+    var rooms := [
+        {"id": "A", "x0": -14, "x1": 14, "z0": 16, "z1": 38, "win_s": [-6, 6], "win_w": [30], "win_e": [22], "door_x": -6, "door_cost": 750},
+        {"id": "B", "x0": -20, "x1": 20, "z0": 2, "z1": 16, "win_w": [9], "win_e": [9], "door_x": 10, "door_cost": 1000},
+        {"id": "C", "x0": -18, "x1": 18, "z0": -38, "z1": 2, "win_w": [-12, -28], "win_e": [-20], "win_n": [-6, 8]},
+    ]
+    var tiles = L.tex("tiles", Color(0.85, 0.95, 1.0), 2.5, 0.3)
+    var carpet = L.tex("carpet", Color(0.55, 0.65, 1.0), 4.0)
+    _floors(L, rooms, L.tex("grass", Color(0.45, 0.55, 0.5), 6.0), 30, 48,
+        {"A": tiles, "B": L.tex("carpet", Color(1.0, 0.85, 0.6), 4.0), "C": carpet})
+    L.bounds(30, 48)
+    var lay := _rooms(L, rooms, 4.6, L.tex("wall", Color(1.0, 0.95, 0.85), 5.0),
+        {"A": L.tex("tiles", Color(0.8, 0.92, 1.0), 2.0, 0.3), "C": L.tex("wall", Color(0.8, 0.88, 1.0), 5.0)})
+    # Bathroom: the tub (still full) with a rubber duck, the loo, the sink, a bath mat.
+    var white: Material = L.mat(Color(0.96, 0.96, 0.98), 0.15)
+    L.box(Vector3(10.5, 0.6, 27), Vector3(5.0, 1.2, 2.6), Color.WHITE, 0.0, true, white)
+    L.water(Vector3(10.5, 1.15, 27), Vector2(4.4, 2.0), Color(0.55, 0.8, 0.95, 0.75))
+    L.sphere(Vector3(9.5, 1.35, 26.6), 0.28, Color(1.0, 0.85, 0.1))
+    L.sphere(Vector3(9.25, 1.6, 26.6), 0.17, Color(1.0, 0.85, 0.1))
+    L.box(Vector3(-11.6, 0.45, 35.5), Vector3(1.2, 0.9, 1.6), Color.WHITE, 0.0, true, white)
+    L.box(Vector3(-11.6, 1.3, 36.6), Vector3(1.4, 1.0, 0.5), Color.WHITE, 0.0, true, white)
+    L.box(Vector3(6, 0.9, 17.2), Vector3(3.0, 1.8, 1.6), Color(0.5, 0.35, 0.25), 0.0, true, L.tex("table_wood", Color(0.8, 0.65, 0.5), 2.0))
+    L.box(Vector3(6, 3.0, 16.45), Vector3(2.4, 1.8, 0.08), Color(0.8, 0.9, 1.0), 0.0, false, L.mat(Color(0.85, 0.92, 1.0), 0.02, 0.9))
+    L.box(Vector3(2, 0.03, 27), Vector3(3.0, 0.06, 2.0), Color(0.4, 0.75, 0.6), 0.0, false)
+    # Landing: a laundry basket and the banister rail.
+    L.cyl(Vector3(-13, 0.7, 12.5), 0.9, 1.4, Color(0.75, 0.6, 0.4))
+    L.box(Vector3(2, 1.0, 3.4), Vector3(10, 0.12, 0.12), Color(0.5, 0.35, 0.25), 0.0, false)
+    # Bedroom: the bed, a toy box, a round rug and a night-light.
+    L.box(Vector3(12, 0.6, -10), Vector3(6.0, 1.2, 8.0), Color(0.4, 0.55, 0.9), 0.0, true, L.tex("carpet", Color(0.6, 0.75, 1.2), 2.0))
+    L.box(Vector3(12, 1.4, -13.5), Vector3(5.0, 0.5, 1.4), Color.WHITE, 0.0, false)
+    L.box(Vector3(12, 1.6, -14.3), Vector3(6.2, 2.0, 0.3), Color(0.5, 0.35, 0.25))
+    L.box(Vector3(-8, 0.6, -6), Vector3(3.0, 1.2, 2.0), Color(0.9, 0.3, 0.3))
+    L.cyl(Vector3(-2, 0.03, -20), 5.0, 0.06, Color(0.95, 0.75, 0.3), false)
+    L.sphere(Vector3(17.2, 1.0, -2.0), 0.25, Color(1.0, 0.85, 0.5), Vector3.ONE, L.glow_mat(Color(1.0, 0.8, 0.45), 3.0))
+    for p in [Vector3(0, 4.2, 27), Vector3(-10, 4.2, 9), Vector3(10, 4.2, 9), Vector3(0, 4.2, -8), Vector3(-6, 4.2, -26), Vector3(10, 4.2, -28)]:
+        L.lamp(p, Color(1.0, 0.92, 0.8), 18.0, 2.4)
+    return {
+        "spawn": Vector3(-2, 0.5, 33), "spawn_yaw": 0.0, "drones": 0, "safe_radius": 0.0,
+        "start_weapons": ["carbine"],
+        "sky_top": Color(0.03, 0.04, 0.1), "sky_horizon": Color(0.12, 0.14, 0.25),
+        "sun_color": Color(0.6, 0.7, 1.0), "sun_energy": 0.3, "sun_rot": Vector3(-55, 40, 0),
+        "fog": 0.008, "ambient": 1.0, "exposure": 1.15,
+        "music": "res://assets/audio/music/determined_pursuit.ogg", "ambience": "res://assets/audio/ambience/clock_tick.ogg", "ambience_db": -14.0,
+        "objectives": [],
+        "meltdown": {
+            "start": "A",
+            "sections": {"A": "BATHROOM", "B": "LANDING", "C": "KIDS' BEDROOM"},
+            "windows": lay["windows"], "doors": lay["doors"],
+            "stations": [
+                {"kind": "weapon", "weapon": "shotgun", "cost": 500, "pos": Vector3(-13.55, 0, 22), "facing": Vector3(1, 0, 0)},
+                {"kind": "medic", "cost": 300, "pos": Vector3(13.55, 0, 33), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "lmg", "cost": 1250, "pos": Vector3(-19.55, 0, 4), "facing": Vector3(1, 0, 0)},
+                {"kind": "weapon", "weapon": "sniper", "cost": 1000, "pos": Vector3(19.55, 0, 14), "facing": Vector3(-1, 0, 0)},
+                {"kind": "crate", "cost": 950, "pos": Vector3(-4, 0, 6), "facing": Vector3(0, 0, 1)},
+                {"kind": "armor", "cost": 400, "pos": Vector3(-17.55, 0, -20), "facing": Vector3(1, 0, 0)},
+                {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(17.55, 0, -32), "facing": Vector3(-1, 0, 0)},
+                {"kind": "press", "cost": 3000, "pos": Vector3(4, 0, -26), "facing": Vector3(0, 0, 1)},
+            ],
+        },
+    }
+
+
+# ======================================================== THE GARAGE ====
+#   A  Workbench    z  16..40
+#   B  Car Bay      z -14..16   (the family car parked in the middle; 750)
+#   C  Paint Store  z -40..-14  (shelving rows; 1250)
+
+static func _garage(L) -> Dictionary:
+    var rooms := [
+        {"id": "A", "x0": -14, "x1": 14, "z0": 16, "z1": 40, "win_s": [-7, 7], "win_w": [28], "win_e": [24], "door_x": 6, "door_cost": 750},
+        {"id": "B", "x0": -22, "x1": 22, "z0": -14, "z1": 16, "win_w": [8, -6], "win_e": [0], "door_x": -10, "door_cost": 1250},
+        {"id": "C", "x0": -16, "x1": 16, "z0": -40, "z1": -14, "win_w": [-26], "win_e": [-34], "win_n": [-6, 6]},
+    ]
+    var concrete = L.tex("concrete", Color(0.8, 0.8, 0.78), 7.0)
+    _floors(L, rooms, L.tex("asphalt", Color(0.55, 0.55, 0.58), 8.0), 32, 46, {"A": concrete, "B": concrete, "C": concrete})
+    L.bounds(32, 46)
+    var lay := _rooms(L, rooms, 5.0, L.tex("concrete", Color(0.75, 0.78, 0.82), 5.0),
+        {"A": L.tex("wall", Color(0.85, 0.8, 0.7), 5.0)})
+    var wood = L.tex("table_wood", Color(0.85, 0.7, 0.5), 2.0)
+    # Workbench, pegboard with tools, the red tool chest.
+    L.box(Vector3(-7, 1.0, 17.4), Vector3(8.0, 0.15, 1.8), Color.BROWN, 0.0, true, wood)
+    for x in [-10.6, -3.4]:
+        L.box(Vector3(x, 0.5, 17.4), Vector3(0.2, 1.0, 1.6), Color.BROWN, 0.0, true, wood)
+    L.box(Vector3(-7, 2.6, 16.45), Vector3(7.0, 2.2, 0.08), Color(0.75, 0.6, 0.4), 0.0, false)
+    for i in 5:
+        L.box(Vector3(-9.6 + i * 1.3, 2.6, 16.55), Vector3(0.15, 1.2, 0.1), [Color(0.8, 0.2, 0.15), Color(0.2, 0.3, 0.8), Color(0.3, 0.3, 0.3)][i % 3], 0.0, false)
+    L.box(Vector3(12, 1.0, 19), Vector3(2.0, 2.0, 2.0), Color(0.8, 0.12, 0.1), 0.0, true, L.mat(Color(0.8, 0.12, 0.1), 0.3, 0.5))
+    # The family car (you can hide behind it), an oil stain, the lawn mower.
+    var paint: Material = L.mat(Color(0.2, 0.35, 0.7), 0.25, 0.6)
+    L.box(Vector3(5, 1.0, 1), Vector3(4.4, 1.2, 9.0), Color.BLUE, 0.0, true, paint)
+    L.box(Vector3(5, 2.1, 0.5), Vector3(3.8, 1.0, 4.6), Color.BLUE, 0.0, true, paint)
+    L.box(Vector3(5, 2.1, 0.5), Vector3(3.9, 0.7, 4.0), Color(0.15, 0.2, 0.25), 0.0, false, L.mat(Color(0.2, 0.28, 0.35), 0.05, 0.6))
+    for wx in [2.75, 7.25]:
+        for wz in [-2.0, 4.0]:
+            L.cyl(Vector3(wx, 0.55, wz), 0.55, 0.5, Color(0.08, 0.08, 0.08), false, Vector3(0, 0, PI / 2))
+    for hz in [5.55, -3.55]:
+        for hx in [3.6, 6.4]:
+            L.box(Vector3(hx, 1.2, hz), Vector3(0.6, 0.25, 0.05), Color(1, 1, 0.8), 0.0, false, L.glow_mat(Color(1.0, 0.95, 0.75), 1.5) if hz > 0 else L.glow_mat(Color(1.0, 0.15, 0.1), 1.5))
+    L.cyl(Vector3(-4, 0.02, 4), 1.4, 0.03, Color(0.05, 0.05, 0.06), false)
+    L.box(Vector3(-14, 0.5, -9), Vector3(1.6, 1.0, 2.2), Color(0.2, 0.55, 0.2))
+    # Paint store: shelving rows with paint tins.
+    for x in [-6.0, 0.0]:
+        L.box(Vector3(x, 1.6, -26), Vector3(1.2, 3.2, 8.0), Color.GRAY, 0.0, true, L.mat(Color(0.5, 0.5, 0.52), 0.4, 0.6))
+        for k in 6:
+            for lvl in 2:
+                L.cyl(Vector3(x, 1.0 + lvl * 1.2, -29 + k * 1.2), 0.3, 0.5, [Color(0.9, 0.2, 0.2), Color(0.2, 0.6, 0.9), Color(0.95, 0.85, 0.2), Color(0.3, 0.75, 0.3)][(k + lvl) % 4], false)
+    var tube: Material = L.glow_mat(Color(0.95, 1.0, 1.0), 2.0)
+    for p in [Vector3(0, 4.7, 30), Vector3(0, 4.7, 21), Vector3(-12, 4.7, 4), Vector3(12, 4.7, 4), Vector3(-6, 4.7, -20), Vector3(6, 4.7, -32)]:
+        L.box(p, Vector3(3.0, 0.12, 0.3), Color.WHITE, 0.0, false, tube)
+        L.lamp(p - Vector3(0, 0.3, 0), Color(0.92, 0.97, 1.0), 18.0, 2.4, false)
+    return {
+        "spawn": Vector3(0, 0.5, 34), "spawn_yaw": 0.0, "drones": 0, "safe_radius": 0.0,
+        "start_weapons": ["carbine"],
+        "sky_top": Color(0.04, 0.04, 0.08), "sky_horizon": Color(0.15, 0.13, 0.18),
+        "sun_color": Color(0.7, 0.75, 1.0), "sun_energy": 0.3, "sun_rot": Vector3(-50, 120, 0),
+        "fog": 0.01, "ambient": 1.0, "exposure": 1.15,
+        "music": "res://assets/audio/music/battle_theme_a.ogg", "ambience": "res://assets/audio/ambience/city_traffic.ogg", "ambience_db": -26.0,
+        "objectives": [],
+        "meltdown": {
+            "start": "A",
+            "sections": {"A": "WORKBENCH", "B": "CAR BAY", "C": "PAINT STORE"},
+            "windows": lay["windows"], "doors": lay["doors"],
+            "stations": [
+                {"kind": "weapon", "weapon": "shotgun", "cost": 500, "pos": Vector3(-13.55, 0, 34), "facing": Vector3(1, 0, 0)},
+                {"kind": "medic", "cost": 300, "pos": Vector3(13.55, 0, 32), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "lmg", "cost": 1250, "pos": Vector3(-21.55, 0, 1), "facing": Vector3(1, 0, 0)},
+                {"kind": "weapon", "weapon": "sniper", "cost": 1000, "pos": Vector3(21.55, 0, 10), "facing": Vector3(-1, 0, 0)},
+                {"kind": "armor", "cost": 400, "pos": Vector3(21.55, 0, -9), "facing": Vector3(-1, 0, 0)},
+                {"kind": "crate", "cost": 950, "pos": Vector3(-10, 0, 9), "facing": Vector3(0, 0, 1)},
+                {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(-15.55, 0, -19), "facing": Vector3(1, 0, 0)},
+                {"kind": "press", "cost": 3000, "pos": Vector3(8, 0, -27), "facing": Vector3(0, 0, 1)},
+            ],
+        },
+    }
+
+
+# ======================================================= PILLOW FORT ====
+#   A  Pillow Fort     z  18..40   (blanket walls)
+#   B  Living Room     z -14..18   (sofa, coffee table, TV; 750)
+#   C  Fireplace Den   z -40..-14  (1250)
+
+static func _pillow_fort(L) -> Dictionary:
+    var rooms := [
+        {"id": "A", "x0": -12, "x1": 12, "z0": 18, "z1": 40, "win_s": [-5, 5], "win_w": [30], "win_e": [26], "door_x": 0, "door_cost": 750},
+        {"id": "B", "x0": -22, "x1": 22, "z0": -14, "z1": 18, "win_w": [10, -6], "win_e": [2], "door_x": 8, "door_cost": 1250},
+        {"id": "C", "x0": -14, "x1": 14, "z0": -40, "z1": -14, "win_w": [-24], "win_e": [-32], "win_n": [-6, 6]},
+    ]
+    var rug = L.tex("carpet", Color(1.1, 0.75, 0.6), 4.0)
+    _floors(L, rooms, L.tex("wood_floor", Color(0.6, 0.48, 0.38), 10.0), 32, 48,
+        {"A": L.tex("carpet", Color(1.0, 0.95, 1.2), 3.0), "B": rug, "C": L.tex("wood_floor", Color(0.9, 0.7, 0.55), 8.0)})
+    L.bounds(32, 48)
+    var lay := _rooms(L, rooms, 4.4, L.tex("wall", Color(0.95, 0.88, 0.75), 5.0),
+        {"A": L.tex("carpet", Color(1.25, 0.6, 0.7), 2.0), "C": L.tex("rock", Color(0.85, 0.75, 0.7), 4.0)})
+    # The fort: a sagging blanket roof, cushions to duck behind, fairy lights.
+    L.box(Vector3(0, 4.3, 29), Vector3(24, 0.1, 22), Color(0.9, 0.5, 0.6), 0.0, false, L.tex("carpet", Color(1.2, 0.65, 0.75), 3.0))
+    for p in [Vector3(-4, 0, 30), Vector3(5, 0, 24), Vector3(-6, 0, 21)]:
+        L.box(p + Vector3(0, 0.45, 0), Vector3(2.4, 0.9, 1.2), Color(0.6, 0.7, 0.95), 0.0, true, L.mat(Color(0.6, 0.7, 0.95), 0.9))
+    var bulb: Material = L.glow_mat(Color(1.0, 0.85, 0.45), 3.0)
+    for i in 11:
+        L.sphere(Vector3(-10 + i * 2.0, 3.8 - absf(sin(i * 0.9)) * 0.3, 39.4), 0.1, Color.YELLOW, Vector3.ONE, bulb)
+    for p in [Vector3(-5, 3.4, 32), Vector3(5, 3.4, 32), Vector3(0, 3.4, 23)]:
+        L.lamp(p, Color(1.0, 0.8, 0.55), 16.0, 2.6)
+    # Living room: the sofa, the coffee table, the TV (still on) and a floor lamp.
+    var sofa: Material = L.mat(Color(0.3, 0.45, 0.35), 0.9)
+    L.box(Vector3(6, 0.5, 8), Vector3(8.0, 1.0, 2.4), Color.GREEN, 0.0, true, sofa)
+    L.box(Vector3(6, 1.3, 9.0), Vector3(8.0, 1.2, 0.6), Color.GREEN, 0.0, true, sofa)
+    L.box(Vector3(6, 0.45, 2), Vector3(3.0, 0.12, 1.8), Color.BROWN, 0.0, true, L.tex("table_wood", Color(0.8, 0.6, 0.45), 2.0))
+    L.box(Vector3(6, 0.4, -10), Vector3(6.0, 0.8, 1.4), Color(0.25, 0.2, 0.18))
+    L.box(Vector3(6, 2.3, -10), Vector3(5.0, 2.8, 0.2), Color(0.05, 0.05, 0.06), 0.0, true)
+    L.box(Vector3(6, 2.3, -9.88), Vector3(4.6, 2.4, 0.05), Color.WHITE, 0.0, false, L.glow_mat(Color(0.35, 0.55, 0.95), 1.4))
+    L.cyl(Vector3(-16, 1.4, 14), 0.08, 2.8, Color(0.3, 0.3, 0.3), false)
+    L.sphere(Vector3(-16, 2.9, 14), 0.45, Color.WHITE, Vector3.ONE, L.glow_mat(Color(1.0, 0.85, 0.6), 1.5))
+    L.lamp(Vector3(-16, 2.6, 14), Color(1.0, 0.8, 0.55), 12.0, 1.6, false)
+    # Den: the fireplace (lit), an armchair, a bookcase.
+    L.box(Vector3(0, 1.4, -39.0), Vector3(4.6, 2.8, 1.4), Color(0.5, 0.3, 0.25), 0.0, true, L.tex("rock", Color(0.8, 0.55, 0.45), 2.0))
+    L.box(Vector3(0, 0.7, -38.25), Vector3(2.4, 1.2, 0.1), Color(1, 0.5, 0.1), 0.0, false, L.glow_mat(Color(1.0, 0.45, 0.1), 3.0))
+    L.lamp(Vector3(0, 1.0, -37), Color(1.0, 0.55, 0.2), 14.0, 2.5, false)
+    L.box(Vector3(-8, 0.6, -24), Vector3(2.2, 1.2, 2.2), Color(0.55, 0.2, 0.2))
+    L.box(Vector3(-8, 1.5, -25), Vector3(2.2, 1.4, 0.4), Color(0.55, 0.2, 0.2))
+    L.box(Vector3(-9, 1.6, -15.0), Vector3(5.0, 3.2, 1.0), Color.BROWN, 0.0, true, L.tex("table_wood", Color(0.7, 0.5, 0.35), 2.0))
+    for p in [Vector3(-6, 3.8, 6), Vector3(14, 3.8, 0), Vector3(-12, 3.8, -8), Vector3(-6, 3.8, -30), Vector3(8, 3.8, -28)]:
+        L.lamp(p, Color(1.0, 0.85, 0.65), 18.0, 2.2)
+    return {
+        "spawn": Vector3(0, 0.5, 35), "spawn_yaw": 0.0, "drones": 0, "safe_radius": 0.0,
+        "start_weapons": ["carbine"],
+        "sky_top": Color(0.03, 0.03, 0.08), "sky_horizon": Color(0.12, 0.1, 0.2),
+        "sun_color": Color(0.65, 0.7, 1.0), "sun_energy": 0.3, "sun_rot": Vector3(-60, 210, 0),
+        "fog": 0.008, "ambient": 0.9, "exposure": 1.15,
+        "music": "res://assets/audio/music/war_theme.ogg", "ambience": "res://assets/audio/ambience/clock_tick.ogg", "ambience_db": -16.0,
+        "objectives": [],
+        "meltdown": {
+            "start": "A",
+            "sections": {"A": "PILLOW FORT", "B": "LIVING ROOM", "C": "FIREPLACE DEN"},
+            "windows": lay["windows"], "doors": lay["doors"],
+            "stations": [
+                {"kind": "weapon", "weapon": "shotgun", "cost": 500, "pos": Vector3(-11.55, 0, 23), "facing": Vector3(1, 0, 0)},
+                {"kind": "medic", "cost": 300, "pos": Vector3(11.55, 0, 34), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "lmg", "cost": 1250, "pos": Vector3(-21.55, 0, 2), "facing": Vector3(1, 0, 0)},
+                {"kind": "weapon", "weapon": "sniper", "cost": 1000, "pos": Vector3(21.55, 0, 12), "facing": Vector3(-1, 0, 0)},
+                {"kind": "armor", "cost": 400, "pos": Vector3(21.55, 0, -8), "facing": Vector3(-1, 0, 0)},
+                {"kind": "crate", "cost": 950, "pos": Vector3(-8, 0, 0), "facing": Vector3(0, 0, 1)},
+                {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(13.55, 0, -24), "facing": Vector3(-1, 0, 0)},
+                {"kind": "press", "cost": 3000, "pos": Vector3(-4, 0, -32), "facing": Vector3(0, 0, 1)},
             ],
         },
     }

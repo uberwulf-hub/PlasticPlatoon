@@ -93,6 +93,11 @@ func _play_level(i: int) -> void:
     await _frames(240)
     _check(p.shots_fired > 0, "L%d weapons fired (%d shots)" % [i, p.shots_fired])
     _safe_zone_test(i, L, p)
+    if i == 1:
+        # Concrete Jungle lag fix: far soldiers/vehicles skip shadows, and flat or
+        # small scenery is cheap to draw.
+        _check(L.far_shadow_off > 5, "L1 distant soldiers and vehicles skip shadows (%d)" % L.far_shadow_off)
+        _check(L.optimize_static() > 100, "L1 small and flat scenery is optimised")
     if i == 0:
         await _plastic_damage_test(L, p)
         await _touch_test(L, p)
