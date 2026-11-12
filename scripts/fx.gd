@@ -45,7 +45,28 @@ static func tracer(root: Node, from: Vector3, to: Vector3, color: Color) -> void
     tw.tween_callback(mi.queue_free)
 
 
+## Every shot used to make a real light. Now only flashes near the camera get
+## one, and at most MAX_FLASH_LIGHTS at a time; the rest are just the glow ball.
+const MAX_FLASH_LIGHTS := 4
+static var _flash_lights := 0
+
+
 static func muzzle_flash(root: Node, pos: Vector3) -> void:
+    var cam: Camera3D = root.get_viewport().get_camera_3d() if root.is_inside_tree() else null
+    var near: bool = cam != null and cam.global_position.distance_to(pos) < 25.0
+    if not near or _flash_lights >= MAX_FLASH_LIGHTS:
+        var ball := MeshInstance3D.new()
+        var bs := SphereMesh.new()
+        bs.radius = 0.12
+        bs.height = 0.24
+        ball.mesh = bs
+        ball.material_override = unlit(Color(1.0, 0.85, 0.4, 0.9))
+        ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        root.add_child(ball)
+        ball.global_position = pos
+        ball.create_tween().tween_callback(ball.queue_free).set_delay(0.05)
+        return
+    _flash_lights += 1
     var l := OmniLight3D.new()
     l.light_color = Color(1.0, 0.75, 0.35)
     l.light_energy = 3.0
@@ -59,6 +80,7 @@ static func muzzle_flash(root: Node, pos: Vector3) -> void:
     mi.mesh = sm
     mi.material_override = unlit(Color(1.0, 0.85, 0.4, 0.9))
     l.add_child(mi)
+    l.tree_exiting.connect(func(): _flash_lights = maxi(0, _flash_lights - 1))
     l.create_tween().tween_callback(l.queue_free).set_delay(0.05)
 
 
@@ -119,12 +141,12 @@ static func explosion(root: Node, pos: Vector3, radius: float) -> void:
     smoke.material_override = smm
     smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     n.add_child(smoke)
-    smoke.scale = Vector3.ONE * radius * 0.5
+    smoke.scale = Vector3.ONE * minf(radius * 0.5, 2.0)
 
     var light := OmniLight3D.new()
     light.light_color = Color(1.0, 0.6, 0.25)
     light.light_energy = 10.0
-    light.omni_range = radius * 3.5
+    light.omni_range = minf(radius * 3.5, 14.0)
     n.add_child(light)
 
     var debris := CPUParticles3D.new()
@@ -134,7 +156,7 @@ static func explosion(root: Node, pos: Vector3, radius: float) -> void:
     var dmat := StandardMaterial3D.new()
     dmat.albedo_color = Color(0.25, 0.22, 0.18)
     dm.material = dmat
-    debris.amount = 28
+    debris.amount = 16
     debris.lifetime = 1.4
     debris.one_shot = true
     debris.explosiveness = 1.0
@@ -152,14 +174,22 @@ static func explosion(root: Node, pos: Vector3, radius: float) -> void:
     tw.tween_property(fire, "scale", Vector3.ONE * radius * 1.4, 0.3).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
     tw.tween_property(fm, "albedo_color", Color(1.0, 0.35, 0.1, 0.0), 0.55)
     tw.tween_property(smm, "albedo_color:a", 0.4, 0.3).set_delay(0.15)
-    tw.tween_property(smoke, "scale", Vector3.ONE * radius * 1.2, 2.0).set_delay(0.15)
+    tw.tween_property(smoke, "scale", Vector3.ONE * minf(radius * 1.2, 4.5), 2.0).set_delay(0.15)
     tw.tween_property(smoke, "position:y", radius * 1.2, 2.0).set_delay(0.15)
     tw.tween_property(smm, "albedo_color:a", 0.0, 1.1).set_delay(0.5)
     tw.tween_property(light, "light_energy", 0.0, 0.6)
     tw.tween_callback(n.queue_free).set_delay(2.2)
 
 
-static func fire(root: Node, pos: Vector3, size := 1.0) -> CPUParticles3D:
+## Burning wrecks used to burn forever, and every one is a cloud of see-through
+## particles (costly to draw). Now each fire dies down after `life` seconds
+## (0 = keep burning, e.g. a camp fire), and only MAX_FIRES burn at once: the
+## oldest dies down early when a new one starts.
+const MAX_FIRES := 4
+static var _fires: Array = []
+
+
+static func fire(root: Node, pos: Vector3, size := 1.0, life := 25.0) -> CPUParticles3D:
     var p := CPUParticles3D.new()
     var sm := SphereMesh.new()
     sm.radius = 0.35 * size
@@ -172,7 +202,7 @@ static func fire(root: Node, pos: Vector3, size := 1.0) -> CPUParticles3D:
     m.vertex_color_use_as_albedo = true
     sm.material = m
     p.mesh = sm
-    p.amount = 24
+    p.amount = 16
     p.lifetime = 1.2
     p.direction = Vector3.UP
     p.spread = 15.0
@@ -189,4 +219,30 @@ static func fire(root: Node, pos: Vector3, size := 1.0) -> CPUParticles3D:
     root.add_child(p)
     p.global_position = pos
     p.emitting = true
+    if life > 0.0:
+        _fires = _fires.filter(func(f): return is_instance_valid(f) and not f.has_meta("dying"))
+        _fires.append(p)
+        if _fires.size() > MAX_FIRES:
+            die_down(_fires.pop_front(), 0.0)
+        die_down(p, life)
     return p
+
+
+## The fire shrinks to nothing over 4 s (after `delay`), then is removed.
+static func die_down(p: CPUParticles3D, delay: float) -> void:
+    if not is_instance_valid(p) or p.has_meta("dying"):
+        return
+    p.set_meta("dying", delay <= 0.0)
+    var tw := p.create_tween()
+    tw.tween_interval(delay)
+    tw.tween_callback(func(): p.set_meta("dying", true))
+    tw.tween_property(p, "scale_amount_max", 0.0, 4.0)
+    tw.parallel().tween_property(p, "scale_amount_min", 0.0, 4.0)
+    tw.tween_callback(func(): p.emitting = false)
+    tw.tween_interval(p.lifetime + 0.2)
+    tw.tween_callback(p.queue_free)
+
+
+## Fires still burning (tests read it).
+static func fires_burning() -> int:
+    return _fires.filter(func(f): return is_instance_valid(f) and not f.has_meta("dying")).size()

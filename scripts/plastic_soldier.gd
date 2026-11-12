@@ -224,7 +224,16 @@ var _mark_mat: StandardMaterial3D
 var _wear := 0.0
 
 
+## Damage marks are switched off: stuck-on dark blobs didn't sit on the
+## plastic properly (they floated off the body, one even ended up by the feet).
+## Damage shows through set_wear() on the plastic itself until a proper,
+## designed damage look replaces it. Kept so callers don't change.
+const MARKS_ENABLED := false
+
+
 func damage_mark(world_pos: Vector3, explosive := false) -> void:
+    if not MARKS_ENABLED:
+        return
     if skeleton == null or _dead or not is_inside_tree():
         return
     var best := -1

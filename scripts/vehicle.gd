@@ -40,6 +40,21 @@ const KINDS := {
         # Door gunners: two each side, sitting in the open doorways.
         "seats": [Vector3(-0.62, 0.93, -0.35), Vector3(0.62, 0.93, -0.35), Vector3(-0.62, 0.93, 0.95), Vector3(0.62, 0.93, 0.95)],
     },
+    # Civilian rides found on the streets: no guns, just fast.
+    "car": {
+        "name": "CAR (UNARMED, 3 SEATS)", "hp": 260.0, "bullet_armor": 1.0,
+        "max_speed": 28.0, "reverse": 9.0, "accel": 16.0, "turn": 2.3, "pivot_turn": false,
+        "size": Vector3(2.0, 1.4, 4.4), "cam_height": 2.4, "cam_dist": 7.5,
+        "primary": "none", "primary_interval": 1.0, "primary_damage": 0.0,
+        "seats": [Vector3(0.45, 0.62, 0.05), Vector3(-0.45, 0.62, 1.25), Vector3(0.45, 0.62, 1.25)],
+    },
+    "bike": {
+        "name": "MOTORBIKE (UNARMED)", "hp": 140.0, "bullet_armor": 1.0,
+        "max_speed": 34.0, "reverse": 6.0, "accel": 22.0, "turn": 2.9, "pivot_turn": false,
+        "size": Vector3(0.9, 1.4, 2.2), "cam_height": 2.2, "cam_dist": 6.0,
+        "primary": "none", "primary_interval": 1.0, "primary_damage": 0.0,
+        "seats": [],
+    },
     "tank": {
         "name": "TANK (120MM + COAX MG)", "hp": 1000.0, "bullet_armor": 0.15,
         "max_speed": 9.5, "reverse": 5.0, "accel": 6.0, "turn": 1.1, "pivot_turn": true,
@@ -130,6 +145,10 @@ var _net_barrel := 0.0
 var _net_have := false
 
 
+var rider: Node3D                 # motorbike: a soldier shown riding it while driven
+var _last_yaw := 0.0
+
+
 func setup(lvl: Node, kd: String, pos: Vector3, rot_y := 0.0, tm := "green") -> void:
     level = lvl
     kind = kd
@@ -167,6 +186,10 @@ func _ready() -> void:
         "heli":
             _build_heli()
             floor_snap_length = 0.0
+        "car":
+            _build_car()
+        "bike":
+            _build_bike()
         _:
             _build_jeep()
     passengers.resize(k.get("seats", []).size())
@@ -260,6 +283,83 @@ func _build_jeep() -> void:
     _box(barrel, Vector3(0, -0.05, 0.35), Vector3(0.5, 0.35, 0.06), dark)       # gun shield
     muzzle = Node3D.new()
     muzzle.position = Vector3(0, 0.02, -1.55)
+    barrel.add_child(muzzle)
+
+
+## A toy convertible (open top, so riders fit): no gun.
+func _build_car() -> void:
+    var body := _mat(body_color)
+    var dark := _mat(Color(0.12, 0.12, 0.13))
+    var chrome := _mat(Color(0.8, 0.8, 0.82))
+    var glass := StandardMaterial3D.new()
+    glass.albedo_color = Color(0.6, 0.75, 0.85, 0.45)
+    glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    glass.roughness = 0.05
+    _box(self, Vector3(0, 0.62, 0), Vector3(1.95, 0.5, 4.3), body)              # body
+    _box(self, Vector3(0, 0.95, -1.45), Vector3(1.85, 0.2, 1.3), body)          # bonnet
+    _box(self, Vector3(0, 0.95, 1.75), Vector3(1.85, 0.2, 0.8), body)           # boot
+    for x in [-0.93, 0.93]:
+        _box(self, Vector3(x, 0.98, 0.45), Vector3(0.1, 0.25, 1.9), body)       # door tops
+    _box(self, Vector3(0, 1.3, -0.75), Vector3(1.75, 0.55, 0.06), glass, Vector3(-0.35, 0, 0))   # windscreen
+    _box(self, Vector3(-0.45, 0.85, 0.05), Vector3(0.7, 0.3, 0.7), dark)         # seats
+    _box(self, Vector3(0.45, 0.85, 0.05), Vector3(0.7, 0.3, 0.7), dark)
+    _box(self, Vector3(0, 0.85, 1.25), Vector3(1.6, 0.3, 0.7), dark)
+    _cyl(self, Vector3(-0.45, 1.05, -0.45), 0.2, 0.06, dark, Vector3(PI / 2 - 0.4, 0, 0))   # wheel
+    _box(self, Vector3(0, 0.55, -2.17), Vector3(1.9, 0.18, 0.08), chrome)        # bumpers
+    _box(self, Vector3(0, 0.55, 2.17), Vector3(1.9, 0.18, 0.08), chrome)
+    var lamp := StandardMaterial3D.new()
+    lamp.albedo_color = Color(1.0, 0.95, 0.75)
+    lamp.emission_enabled = true
+    lamp.emission = Color(1.0, 0.95, 0.75)
+    for x in [-0.65, 0.65]:
+        _box(self, Vector3(x, 0.75, -2.16), Vector3(0.35, 0.18, 0.06), lamp)
+    for x in [-0.98, 0.98]:
+        for z in [-1.35, 1.4]:
+            _cyl(self, Vector3(x, 0.4, z), 0.4, 0.3, dark, Vector3(0, 0, PI / 2))
+            _cyl(self, Vector3(x * 1.01, 0.4, z), 0.2, 0.31, chrome, Vector3(0, 0, PI / 2))
+    _no_gun()
+
+
+## A toy motorbike; a green soldier rides it while you drive.
+func _build_bike() -> void:
+    visual = Node3D.new()
+    add_child(visual)
+    var body := _mat(body_color)
+    var dark := _mat(Color(0.1, 0.1, 0.11))
+    var chrome := _mat(Color(0.82, 0.82, 0.85))
+    for z in [-0.78, 0.78]:
+        _cyl(visual, Vector3(0, 0.42, z), 0.42, 0.16, dark, Vector3(0, 0, PI / 2))
+        _cyl(visual, Vector3(0, 0.42, z), 0.2, 0.17, chrome, Vector3(0, 0, PI / 2))
+    _box(visual, Vector3(0, 0.62, 0), Vector3(0.22, 0.2, 1.4), chrome, Vector3(0.25, 0, 0))   # frame
+    _box(visual, Vector3(0, 0.95, -0.25), Vector3(0.42, 0.3, 0.7), body)        # tank
+    _box(visual, Vector3(0, 0.92, 0.42), Vector3(0.36, 0.14, 0.7), dark)        # seat
+    _box(visual, Vector3(0, 0.62, 0.15), Vector3(0.36, 0.3, 0.5), dark)         # engine
+    _cyl(visual, Vector3(0, 0.88, -0.72), 0.04, 0.8, chrome, Vector3(-0.35, 0, 0))   # forks
+    _cyl(visual, Vector3(0, 1.25, -0.6), 0.03, 0.8, chrome, Vector3(0, 0, PI / 2))   # handlebar
+    _box(visual, Vector3(0, 0.62, 0.9), Vector3(0.3, 0.06, 0.5), body)          # rear mudguard
+    var lamp := StandardMaterial3D.new()
+    lamp.albedo_color = Color(1.0, 0.95, 0.75)
+    lamp.emission_enabled = true
+    lamp.emission = Color(1.0, 0.95, 0.75)
+    _cyl(visual, Vector3(0, 1.1, -0.85), 0.11, 0.08, lamp, Vector3(PI / 2, 0, 0))
+    var Soldier = load("res://scripts/plastic_soldier.gd")
+    rider = Soldier.create()
+    visual.add_child(rider)
+    rider.build(GREEN, "none")
+    rider.position = Vector3(0, 0.42, 0.25)
+    rider.visible = false
+    _no_gun()
+
+
+## Unarmed vehicles still get the aim nodes the camera/turret code expects.
+func _no_gun() -> void:
+    turret = Node3D.new()
+    turret.position = Vector3(0, 1.5, 0)
+    add_child(turret)
+    barrel = Node3D.new()
+    turret.add_child(barrel)
+    muzzle = Node3D.new()
+    muzzle.position = Vector3(0, 0, -1.0)
     barrel.add_child(muzzle)
 
 
@@ -513,6 +613,8 @@ func enter(p) -> void:
     driver = p
     p.vehicle = self
     p.visible = false
+    if rider:
+        rider.visible = true
     p.collision_layer = 0
     p.collision_mask = 0
     collision_layer = 2          # enemies shoot at the occupied vehicle like the player
@@ -524,7 +626,8 @@ func enter(p) -> void:
     engine.play()
     Game.play_ui("ui_confirm", -6.0)
     var extra := ", RMB coax MG" if kind == "tank" else (", RMB rockets, Space/C climb/descend" if kind == "heli" else "")
-    level.notify("%s  -  %s, mouse aim, LMB fire%s, E to exit%s" % [k["name"], "WASD fly" if kind == "heli" else "WASD drive", extra,
+    var aim := "mouse look" if k["primary"] == "none" else "mouse aim, LMB fire"
+    level.notify("%s  -  %s, %s%s, E to exit%s" % [k["name"], "WASD fly" if kind == "heli" else "WASD drive", aim, extra,
         "  (squad climbs aboard)" if not level.squad.is_empty() and not passengers.is_empty() else ""], 3.0)
 
 
@@ -533,6 +636,8 @@ func exit_vehicle() -> void:
         return
     var p = driver
     driver = null
+    if rider:
+        rider.visible = false
     if level.net != null and occupant_peer == multiplayer.get_unique_id():
         level.net.release_vehicle(level.vehicles.find(self))
     p.vehicle = null
@@ -620,6 +725,12 @@ func _physics_process(delta: float) -> void:
     fire_cd = maxf(0.0, fire_cd - delta)
     fire2_cd = maxf(0.0, fire2_cd - delta)
     _enter_cd = maxf(0.0, _enter_cd - delta)
+    if kind == "bike" and visual:
+        # Lean into turns, more the faster it goes.
+        var yaw_rate := angle_difference(_last_yaw, rotation.y) / maxf(delta, 0.001)
+        _last_yaw = rotation.y
+        var lean := clampf(-yaw_rate * absf(speed) / 40.0, -0.45, 0.45)
+        visual.rotation.z = lerpf(visual.rotation.z, lean, minf(1.0, delta * 6.0))
     var throttle := 0.0
     var steer := 0.0
     if ai and alive:
@@ -749,7 +860,7 @@ func _aim_point() -> Vector3:
 
 
 func fire_primary() -> void:
-    if fire_cd > 0.0 or not alive:
+    if fire_cd > 0.0 or not alive or k["primary"] == "none":
         return
     if not ai and driver:
         driver.last_fire_ms = Time.get_ticks_msec()

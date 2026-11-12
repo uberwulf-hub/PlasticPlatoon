@@ -95,9 +95,11 @@ func _play_level(i: int) -> void:
     _safe_zone_test(i, L, p)
     if i == 0:
         await _edge_test(L, p)
+        await _fx_budget_test(L)
     if i == 1:
         # Concrete Jungle lag fix: far soldiers/vehicles skip shadows, and flat or
         # small scenery is cheap to draw.
+        await _street_vehicle_test(L, p)
         _check(L.far_shadow_off > 5, "L1 distant soldiers and vehicles skip shadows (%d)" % L.far_shadow_off)
         _check(L.optimize_static() > 100, "L1 small and flat scenery is optimised")
     if i == 0:
@@ -203,7 +205,8 @@ func _vehicle_test(i: int, L, p) -> void:
     # Pause Tan vehicles so they can't wander over and block this driving check.
     for t in L.enemy_vehicles:
         t.set_physics_process(false)
-    for v in L.vehicles.duplicate():
+    # Street cars/bikes are unarmed and have their own test (_street_vehicle_test).
+    for v in L.vehicles.filter(func(x): return not ["car", "bike"].has(x.kind)):
         var side: Vector3 = v.global_transform.basis.x
         p.global_position = v.global_position - side * (v.k["size"].x * 0.5 + 1.2) + Vector3(0, 0.3, 0)
         await _frames(3)
@@ -477,13 +480,13 @@ func _plastic_damage_test(L, p) -> void:
             break
     var m0: int = e.model.damage_marks()
     e.take_damage(1.0, p.global_position, e.global_position + Vector3(0.2, 1.2, 0.3), false)
-    _check(e.model.damage_marks() == m0 + 1 and e.model._wear > 0.0, "L0 a hit leaves a melted mark on a Tan soldier")
+    _check(e.model.damage_marks() == m0 and e.model._wear > 0.0, "L0 a hit wears the Tan soldier's plastic (no stuck-on blobs)")
     var keep_inv: bool = p.invulnerable
     var keep_pos: Vector3 = p.global_position
     p.global_position = L.safe_center + Vector3(L.safe_radius + 12.0, 0.5, 0)
     p.invulnerable = false
     p.take_damage(20.0, e.global_position, Vector3.ZERO, true)
-    _check(p.model.damage_marks() >= 1 and p.model._wear > 0.0, "L0 the player's plastic shows damage")
+    _check(p.model.damage_marks() == 0 and p.model._wear > 0.0, "L0 the player's plastic shows damage")
     p.health = p.max_health - 5.0
     p.give_pickup("health")
     _check(p.model.damage_marks() == 0 and p.model._wear == 0.0, "L0 healing to full clears the damage")
@@ -512,6 +515,43 @@ func _edge_test(L, p) -> void:
     Game._process(0.0)
     _check(Game.res_scale < was, "auto resolution steps down when the game is slow (%.2f -> %.2f)" % [was, Game.res_scale])
     Game.apply_graphics()
+
+
+## Street cars and motorbikes can be driven (unarmed), on any operation.
+func _street_vehicle_test(L, p) -> void:
+    var cars: Array = L.vehicles.filter(func(v): return v.kind == "car")
+    var bikes: Array = L.vehicles.filter(func(v): return v.kind == "bike")
+    _check(cars.size() >= 8 and bikes.size() >= 4, "L1 drivable street cars (%d) and motorbikes (%d)" % [cars.size(), bikes.size()])
+    var b = bikes[0]
+    var keep: Vector3 = p.global_position
+    b.enter(p)
+    _check(p.vehicle == b and b.rider.visible, "L1 a soldier rides the motorbike")
+    b.drive_input = Vector2(0, -1)
+    var start: Vector3 = b.global_position
+    await _frames(40)
+    _check(b.global_position.distance_to(start) > 3.0, "L1 the motorbike drives")
+    var shots: int = b.ai_shots
+    b.fire_cd = 0.0
+    b.fire_primary()
+    _check(b.fire_cd == 0.0, "L1 street vehicles have no gun")
+    b.drive_input = null
+    b.exit_vehicle()
+    _check(p.vehicle == null and not b.rider.visible, "L1 getting off the motorbike")
+    p.global_position = keep
+    await _frames(5)
+
+
+## Lag fixes: fires die down and only a few burn at once; effects are
+## prepared at level start.
+func _fx_budget_test(L) -> void:
+    var Fx = load("res://scripts/fx.gd")
+    _check(L.fx_prewarmed, "effects are prepared at level start")
+    for k in 7:
+        Fx.fire(L, Vector3(k * 3.0, 1, 60), 1.0)
+    _check(Fx.fires_burning() <= Fx.MAX_FIRES, "at most %d fires burn at once (%d)" % [Fx.MAX_FIRES, Fx.fires_burning()])
+    var f = Fx.fire(L, Vector3(0, 1, 64), 1.0, 0.2)
+    await get_tree().create_timer(5.5).timeout
+    _check(not is_instance_valid(f) or not f.emitting, "a fire dies down after its time")
 
 
 ## Phone controls: the joystick walks, a right-side drag turns, FIRE holds.

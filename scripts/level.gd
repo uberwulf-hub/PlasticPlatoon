@@ -97,6 +97,7 @@ func _ready() -> void:
         _add_snowfall()
     hud = HUD.new()
     add_child(hud)
+    get_tree().create_timer(0.4).timeout.connect(_prewarm_fx)
     var touch = TouchControls.new()
     touch.setup(self)
     add_child(touch)
@@ -479,6 +480,28 @@ func apply_graphics() -> void:
 
 
 # ------------------------------------------------------ builder helpers ----
+
+## Plays one of every effect hidden under the ground in front of the camera,
+## while the level title is up. On desktop graphics, the first time an effect
+## is drawn its shaders get prepared on the spot (a hitch mid-firefight);
+## this gets that done up front.
+var fx_prewarmed := false
+
+
+func _prewarm_fx() -> void:
+    if not is_inside_tree():
+        return
+    var cam := get_viewport().get_camera_3d()
+    if cam == null:
+        return
+    var p := cam.global_position - cam.global_transform.basis.z * 6.0 + Vector3(0, -6.0, 0)
+    Fx.explosion(self, p, 2.0)
+    Fx.die_down(Fx.fire(self, p, 0.5, 0.0), 0.5)
+    Fx.puff(self, p, Color(0.8, 0.8, 0.8, 0.5), 0.5, 0.3)
+    Fx.tracer(self, p, p + Vector3(0, 0, 2), Color(1.0, 0.45, 0.3))
+    Fx.muzzle_flash(self, cam.global_position - cam.global_transform.basis.z * 2.0 + Vector3(0, -3.0, 0))
+    fx_prewarmed = true
+
 
 ## Cheaper rendering for the level's fixed scenery (not soldiers, vehicles,
 ## targets or pickups, which have scripts). Every mesh is drawn once for the
@@ -896,9 +919,11 @@ func add_target(pos: Vector3, kind: String, tag: String, rot_y := 0.0) -> Node:
     return t
 
 
-func add_vehicle(kind: String, pos: Vector3, rot_y := 0.0) -> Node:
+func add_vehicle(kind: String, pos: Vector3, rot_y := 0.0, color = null) -> Node:
     var v = Vehicle.new()
     v.setup(self, kind, pos, rot_y)
+    if color != null:
+        v.body_color = color
     add_child(v)
     vehicles.append(v)
     return v
@@ -987,7 +1012,7 @@ func add_helipad(pos: Vector3) -> Node3D:
     beam.material_override = Fx.unlit(Color(0.3, 1.0, 0.4, 0.22))
     beam.position.y = 40.0
     root.add_child(beam)
-    var smoke := Fx.fire(root, pos + Vector3(4.5, 0.2, 0), 0.6)
+    var smoke := Fx.fire(root, pos + Vector3(4.5, 0.2, 0), 0.6, 0.0)   # the extraction smoke keeps going
     smoke.color_ramp.set_color(0, Color(0.3, 1.0, 0.4, 0.8))
     smoke.color_ramp.set_color(1, Color(0.3, 0.9, 0.4, 0.0))
     smoke.gravity = Vector3(0, 4.0, 0)
@@ -1414,7 +1439,7 @@ func _apply_progression() -> void:
     var pr: Dictionary = LevelData.FULL_PROGRESSION if full else LevelData.progression(level_index)
     Game.campaign_ramp = pr["ramp"]
     for v in vehicles.duplicate():
-        if not pr["vehicles"].has(v.kind):
+        if not pr["vehicles"].has(v.kind) and not LevelData.CIVILIAN.has(v.kind):
             vehicles.erase(v)
             v.free()
     for v in enemy_vehicles.duplicate():

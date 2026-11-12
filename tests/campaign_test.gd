@@ -140,7 +140,7 @@ func _play(i: int) -> void:
     var pr: Dictionary = load("res://scripts/level_data.gd").progression(i)
     var bad: Array = []
     for v in L.vehicles:
-        if not pr["vehicles"].has(v.kind):
+        if not pr["vehicles"].has(v.kind) and not ["car", "bike"].has(v.kind):   # street rides are always allowed
             bad.append(v.kind)
     for v in L.enemy_vehicles:
         if not pr["tan"].has(v.kind):

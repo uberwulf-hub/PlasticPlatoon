@@ -114,6 +114,7 @@ const PROGRESSION := [
     {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.25},
     {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.3},
 ]
+const CIVILIAN := ["car", "bike"]    # street cars and motorbikes: drivable on every operation
 const VEHICLE_NAMES := {"jeep": "Jeep", "tank": "Tank", "apc": "Troop carrier", "heli": "Helicopter"}
 const WEAPON_NAMES := {"carbine": "M4A1 Carbine", "lmg": "M249 SAW", "shotgun": "M1014 Shotgun", "sniper": "Mk 22 Sniper", "launcher": "AT4 Launcher"}
 
@@ -487,8 +488,16 @@ static func _urban(L) -> Dictionary:
         [Vector3(47, 0, -76), 3.1], [Vector3(-47, 0, 20), 0.2], [Vector3(-53, 0, -32), 3.0], [Vector3(20, 0, -47), 1.6],
         [Vector3(-76, 0, -53), -1.5], [Vector3(-22, 0, 53), 1.5], [Vector3(76, 0, 47), -1.6], [Vector3(-80, 0, 3), 1.4],
     ]
+    # Burnt-out wrecks stay scenery; every other street car can be driven.
     for i in cars.size():
-        vehicle(L, cars[i][0], cars[i][1], car_cols[i % car_cols.size()], i % 5 == 2)
+        if i % 5 == 2:
+            vehicle(L, cars[i][0], cars[i][1], car_cols[i % car_cols.size()], true)
+        else:
+            L.add_vehicle("car", cars[i][0], cars[i][1], car_cols[i % car_cols.size()])
+    # Motorbikes parked along the kerbs.
+    for b in [[Vector3(8.6, 0, 70), PI], [Vector3(-8.4, 0, 18), 0.2], [Vector3(41.5, 0, -12), -1.5], [Vector3(-58.5, 0, 12), 1.6],
+            [Vector3(14, 0, 8.5), 1.6], [Vector3(-12, 0, -58.6), -1.4]]:
+        L.add_vehicle("bike", b[0], b[1], [Color(0.8, 0.12, 0.1), Color(0.1, 0.25, 0.7), Color(0.1, 0.1, 0.1)][int(absf(b[0].x)) % 3])
     for p in [Vector3(-4.5, 0, 40), Vector3(4.5, 0, 40), Vector3(-4.5, 0, -40), Vector3(4.5, 0, -40),
             Vector3(40, 0, -3), Vector3(40, 0, 3), Vector3(-40, 0, 0), Vector3(50, 0, -40), Vector3(-50, 0, 40)]:
         L.box(p + Vector3(0, 0.55, 0), Vector3(3.2, 1.1, 0.7), Color(0.75, 0.74, 0.7))

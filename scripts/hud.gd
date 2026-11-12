@@ -187,7 +187,7 @@ func _refresh_vehicle() -> void:
         ammo_label.text = "CANNON READY" if v.fire_cd <= 0.0 else "LOADING %.1fs" % v.fire_cd
     else:
         ammo_label.text = "%d km/h" % int(absf(v.speed) * 3.6)
-    slots_label.text = "LMB fire   %sE exit" % ("RMB coax MG   " if v.kind == "tank" else "")
+    slots_label.text = "E exit" if v.k["primary"] == "none" else "LMB fire   %sE exit" % ("RMB coax MG   " if v.kind == "tank" else "")
     ord_label.text = "%d km/h" % int(absf(v.speed) * 3.6) if v.kind == "tank" else "Ram Tan soldiers to flatten them"
     if v.kind == "heli":
         var alt: float = v.altitude()
