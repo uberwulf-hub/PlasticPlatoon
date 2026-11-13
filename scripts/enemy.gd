@@ -341,6 +341,7 @@ func _shoot(p) -> void:
             col.take_damage(s["damage"] * Game.enemy_damage_mult(), global_position, end, false)
         else:
             Fx.impact(level, end, hit["normal"])
+            level.bullet_mark(hit)
     model.notify_shot()
     _net_shot = true
     if level.net:

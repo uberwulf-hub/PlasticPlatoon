@@ -30,9 +30,9 @@ void fragment() {
         float hole = 1.0 - smoothstep(0.16, 0.22, r + jag * 0.08);
         float chip = (1.0 - smoothstep(0.3, 0.46, r + jag * 0.25)) * (1.0 - hole);
         float dust = (1.0 - smoothstep(0.4, 1.0, r + jag * 0.3)) * 0.35;
-        col = mix(surface_color * 0.75, surface_color * 1.35 + vec3(0.08), chip);
+        col = mix(surface_color * 0.55, surface_color * 1.08, chip);
         col = mix(col, vec3(0.03), hole);
-        a = max(max(hole, chip * 0.9), dust * (0.5 + n));
+        a = max(max(hole, chip * 0.55), dust * (0.45 + n));
     } else if (kind == 1) {
         // Melted pock: a dark glossy crater with a raised, shiny lip.
         float pit = 1.0 - smoothstep(0.18, 0.3, r + jag * 0.1);

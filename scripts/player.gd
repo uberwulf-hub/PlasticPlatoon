@@ -334,6 +334,7 @@ func _fire(w: Dictionary) -> void:
                     ref = level.ref_of(_receiver(hit["collider"]))
                     if ref.is_empty():
                         Fx.impact(level, end_point, hit["normal"])
+                        level.bullet_mark(hit)
                 net_segs.append_array([muzzle_pos, end_point])
                 net_dmgs.append(w["damage"] * dmg_mult.get(current, 1.0) * _falloff(w, muzzle_pos.distance_to(end_point)))
                 net_refs.append(ref)
@@ -351,6 +352,7 @@ func _fire(w: Dictionary) -> void:
                     any_hit = true
                 else:
                     Fx.impact(level, end_point, hit["normal"])
+                    level.bullet_mark(hit)
             if i == 0 or randf() < 0.3:
                 Fx.tracer(level, muzzle_pos, end_point, w["tracer"])
                 if level.net:

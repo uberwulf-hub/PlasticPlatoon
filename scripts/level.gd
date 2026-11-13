@@ -380,10 +380,94 @@ func net_squad_wiped() -> void:
 ## Effects for an explosion on this PC only.
 func boom_local(pos: Vector3, radius: float, db := 0.0) -> void:
     Fx.explosion(self, pos, radius)
+    _scorch(pos, radius)
     Game.play_sfx("explosion", pos, db)
     if player and is_instance_valid(player):
         var pd: float = player.global_position.distance_to(pos)
         player.shake = maxf(player.shake, clampf(1.3 - pd / 30.0, 0.0, 1.3))
+
+
+# ------------------------------------------------- bullet holes and scorch ----
+# Marks painted where shots and blasts land on fixed scenery (walls, ground,
+# buildings): chipped bullet holes and sooty scorch (the looks picked from the
+# mockups; surface_mark.gdshader draws them, no textures). Never on anything
+# that moves - a mark there would be left floating. Capped in number and faded
+# out after a while, so long fights don't get slower.
+
+const MarkShader = preload("res://assets/shaders/surface_mark.gdshader")
+const MAX_HOLES := 48
+const MAX_SCORCH := 10
+const MARK_LIFE := 40.0
+var _holes: Array = []
+var _scorches: Array = []
+
+
+func bullet_mark(hit: Dictionary) -> void:
+    if hit.is_empty() or not _marks_on(hit.get("collider")):
+        return
+    _add_mark(0, hit["position"], hit["normal"], randf_range(0.22, 0.3), _surface_color(hit["collider"]), _holes, MAX_HOLES)
+
+
+func _scorch(pos: Vector3, radius: float) -> void:
+    var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+    var q := PhysicsRayQueryParameters3D.create(pos + Vector3(0, 0.6, 0), pos + Vector3(0, -radius * 0.6, 0), 1)
+    var h: Dictionary = space.intersect_ray(q)
+    if h.is_empty() or not _marks_on(h["collider"]) or h["normal"].y < 0.6:
+        return
+    _add_mark(2, h["position"], h["normal"], clampf(radius * 0.8, 1.5, 5.0), _surface_color(h["collider"]), _scorches, MAX_SCORCH)
+
+
+## Fixed scenery only: static bodies and the terrain, not soldiers, vehicles,
+## barrels, targets or pickups (they move, break or have their own damage look).
+func _marks_on(c) -> bool:
+    return c != null and is_instance_valid(c) and c is StaticBody3D and c.get_script() == null
+
+
+func _surface_color(c: Node) -> Color:
+    for ch in c.get_children():
+        if ch is MeshInstance3D:
+            var m = ch.material_override
+            if m is StandardMaterial3D:
+                var col: Color = m.albedo_color
+                # A textured surface's colour is only a tint (near white): guess darker.
+                return col * 0.6 if m.albedo_texture != null or col.get_luminance() > 0.9 else col
+    return Color(0.6, 0.58, 0.55)
+
+
+func _add_mark(kind: int, pos: Vector3, normal: Vector3, size: float, col: Color, pool: Array, cap: int) -> void:
+    var mi := MeshInstance3D.new()
+    var qm := QuadMesh.new()
+    qm.size = Vector2(size, size)
+    mi.mesh = qm
+    var m := ShaderMaterial.new()
+    m.shader = MarkShader
+    m.set_shader_parameter("kind", kind)
+    m.set_shader_parameter("seed", randf() * 10.0)
+    m.set_shader_parameter("surface_color", col)
+    mi.material_override = m
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    mi.visibility_range_end = 70.0 if kind == 0 else 140.0
+    add_child(mi)
+    mi.global_position = pos + normal * (0.012 if kind == 0 else 0.03)
+    var up := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.9 else Vector3.FORWARD
+    mi.look_at(mi.global_position - normal, up)
+    mi.rotate_object_local(Vector3.FORWARD, randf() * TAU)
+    pool.append(mi)
+    if pool.size() > cap:
+        var old = pool.pop_front()
+        if is_instance_valid(old):
+            old.queue_free()
+    var tw := mi.create_tween()
+    tw.tween_interval(MARK_LIFE)
+    tw.tween_method(func(f: float): m.set_shader_parameter("fade", f), 1.0, 0.0, 3.0)
+    tw.tween_callback(func():
+        pool.erase(mi)
+        mi.queue_free())
+
+
+## Marks on the map right now (tests read it).
+func mark_count() -> int:
+    return _holes.size() + _scorches.size()
 
 
 ## Explosion effects on every PC (call where the damage is decided).

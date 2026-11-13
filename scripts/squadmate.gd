@@ -295,6 +295,7 @@ func _shoot(e) -> void:
                 kills += 1
         else:
             Fx.impact(level, end, hit["normal"])
+            level.bullet_mark(hit)
     model.notify_shot()
     last_fire_ms = Time.get_ticks_msec()
     Fx.tracer(level, muzzle, end, Color(0.7, 1.0, 0.5))

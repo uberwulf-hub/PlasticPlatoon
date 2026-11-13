@@ -567,6 +567,19 @@ func _street_vehicle_test(L, p) -> void:
 ## prepared at level start.
 func _fx_budget_test(L) -> void:
     var Fx = load("res://scripts/fx.gd")
+    # Bullet holes on walls, scorch on the ground, never on anything that moves.
+    var space: PhysicsDirectSpaceState3D = L.get_world_3d().direct_space_state
+    var c0: int = L.mark_count()
+    var gh: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(0, 40, 50), Vector3(0, -10, 50), 1))
+    L.bullet_mark(gh)
+    _check(L.mark_count() == c0 + 1, "a bullet leaves a hole on fixed scenery")
+    L.bullet_mark({"collider": L.enemy_vehicles[0], "position": Vector3.ZERO, "normal": Vector3.UP})
+    _check(L.mark_count() == c0 + 1, "no bullet holes on things that move")
+    for k in 60:
+        L.bullet_mark(gh)
+    _check(L._holes.size() <= L.MAX_HOLES, "bullet holes are capped (%d)" % L._holes.size())
+    L.boom_local(gh["position"] + Vector3(0, 0.5, 0), 4.0)
+    _check(L._scorches.size() >= 1, "an explosion scorches the ground")
     _check(L.fx_prewarmed, "effects are prepared at level start")
     for k in 7:
         Fx.fire(L, Vector3(k * 3.0, 1, 60), 1.0)

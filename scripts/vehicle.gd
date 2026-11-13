@@ -1015,6 +1015,7 @@ func _bullet(from: Vector3, damage: float, spread_deg: float, sound: String) -> 
                 driver.hit_confirmed.emit(killed)
         else:
             Fx.impact(level, end, hit["normal"])
+            level.bullet_mark(hit)
     if driver:
         driver.shots_fired += 1
     if ai:
