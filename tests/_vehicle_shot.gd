@@ -21,6 +21,11 @@ func _ready() -> void:
     # Look at a parked car and bike side by side.
     car.global_position = Vector3(0, 0.5, 80); car.rotation.y = 0.6
     bike.global_position = Vector3(4, 0.5, 80); bike.rotation.y = -0.4
+    car.hp = car.max_hp * 0.55
+    var tj = L.enemy_vehicles[0]
+    tj.set_physics_process(false)
+    tj.global_position = Vector3(-5, 0.5, 74); tj.rotation.y = 0.9
+    tj.hp = tj.max_hp * 0.3
     p.global_position = Vector3(2, 0.5, 88); p.rotation.y = 0.0; p.pitch = -0.15
     for i in 20: await get_tree().physics_frame
     await RenderingServer.frame_post_draw

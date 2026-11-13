@@ -288,6 +288,19 @@ func _invisible_wall_test(i: int, L) -> void:
 ## Tan jeeps/tanks: spot the player, drive, aim, shoot, can't be stolen, and
 ## count as kills when destroyed.
 func _enemy_vehicle_test(i: int, L, p) -> void:
+    # This checks the Tan jeep/tank AI engages; parked street cars (real cover
+    # in play) can randomly block its view of the test spot, so they step
+    # aside for this check.
+    var parked: Array = L.vehicles.filter(func(v): return ["car", "bike"].has(v.kind))
+    for v in parked:
+        v.collision_layer = 0
+    await _enemy_vehicle_checks(i, L, p)
+    for v in parked:
+        if is_instance_valid(v):
+            v.collision_layer = 1
+
+
+func _enemy_vehicle_checks(i: int, L, p) -> void:
     p.invulnerable = false
     p.health = 100000.0      # survive the test but still register hits
     var dmg_total := 0.0
@@ -522,6 +535,15 @@ func _street_vehicle_test(L, p) -> void:
     var cars: Array = L.vehicles.filter(func(v): return v.kind == "car")
     var bikes: Array = L.vehicles.filter(func(v): return v.kind == "bike")
     _check(cars.size() >= 8 and bikes.size() >= 4, "L1 drivable street cars (%d) and motorbikes (%d)" % [cars.size(), bikes.size()])
+    var c = cars[0]
+    var tj = L.enemy_vehicles.filter(func(v): return v.alive)[0]
+    c.hp = c.max_hp          # earlier blasts in this test may have scratched it
+    await _frames(2)
+    _check(not c.hp_bar.visible and tj.hp_bar.visible, "L1 health bars: Tan vehicles always, ours hidden at full health (%s %s)" % [c.hp_bar.visible, tj.hp_bar.visible])
+    c.hp = c.max_hp * 0.5
+    await _frames(2)
+    _check(c.hp_bar.visible and absf(c._bar_fill.mesh.size.x - c.BAR_W * 0.5) < 0.01, "L1 a damaged vehicle shows a half-full health bar")
+    c.hp = c.max_hp
     var b = bikes[0]
     var keep: Vector3 = p.global_position
     b.enter(p)

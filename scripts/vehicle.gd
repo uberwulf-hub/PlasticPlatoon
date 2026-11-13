@@ -70,6 +70,10 @@ var level: Node
 var kind := "jeep"
 var k: Dictionary
 var hp := 300.0
+var max_hp := 300.0
+var hp_bar: Node3D                # health bar floating over the vehicle
+var _bar_fill: MeshInstance3D
+var _bar_shown := -1.0
 var alive := true
 var driver = null
 var speed := 0.0
@@ -202,12 +206,74 @@ func _ready() -> void:
     camera.far = 900.0
     cam_pivot.add_child(camera)
 
+    max_hp = hp
+    _build_hp_bar()
     engine = AudioStreamPlayer3D.new()
     engine.stream = Game.sfx.get("engine")
     engine.bus = "SFX"
     engine.unit_size = 10.0
     engine.volume_db = -14.0
     add_child(engine)
+
+
+# ------------------------------------------------------------ health bar ----
+# A small bar that always faces the camera, over the vehicle: red for the Tan
+# Army (always shown), green for ours (shown once damaged). Hidden for the one
+# you're driving (the HUD shows it), once it's destroyed, and far away.
+
+const BAR_W := 2.4
+
+
+func _build_hp_bar() -> void:
+    hp_bar = Node3D.new()
+    hp_bar.position = Vector3(0, k["size"].y + 1.1, 0)
+    add_child(hp_bar)
+    var back := MeshInstance3D.new()
+    var bq := QuadMesh.new()
+    bq.size = Vector2(BAR_W + 0.12, 0.3)
+    back.mesh = bq
+    back.material_override = _bar_mat(Color(0.05, 0.05, 0.05, 0.75), 0)
+    hp_bar.add_child(back)
+    _bar_fill = MeshInstance3D.new()
+    _bar_fill.mesh = QuadMesh.new()
+    _bar_fill.material_override = _bar_mat(Color(0.9, 0.25, 0.15) if ai else Color(0.35, 0.85, 0.3), 1)
+    hp_bar.add_child(_bar_fill)
+    for mi in [back, _bar_fill]:
+        mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        mi.visibility_range_end = 90.0
+    _refresh_hp_bar()
+
+
+func _bar_mat(c: Color, prio: int) -> StandardMaterial3D:
+    var m := StandardMaterial3D.new()
+    m.albedo_color = c
+    m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+    m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    m.render_priority = prio
+    m.fixed_size = false
+    return m
+
+
+func _refresh_hp_bar() -> void:
+    if hp_bar == null:
+        return
+    var f := clampf(hp / maxf(1.0, max_hp), 0.0, 1.0)
+    _bar_shown = hp
+    var q: QuadMesh = _bar_fill.mesh
+    q.size = Vector2(maxf(0.001, BAR_W * f), 0.2)
+    q.center_offset = Vector3(-(BAR_W - BAR_W * f) * 0.5, 0, 0.001)
+    hp_bar.visible = _bar_wanted()
+
+
+## Tan vehicles always show their bar; ours only once they've been hit.
+func _bar_wanted() -> bool:
+    return alive and hp > 0.0 and driver == null and occupant_peer == 0 and (ai or hp < max_hp - 0.5)
+
+
+func _process(_delta: float) -> void:
+    if hp_bar and (hp != _bar_shown or hp_bar.visible != _bar_wanted()):
+        _refresh_hp_bar()
 
 
 # ---------------------------------------------------------------- models ----
