@@ -493,13 +493,13 @@ func _plastic_damage_test(L, p) -> void:
             break
     var m0: int = e.model.damage_marks()
     e.take_damage(1.0, p.global_position, e.global_position + Vector3(0.2, 1.2, 0.3), false)
-    _check(e.model.damage_marks() == m0 and e.model._wear > 0.0, "L0 a hit wears the Tan soldier's plastic (no stuck-on blobs)")
+    _check(e.model.damage_marks() == m0 + 1 and e.model._wear > 0.0 and e.model.find_children("*", "MeshInstance3D", true, false)[0].material_overlay != null, "L0 a hit melts a patch of the Tan soldier's plastic (shader, no stuck-on shapes)")
     var keep_inv: bool = p.invulnerable
     var keep_pos: Vector3 = p.global_position
     p.global_position = L.safe_center + Vector3(L.safe_radius + 12.0, 0.5, 0)
     p.invulnerable = false
     p.take_damage(20.0, e.global_position, Vector3.ZERO, true)
-    _check(p.model.damage_marks() == 0 and p.model._wear > 0.0, "L0 the player's plastic shows damage")
+    _check(p.model.damage_marks() >= 1 and p.model._wear > 0.0, "L0 the player's plastic shows damage")
     p.health = p.max_health - 5.0
     p.give_pickup("health")
     _check(p.model.damage_marks() == 0 and p.model._wear == 0.0, "L0 healing to full clears the damage")

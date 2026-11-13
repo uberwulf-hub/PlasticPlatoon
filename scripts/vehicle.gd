@@ -1235,7 +1235,7 @@ func _ai_update(delta: float) -> Vector2:
     # out if we're facing in).
     if level.safe_radius > 0.0:
         var fwd := -global_transform.basis.z
-        var ahead: Vector3 = global_position + fwd * (absf(speed) * 0.8 + k["size"].z)
+        var ahead: Vector3 = global_position + fwd * (absf(speed) * 1.0 + k["size"].z + 2.0)
         if level.in_safe_zone(ahead) or level.in_safe_zone(global_position):
             var out: Vector3 = global_position - level.safe_center
             out.y = 0.0

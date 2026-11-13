@@ -213,28 +213,22 @@ func melt() -> void:
 
 
 # --------------------------------------------------------- plastic damage ----
-# Hits leave dark, glossy melted blobs stuck to the nearest bone (so they move
-# with the body), and the whole soldier darkens and gets glossier ("wear") as
-# its health drops. Healing back to full clears it.
+# The "melt" look (picked from the damage mockups): each hit melts a patch of
+# the soldier's own plastic - darker, wet-glossy, running downward - drawn by a
+# shader pass over the same mesh, so it always follows the body. Each hit is
+# pinned to the nearest bone and its position re-sent every frame, so a melted
+# arm stays melted where it was hit while it moves. Healing clears it.
 
-const MAX_MARKS := 12
-var _marks: Array = []
-var _attach := {}                 # bone index -> BoneAttachment3D
-var _mark_mat: StandardMaterial3D
+const DamageShader = preload("res://assets/shaders/plastic_damage.gdshader")
+const MAX_MARKS := 8              # the shader takes 8 hit spots
+const MARKS_ENABLED := true
+var _hits: Array = []             # [bone index, offset in bone space, size]
+var _dmg_mat: ShaderMaterial
 var _wear := 0.0
 
 
-## Damage marks are switched off: stuck-on dark blobs didn't sit on the
-## plastic properly (they floated off the body, one even ended up by the feet).
-## Damage shows through set_wear() on the plastic itself until a proper,
-## designed damage look replaces it. Kept so callers don't change.
-const MARKS_ENABLED := false
-
-
 func damage_mark(world_pos: Vector3, explosive := false) -> void:
-    if not MARKS_ENABLED:
-        return
-    if skeleton == null or _dead or not is_inside_tree():
+    if not MARKS_ENABLED or skeleton == null or _dead or not is_inside_tree():
         return
     var best := -1
     var best_d := INF
@@ -246,41 +240,51 @@ func damage_mark(world_pos: Vector3, explosive := false) -> void:
             best = i
     if best < 0:
         return
-    var at: BoneAttachment3D = _attach.get(best)
-    if at == null:
-        at = BoneAttachment3D.new()
-        at.bone_idx = best
-        skeleton.add_child(at)
-        _attach[best] = at
-    # A fresh attachment only follows its bone from the next frame: place it now
-    # so the mark is computed against the bone, not the skeleton's origin.
-    at.global_transform = skeleton.global_transform * skeleton.get_bone_global_pose(best)
-    if _mark_mat == null:
-        _mark_mat = StandardMaterial3D.new()
-        _mark_mat.albedo_color = Color(0.13, 0.08, 0.05).lerp(body_color, 0.1)    # scorched plastic
-        _mark_mat.roughness = 0.45
-        _mark_mat.metallic_specular = 0.3
-    var blob := MeshInstance3D.new()
-    var sm := SphereMesh.new()
-    var r := randf_range(0.1, 0.15) * (1.35 if explosive else 1.0)
-    sm.radius = r
-    sm.height = r * 2.0
-    blob.mesh = sm
-    blob.material_override = _mark_mat
-    at.add_child(blob)
-    # Sit the mark on the surface: from the bone toward the hit point, no
-    # further out than the body is thick (hits are reported on the capsule).
-    var local: Vector3 = at.global_transform.affine_inverse() * world_pos
-    var sc := maxf(0.01, at.global_transform.basis.get_scale().x)
-    var d := local.length()
-    var surface := clampf(d, 0.16 / sc, 0.24 / sc)         # about where the plastic is
-    var n := local.normalized() if d > 0.001 else Vector3(0, 0, 1)
-    blob.position = n * surface
-    # A flat splash lying on the surface (its thin axis along the surface normal).
-    blob.basis = Basis(Quaternion(Vector3.UP, n)).rotated(n, randf() * TAU).scaled(Vector3(1.0, 0.3, 0.8) / sc)
-    _marks.append(blob)
-    if _marks.size() > MAX_MARKS:
-        _marks.pop_front().queue_free()
+    var bone_xf: Transform3D = skeleton.global_transform * skeleton.get_bone_global_pose(best)
+    # Hits are reported on the collision capsule, a little outside the plastic:
+    # pull the spot part of the way in towards the bone.
+    var p: Vector3 = world_pos.lerp(bone_xf.origin, 0.35)
+    var size := (0.4 if explosive else 0.26) * randf_range(0.9, 1.15)
+    var offset: Vector3 = bone_xf.affine_inverse() * p
+    # Another hit right next to an old one makes that patch bigger instead.
+    for h in _hits:
+        if h[0] == best and h[1].distance_to(offset) < 0.15:
+            h[2] = minf(h[2] + size * 0.35, 0.6)
+            _push_hits()
+            return
+    _hits.append([best, offset, size])
+    if _hits.size() > MAX_MARKS:
+        _hits.pop_front()
+    if _dmg_mat == null:
+        _dmg_mat = ShaderMaterial.new()
+        _dmg_mat.shader = DamageShader
+        _dmg_mat.set_shader_parameter("style", 2)
+        _dmg_mat.set_shader_parameter("base_color", body_color)
+        for m in find_children("*", "MeshInstance3D", true, false):
+            m.material_overlay = _dmg_mat
+    _dmg_mat.set_shader_parameter("wear", _wear)
+    _push_hits()
+
+
+## Re-sends the hit spots (bone pose -> world) so they move with the body.
+func _push_hits() -> void:
+    if _dmg_mat == null or skeleton == null:
+        return
+    var arr: Array = []
+    for k in MAX_MARKS:
+        if k < _hits.size():
+            var h: Array = _hits[k]
+            var w: Vector3 = skeleton.global_transform * (skeleton.get_bone_global_pose(h[0]) * h[1])
+            arr.append(Vector4(w.x, w.y, w.z, h[2]))
+        else:
+            arr.append(Vector4.ZERO)
+    _dmg_mat.set_shader_parameter("hits", arr)
+    _dmg_mat.set_shader_parameter("hit_count", _hits.size())
+
+
+func _process(_delta: float) -> void:
+    if not _hits.is_empty() and is_visible_in_tree():
+        _push_hits()
 
 
 ## 0 = fresh plastic, 1 = nearly melted.
@@ -291,15 +295,17 @@ func set_wear(w: float) -> void:
     for i in mats.size():
         mats[i].albedo_color = base_colors[i].darkened(_wear * 0.25)
         mats[i].roughness = lerpf(0.38, 0.12, _wear)
+    if _dmg_mat != null:
+        _dmg_mat.set_shader_parameter("wear", _wear)
 
 
 func clear_damage() -> void:
-    for b in _marks:
-        if is_instance_valid(b):
-            b.queue_free()
-    _marks.clear()
+    _hits.clear()
+    if _dmg_mat != null:
+        _dmg_mat.set_shader_parameter("hit_count", 0)
+        _dmg_mat.set_shader_parameter("wear", 0.0)
     set_wear(0.0)
 
 
 func damage_marks() -> int:
-    return _marks.size()
+    return _hits.size()
