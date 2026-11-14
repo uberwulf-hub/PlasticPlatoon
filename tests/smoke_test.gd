@@ -98,6 +98,14 @@ func _play_level(i: int) -> void:
         await _fx_budget_test(L)
         await _zoom_test(L, p)
     if i == 1:
+        # Weather: Concrete Jungle has clouds and rain (a storm adds lightning).
+        _check(L.weather != null and L.weather.rain != null and L.weather.sky_mat != null, "L1 weather: cloudy sky and rain")
+        L.weather.w["storm"] = true
+        L.weather.strike()
+        await _frames(3)
+        _check(L.weather.flashes == 1 and L._sun.light_energy > L.weather._base_sun, "L1 lightning flashes the map")
+        L.weather.w["storm"] = false
+    if i == 1:
         # Concrete Jungle lag fix: far soldiers/vehicles skip shadows, and flat or
         # small scenery is cheap to draw.
         await _street_vehicle_test(L, p)

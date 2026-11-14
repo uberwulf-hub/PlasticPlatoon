@@ -21,6 +21,7 @@ const RemotePlayer = preload("res://scripts/remote_player.gd")
 const Squadmate = preload("res://scripts/squadmate.gd")
 const Meltdown = preload("res://scripts/meltdown.gd")
 const TouchControls = preload("res://scripts/touch_controls.gd")
+const WeatherNode = preload("res://scripts/weather.gd")
 const Rocket = preload("res://scripts/rocket.gd")
 const Grenade = preload("res://scripts/grenade.gd")
 const DroneStrike = preload("res://scripts/drone_strike.gd")
@@ -41,6 +42,7 @@ var barrels: Array = []
 var pickups := {}              # id -> Pickup
 var _next_pickup_id := 0
 var net = null                 # NetSync in a LAN game, else null
+var weather: Node = null      # clouds / rain / thunder (scripts/weather.gd)
 var remotes := {}              # peer id -> RemotePlayer (teammates)
 var squad: Array = []          # friendly AI squadmates (single-player)
 var squad_hold := false
@@ -96,6 +98,11 @@ func _ready() -> void:
     player.died.connect(_on_player_died)
     if info.get("snow", false):
         _add_snowfall()
+    var wp: Dictionary = LevelData.WEATHER.get(level_index, {})
+    if Game.weather and not wp.is_empty():
+        weather = WeatherNode.new()
+        weather.setup(self, wp)
+        add_child(weather)
     hud = HUD.new()
     add_child(hud)
     get_tree().create_timer(0.4).timeout.connect(_prewarm_fx)

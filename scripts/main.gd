@@ -310,6 +310,7 @@ func show_settings() -> void:
         Game.save()
         show_settings())
     check.call(right, "Show FPS counter (in game)", Game.show_fps, func(on): Game.show_fps = on)
+    check.call(right, "Weather (clouds, rain, thunder)", Game.weather, func(on): Game.weather = on)
     check.call(right, "Auto resolution (smooth when busy)", Game.auto_res, func(on):
         Game.auto_res = on
         Game.apply_graphics())

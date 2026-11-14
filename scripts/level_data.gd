@@ -119,6 +119,20 @@ const CIVILIAN := ["car", "bike"]    # street cars and motorbikes: drivable on e
 # Not the first operation: it has no vehicles while players learn the ropes.
 # (Concrete Jungle has its own, placed along the streets.)
 const RIDES := {3: [1, 2], 4: [0, 2], 6: [1, 2], 10: [1, 2]}
+# Weather per map (index; MELTDOWN maps are MELTDOWN_BASE + i): clouds 0..1,
+# rain 0..1, storm = thunder and lightning. Indoor / toy-scale maps stay dry.
+const WEATHER := {
+    0: {"clouds": 0.25},                                   # Dust Lid: a few wisps
+    1: {"clouds": 0.65, "rain": 0.55},                     # Concrete Jungle: city rain
+    3: {"clouds": 0.75},                                   # Snow Globe (its snow is separate)
+    4: {"clouds": 0.9, "rain": 1.0, "storm": true},        # Green Hell: jungle thunderstorm
+    6: {"clouds": 0.45},                                   # Beachhead: fair-weather clouds
+    8: {"clouds": 0.85, "rain": 0.8, "storm": true},       # Night Shift: stormy night at the port
+    10: {"clouds": 0.7},                                   # Mountain Pass
+    102: {"clouds": 0.7, "rain": 0.6, "storm": true},      # MELTDOWN: Garden Shed after dark
+    106: {"clouds": 0.5},                                  # MELTDOWN: Beach at dusk
+    112: {"clouds": 0.75},                                 # MELTDOWN: Snow Day
+}
 const VEHICLE_NAMES := {"jeep": "Jeep", "tank": "Tank", "apc": "Troop carrier", "heli": "Helicopter"}
 const WEAPON_NAMES := {"carbine": "M4A1 Carbine", "lmg": "M249 SAW", "shotgun": "M1014 Shotgun", "sniper": "Mk 22 Sniper", "launcher": "AT4 Launcher"}
 

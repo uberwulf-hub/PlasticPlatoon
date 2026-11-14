@@ -30,6 +30,7 @@ var _res_good := 0
 var show_fps := false
 var touch_controls := OS.has_feature("mobile")   # on-screen joystick + buttons
 var touch_mode := false         # touch controls are in use right now
+var weather := true             # clouds, rain and thunderstorms on outdoor maps
 var view_dist := 3.4             # on-foot camera distance (0 = first person); the wheel sets it
 var vehicle_zoom := 1.0          # vehicle chase-camera distance multiplier
 var difficulty := 1
@@ -259,6 +260,7 @@ func save() -> void:
     cfg.set_value("settings", "fps_cap", fps_cap)
     cfg.set_value("settings", "show_fps", show_fps)
     cfg.set_value("settings", "view_dist", view_dist)
+    cfg.set_value("settings", "weather", weather)
     cfg.set_value("settings", "vehicle_zoom", vehicle_zoom)
     cfg.set_value("settings", "auto_res", auto_res)
     cfg.set_value("settings", "touch_controls", touch_controls)
@@ -289,6 +291,7 @@ func _load() -> void:
     fps_cap = cfg.get_value("settings", "fps_cap", fps_cap)
     show_fps = cfg.get_value("settings", "show_fps", show_fps)
     view_dist = cfg.get_value("settings", "view_dist", view_dist)
+    weather = cfg.get_value("settings", "weather", weather)
     vehicle_zoom = cfg.get_value("settings", "vehicle_zoom", vehicle_zoom)
     auto_res = cfg.get_value("settings", "auto_res", auto_res)
     touch_controls = cfg.get_value("settings", "touch_controls", touch_controls)
