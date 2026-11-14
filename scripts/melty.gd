@@ -362,6 +362,18 @@ func _face(d: Vector3) -> void:
         rotation.y = lerp_angle(rotation.y, atan2(-d.x, -d.z), 0.25)
 
 
+## The drips, lumps and glowing bits stuck on a Melty sag and melt away with
+## the body (they used to stay floating where it had been).
+func _melt_extras() -> void:
+    for c in get_children():
+        if c is MeshInstance3D:
+            var tw := c.create_tween()
+            tw.tween_interval(randf_range(0.3, 0.8))
+            tw.tween_property(c, "position:y", 0.05, 0.9).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+            tw.parallel().tween_property(c, "scale", c.scale * Vector3(1.6, 0.15, 1.6), 0.9)
+            tw.tween_property(c, "scale", Vector3.ZERO, 1.5)
+
+
 ## Host snapshot for this Melty (non-host PCs).
 func net_apply(pos: Vector3, yaw: float, hs: float, flags: int) -> void:
     _net_pos = pos
@@ -386,8 +398,9 @@ func die_visual() -> void:
     collision_mask = 0
     set_physics_process(false)
     model.melt()
+    _melt_extras()
     Game.play_sfx("melt", global_position, -2.0)
-    get_tree().create_timer(8.0).timeout.connect(func():
+    get_tree().create_timer(9.0).timeout.connect(func():
         if is_instance_valid(self):
             queue_free())
 
@@ -424,6 +437,7 @@ func _die(headshot: bool, by_player: bool) -> void:
     collision_mask = 0
     set_physics_process(false)
     model.melt()
+    _melt_extras()
     Game.play_sfx("melt", global_position, -2.0)
     level.on_enemy_killed(self, headshot)
     if by_player:
@@ -433,7 +447,7 @@ func _die(headshot: bool, by_player: bool) -> void:
         _pop_on_death()
     mode.on_melty_died(self)
     var t := Timer.new()
-    t.wait_time = 8.0
+    t.wait_time = 9.0
     t.one_shot = true
     t.autostart = true
     t.timeout.connect(queue_free)

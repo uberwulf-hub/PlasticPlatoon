@@ -196,20 +196,96 @@ func hit_flash() -> void:
         anim.play("HitReact", 0.05)
 
 
+## Death, in three beats (about 7 s in all):
+##  1. fall: the death animation tips him over, with a soft squash as he lands;
+##  2. melt: the body softens and sags flat into a glossy puddle of its own
+##     plastic that spreads on the ground;
+##  3. fade: the puddle slowly shrinks and fades away.
+## Everything on him (gear, damage) is part of the model, so nothing is left
+## hanging in the air. finished_melting fires at the end.
+signal finished_melting
+
+const FALL_T := 0.7
+const MELT_T := 2.8
+const FADE_T := 3.0
+var puddle: MeshInstance3D
+
+
 func melt() -> void:
+    if _dead:
+        return
     _dead = true
     anim.speed_scale = 1.0
     if anim.has_animation("Death"):
         anim.play("Death", 0.1)
     for m in mats:
         m.emission_enabled = false
+    if _dmg_mat != null:
+        _dmg_mat.set_shader_parameter("hit_count", 0)
+    var base := scale
     var tw := create_tween()
-    tw.tween_interval(0.9)
+    # 1. Fall: a little squash as he hits the ground, springing back.
+    tw.tween_interval(FALL_T * 0.75)
+    tw.tween_property(self, "scale", base * Vector3(1.12, 0.86, 1.12), FALL_T * 0.15).set_trans(Tween.TRANS_SINE)
+    tw.tween_property(self, "scale", base, FALL_T * 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    # 2. Melt: sag flat and spread, darker and wet-glossy, sinking a touch.
+    tw.tween_callback(_make_puddle)
     tw.set_parallel(true)
-    tw.tween_property(self, "scale", Vector3(1.8, 0.06, 1.8), 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+    tw.tween_property(self, "scale", base * Vector3(1.7, 0.05, 1.7), MELT_T).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    tw.tween_property(self, "position:y", position.y - 0.04, MELT_T)
     for i in mats.size():
-        tw.tween_property(mats[i], "albedo_color", base_colors[i].darkened(0.35), 1.5)
-        tw.tween_property(mats[i], "roughness", 0.1, 1.5)
+        tw.tween_property(mats[i], "albedo_color", base_colors[i].darkened(0.4), MELT_T)
+        tw.tween_property(mats[i], "roughness", 0.06, MELT_T)
+    tw.tween_method(_grow_puddle, 0.0, 1.0, MELT_T).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+    # 3. Fade: the flattened body goes, the puddle shrinks and fades out.
+    tw.set_parallel(false)
+    tw.tween_property(self, "scale", base * Vector3(1.75, 0.0, 1.75), 0.6)
+    tw.tween_method(_fade_puddle, 1.0, 0.0, FADE_T).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+    tw.tween_callback(func(): finished_melting.emit())
+
+
+## A glossy puddle of this soldier's plastic, on the ground under him (a
+## sibling of the model, so the model's squash doesn't flatten it).
+func _make_puddle() -> void:
+    var host := get_parent() as Node3D
+    if host == null:
+        return
+    puddle = MeshInstance3D.new()
+    var cm := CylinderMesh.new()
+    cm.top_radius = 0.5
+    cm.bottom_radius = 0.56
+    cm.height = 0.04
+    cm.radial_segments = 20
+    puddle.mesh = cm
+    var m := StandardMaterial3D.new()
+    m.albedo_color = body_color.darkened(0.35)
+    m.roughness = 0.05
+    m.metallic_specular = 0.8
+    m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    puddle.material_override = m
+    puddle.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    host.add_child(puddle)
+    # Under where the body lies: halfway from the feet to the head after the fall.
+    var mid := global_position
+    if torso != null:
+        mid = (global_position + torso.global_position) * 0.5
+    puddle.global_position = Vector3(mid.x, global_position.y + 0.025, mid.z)
+    puddle.scale = Vector3(0.1, 1.0, 0.1)
+
+
+func _grow_puddle(f: float) -> void:
+    if is_instance_valid(puddle):
+        var r := lerpf(0.1, 1.15 * maxf(scale.x / 1.7, 0.6), f)
+        puddle.scale = Vector3(r, 1.0, r * 1.25)
+
+
+func _fade_puddle(a: float) -> void:
+    if is_instance_valid(puddle):
+        puddle.material_override.albedo_color.a = a
+        var s := puddle.scale
+        puddle.scale = Vector3(maxf(0.05, s.x * (0.995 if a < 0.98 else 1.0)), 1.0, maxf(0.05, s.z * (0.995 if a < 0.98 else 1.0)))
+        if a <= 0.0:
+            puddle.queue_free()
 
 
 # --------------------------------------------------------- plastic damage ----
