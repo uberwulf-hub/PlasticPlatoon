@@ -533,8 +533,8 @@ func show_multiplayer() -> void:
     Net.start_discovery()
     var root := _new_ui(0.4)
     var vb := UI.centered_panel(root, 640)
-    vb.add_child(UI.label("MULTIPLAYER (LAN)", 40, UI.ACCENT))
-    vb.add_child(UI.label("Co-op for up to 4 players on the same network.", 17))
+    vb.add_child(UI.label("MULTIPLAYER", 40, UI.ACCENT))
+    vb.add_child(UI.label("Co-op for up to 4 players - over the internet or on the same Wi-Fi.", 17))
     var row := HBoxContainer.new()
     row.add_child(UI.label("Your name  ", 19))
     var name_edit := LineEdit.new()
@@ -546,14 +546,32 @@ func show_multiplayer() -> void:
         Game.save())
     row.add_child(name_edit)
     vb.add_child(row)
-    vb.add_child(UI.button("Host a game", func():
+    vb.add_child(UI.label("Over the internet", 19, UI.ACCENT))
+    vb.add_child(UI.button("Host an online game (get a code)", func():
+        Net.stop_discovery()
+        Net.host_online(Game.player_name)
+        show_lobby(), 560))
+    var code_row := HBoxContainer.new()
+    var code_edit := LineEdit.new()
+    code_edit.placeholder_text = "friend's game code, e.g. ZOOM"
+    code_edit.max_length = 6
+    code_edit.custom_minimum_size = Vector2(380, 40)
+    code_row.add_child(code_edit)
+    code_row.add_child(UI.button("Join online", func():
+        Net.stop_discovery()
+        Net.join_online(code_edit.text, Game.player_name)
+        if Net.active:
+            show_lobby(), 160))
+    vb.add_child(code_row)
+    vb.add_child(UI.label("On the same Wi-Fi (LAN)", 19, UI.ACCENT))
+    vb.add_child(UI.button("Host a LAN game", func():
         var err := Net.host(Game.player_name)
         if err != "":
             _mp_message(err)
         else:
             Net.stop_discovery()
             show_lobby(), 560))
-    vb.add_child(UI.label("Games on your network", 19, UI.ACCENT))
+    vb.add_child(UI.label("Games on your network", 17))
     var list := VBoxContainer.new()
     list.name = "HostList"
     vb.add_child(list)
@@ -610,7 +628,14 @@ func show_lobby() -> void:
     var root := _new_ui(0.4)
     var vb := UI.centered_panel(root, 600)
     var host: bool = Net.active and multiplayer.is_server()
-    vb.add_child(UI.label("LOBBY", 40, UI.ACCENT))
+    vb.add_child(UI.label("ONLINE LOBBY" if Net.online else "LOBBY", 40, UI.ACCENT))
+    if Net.online:
+        if Net.room_code == "":
+            vb.add_child(UI.label("Getting a game code...", 20))
+        else:
+            vb.add_child(UI.label("Game code:  " + Net.room_code, 34, Color(1.0, 0.85, 0.3)))
+            if host:
+                vb.add_child(UI.label("Friends: Multiplayer > Join online > type this code.", 16, Color(0.8, 0.85, 0.7)))
     if not Net.active:
         vb.add_child(UI.label("Not connected.", 18))
     elif Net.players.is_empty():

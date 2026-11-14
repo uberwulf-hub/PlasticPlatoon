@@ -1,0 +1,8 @@
+{
+  "name": "platoon-relay-local",
+  "private": true,
+  "type": "module",
+  "description": "Local copy of the Race Track Mayhem relay (game-agnostic rooms + codes) for testing Plastic Platoon's online co-op. The live relay is the Race Track Mayhem one on Cloudflare.",
+  "scripts": { "local": "node local.mjs" },
+  "dependencies": { "ws": "^8.18.0" }
+}

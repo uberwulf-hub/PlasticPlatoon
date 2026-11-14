@@ -1,7 +1,9 @@
 extends Node
-## LAN multiplayer (autoload "Net"): hosting/joining with ENet, LAN discovery
-## over UDP broadcast, and the 4-player co-op lobby. In-game sync lives in
-## net_sync.gd. When `active` is false the game is plain single-player.
+## Multiplayer (autoload "Net"): the 4-player co-op lobby, played either on
+## the same network (LAN: ENet + discovery over UDP broadcast) or over the
+## internet (online: RelayPeer through a relay server, joined by room code).
+## In-game sync lives in net_sync.gd and works the same either way. When
+## `active` is false the game is plain single-player.
 
 signal players_changed
 signal hosts_changed
@@ -13,6 +15,11 @@ const PORT := 7777
 const DISCOVERY_PORT := 7778
 const MAX_PLAYERS := 4
 const GAME_ID := "plasticplatoon-1"
+# The internet relay: Race Track Mayhem's (it's game-agnostic - rooms and codes
+# only). PLATOON_RELAY_URL overrides it (tests run a local copy).
+const DEFAULT_RELAY := "wss://race-track-mayhem-relay.andrewsaulls.workers.dev"
+const RELAY_PROTOCOL := 1
+const RelayPeer = preload("res://scripts/relay_peer.gd")
 const SLOT_COLORS := [Color(0.27, 0.48, 0.17), Color(0.2, 0.55, 0.32), Color(0.4, 0.52, 0.14), Color(0.18, 0.42, 0.24)]
 
 var active := false
@@ -20,6 +27,9 @@ var players := {}          # peer_id -> {"name": String, "slot": int}
 var hosts := {}            # ip -> {"name", "players", "seen"}  (LAN discovery results)
 var op := 0
 var in_game := false
+var online := false        # playing over the internet (relay) rather than LAN
+var room_code := ""        # online: the code friends type to join
+var _join_watch := 0.0
 var _broadcast: PacketPeerUDP
 var _listen: PacketPeerUDP
 var _bcast_t := 0.0
@@ -78,12 +88,59 @@ func join(ip: String, name: String) -> void:
     set_meta("join_name", _clean(name))
 
 
+func relay_url() -> String:
+    var custom := OS.get_environment("PLATOON_RELAY_URL")
+    return custom if custom != "" else DEFAULT_RELAY
+
+
+## Online: opens a room on the relay. The room code arrives a moment later.
+func host_online(name: String) -> void:
+    leave()
+    var relay := RelayPeer.new()
+    relay.room_ready.connect(func(c: String):
+        room_code = c
+        players_changed.emit())
+    relay.relay_error.connect(func(m: String): _fail(m))
+    if relay.create_room(relay_url(), RELAY_PROTOCOL) != OK:
+        _fail("Couldn't reach the online game server.")
+        return
+    multiplayer.multiplayer_peer = relay
+    active = true
+    online = true
+    room_code = ""
+    players = {1: {"name": _clean(name), "slot": 0}}
+    players_changed.emit()
+
+
+## Online: joins a friend's room by its 4-letter code.
+func join_online(code: String, name: String) -> void:
+    leave()
+    code = code.strip_edges().to_upper()
+    if code.length() < 4:
+        _fail("Type the 4-letter game code first.")
+        return
+    var relay := RelayPeer.new()
+    relay.relay_error.connect(func(m: String): _fail(m.replace("race", "game")))
+    if relay.join_room(relay_url(), code, RELAY_PROTOCOL) != OK:
+        _fail("Couldn't reach the online game server.")
+        return
+    multiplayer.multiplayer_peer = relay
+    active = true
+    online = true
+    room_code = code
+    set_meta("join_name", _clean(name))
+    _join_watch = 15.0          # no squad list by then: not one of our games
+
+
 func leave() -> void:
     if multiplayer.multiplayer_peer and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
         multiplayer.multiplayer_peer.close()
     multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
     active = false
     in_game = false
+    online = false
+    room_code = ""
+    _join_watch = 0.0
     players = {}
     _stop_broadcast()
 
@@ -150,6 +207,7 @@ func _rejected(reason: String) -> void:
 @rpc("authority", "reliable")
 func _sync_players(p: Dictionary) -> void:
     players = p
+    _join_watch = 0.0
     players_changed.emit()
 
 
@@ -211,6 +269,10 @@ func stop_discovery() -> void:
 
 
 func _process(delta: float) -> void:
+    if _join_watch > 0.0:
+        _join_watch -= delta
+        if _join_watch <= 0.0 and players.is_empty():
+            _fail("No Plastic Platoon game with that code. Check the letters!")
     if _broadcast and active and multiplayer.is_server():
         _bcast_t -= delta
         if _bcast_t <= 0.0:

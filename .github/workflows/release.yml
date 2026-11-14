@@ -64,6 +64,29 @@ jobs:
       - name: Meltdown test (waves, coins, stations, doors)
         run: $GODOT --headless --path . res://tests/meltdown_test.tscn
 
+      - name: Co-op test over LAN (host + client)
+        run: |
+          $GODOT --headless --path . res://tests/mp_test.tscn -- host > host.log 2>&1 &
+          HP=$!
+          sleep 3
+          $GODOT --headless --path . res://tests/mp_test.tscn -- client; C=$?
+          wait $HP; H=$?
+          cat host.log | grep -E "PASS|FAIL|===="
+          test $C -eq 0 -a $H -eq 0
+
+      - name: Co-op test online (host + client through a local copy of the relay)
+        run: |
+          (cd tools/relay_local && npm install --no-audit --no-fund && node local.mjs) &
+          sleep 3
+          export PLATOON_RELAY_URL=ws://127.0.0.1:24690
+          $GODOT --headless --path . res://tests/mp_test.tscn -- host_online code.txt > host.log 2>&1 &
+          HP=$!
+          sleep 3
+          $GODOT --headless --path . res://tests/mp_test.tscn -- client_online code.txt; C=$?
+          wait $HP; H=$?
+          cat host.log | grep -E "PASS|FAIL|===="
+          test $C -eq 0 -a $H -eq 0
+
       - name: Export Windows build
         run: |
           mkdir -p build/windows

@@ -1,7 +1,10 @@
 extends Node
-## Two-process LAN co-op test. Run a host and a client at the same time:
-##   godot --headless --path . res://tests/mp_test.tscn -- host
-##   godot --headless --path . res://tests/mp_test.tscn -- client
+## Two-process co-op test. Run a host and a client at the same time:
+##   LAN:    godot --headless --path . res://tests/mp_test.tscn -- host
+##           godot --headless --path . res://tests/mp_test.tscn -- client
+##   Online: start the relay (cd tools/relay_local && npm install && node local.mjs),
+##           set PLATOON_RELAY_URL=ws://127.0.0.1:24690, then
+##           ... -- host_online <codefile>   and   ... -- client_online <codefile>
 ## Both follow the same timeline (seconds after the level starts) and each
 ## checks what it should see from the other PC. Exit code 1 on any failure.
 
@@ -20,7 +23,7 @@ func _ready() -> void:
     main = load("res://scenes/main.tscn").instantiate()
     add_child(main)
     await _frames(5)
-    if role == "host":
+    if role.begins_with("host"):
         await _run_host()
     else:
         await _run_client()
@@ -63,8 +66,16 @@ func _level():
 # ------------------------------------------------------------------- host ----
 
 func _run_host() -> void:
-    var err: String = Net.host("HostBot")
-    _check(err == "", "host started on UDP %d %s" % [Net.PORT, err])
+    if role == "host_online":
+        # Online: open a room on the relay and leave the code for the client.
+        Net.host_online("HostBot")
+        _check(await _wait_until(func(): return Net.room_code != "", 15.0), "online room opened on the relay (code %s)" % Net.room_code)
+        var f := FileAccess.open(OS.get_cmdline_user_args()[1], FileAccess.WRITE)
+        f.store_string(Net.room_code)
+        f.close()
+    else:
+        var err: String = Net.host("HostBot")
+        _check(err == "", "host started on UDP %d %s" % [Net.PORT, err])
     _check(await _wait_until(func(): return Net.players.size() == 2, 30.0), "client joined the lobby (%d players)" % Net.players.size())
     await _frames(30)
     Net.start_game(0)
@@ -127,11 +138,17 @@ func _run_host() -> void:
 # ----------------------------------------------------------------- client ----
 
 func _run_client() -> void:
-    Net.start_discovery()
-    var found := await _wait_until(func(): return not Net.hosts.is_empty(), 8.0)
-    _check(true, "LAN discovery %s" % ("found the host" if found else "saw no broadcast (normal in some sandboxes); joining by IP"))
-    Net.stop_discovery()
-    Net.join("127.0.0.1", "ClientBot")
+    if role == "client_online":
+        var path: String = OS.get_cmdline_user_args()[1]
+        _check(await _wait_until(func(): return FileAccess.file_exists(path) and FileAccess.get_file_as_string(path).length() >= 4, 20.0), "got the host's game code")
+        var code := FileAccess.get_file_as_string(path).strip_edges()
+        Net.join_online(code, "ClientBot")
+    else:
+        Net.start_discovery()
+        var found := await _wait_until(func(): return not Net.hosts.is_empty(), 8.0)
+        _check(true, "LAN discovery %s" % ("found the host" if found else "saw no broadcast (normal in some sandboxes); joining by IP"))
+        Net.stop_discovery()
+        Net.join("127.0.0.1", "ClientBot")
     _check(await _wait_until(func(): return Net.players.size() == 2, 20.0), "joined the host's lobby")
     _check(await _wait_until(func(): return _level() != null and _level().net != null and _level().net.started, 30.0), "level started on the client")
     go_ms = Time.get_ticks_msec()
