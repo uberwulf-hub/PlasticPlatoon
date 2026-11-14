@@ -29,7 +29,9 @@ var _res_frames := 0
 var _res_good := 0
 var show_fps := false
 var touch_controls := OS.has_feature("mobile")   # on-screen joystick + buttons
-var touch_mode := false                          # touch controls are in use right now
+var touch_mode := false         # touch controls are in use right now
+var view_dist := 3.4             # on-foot camera distance (0 = first person); the wheel sets it
+var vehicle_zoom := 1.0          # vehicle chase-camera distance multiplier
 var difficulty := 1
 var unlocked_level := 0
 var current_level: Node = null
@@ -90,8 +92,11 @@ func _setup_inputs() -> void:
         _keys("weapon_%d" % (i + 1), [KEY_1 + i])
     _mouse("fire", MOUSE_BUTTON_LEFT)
     _mouse("aim", MOUSE_BUTTON_RIGHT)
-    _mouse("next_weapon", MOUSE_BUTTON_WHEEL_DOWN)
-    _mouse("prev_weapon", MOUSE_BUTTON_WHEEL_UP)
+    # The wheel zooms the camera (all the way in = first person); Q swaps weapon.
+    _mouse("zoom_in", MOUSE_BUTTON_WHEEL_UP)
+    _mouse("zoom_out", MOUSE_BUTTON_WHEEL_DOWN)
+    _keys("next_weapon", [KEY_Q])
+    _keys("prev_weapon", [KEY_Z])
 
 
 func _keys(action: String, keys: Array) -> void:
@@ -253,6 +258,8 @@ func save() -> void:
     cfg.set_value("settings", "graphics", graphics)
     cfg.set_value("settings", "fps_cap", fps_cap)
     cfg.set_value("settings", "show_fps", show_fps)
+    cfg.set_value("settings", "view_dist", view_dist)
+    cfg.set_value("settings", "vehicle_zoom", vehicle_zoom)
     cfg.set_value("settings", "auto_res", auto_res)
     cfg.set_value("settings", "touch_controls", touch_controls)
     cfg.set_value("progress", "meltdown_best", meltdown_best)
@@ -281,6 +288,8 @@ func _load() -> void:
     graphics = clampi(cfg.get_value("settings", "graphics", graphics), 0, 2)
     fps_cap = cfg.get_value("settings", "fps_cap", fps_cap)
     show_fps = cfg.get_value("settings", "show_fps", show_fps)
+    view_dist = cfg.get_value("settings", "view_dist", view_dist)
+    vehicle_zoom = cfg.get_value("settings", "vehicle_zoom", vehicle_zoom)
     auto_res = cfg.get_value("settings", "auto_res", auto_res)
     touch_controls = cfg.get_value("settings", "touch_controls", touch_controls)
     touch_mode = touch_controls

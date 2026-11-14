@@ -133,6 +133,10 @@ func _unhandled_input(event: InputEvent) -> void:
         return
     if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not Game.touch_mode:
         look(event.relative)
+    elif event.is_action_pressed("zoom_in"):
+        zoom(-1)
+    elif event.is_action_pressed("zoom_out"):
+        zoom(1)
     elif event.is_action_pressed("next_weapon"):
         _cycle(1)
     elif event.is_action_pressed("prev_weapon"):
@@ -215,10 +219,40 @@ func _move(delta: float) -> void:
     move_and_slide()
 
 
+## Scroll wheel: step the camera in or out. All the way in is first person.
+const VIEW_STEPS := [0.0, 1.4, 2.4, 3.4, 4.6, 6.0]
+
+
+func zoom(step: int) -> void:
+    var i := 0
+    var best := INF
+    for k in VIEW_STEPS.size():
+        if absf(VIEW_STEPS[k] - Game.view_dist) < best:
+            best = absf(VIEW_STEPS[k] - Game.view_dist)
+            i = k
+    Game.view_dist = VIEW_STEPS[clampi(i + step, 0, VIEW_STEPS.size() - 1)]
+    Game.save()
+
+
+var _heads: Array = []
+
+
+func _head_meshes() -> Array:
+    _heads = _heads.filter(func(m): return is_instance_valid(m))
+    if _heads.is_empty() and model != null:          # new body after a respawn too
+        _heads = model.find_children("Head*", "MeshInstance3D", true, false)
+    return _heads
+
+
+func first_person() -> bool:
+    return Game.view_dist < 0.3
+
+
 func _update_camera(delta: float) -> void:
     var w := cur()
     var scoped := is_scoped()
-    var target_len := 0.15 if scoped else (1.7 if aiming else 3.4)
+    var fp := first_person()
+    var target_len := 0.15 if scoped else (minf(1.7, maxf(Game.view_dist, 0.0)) if aiming else Game.view_dist)
     cam_len = lerpf(cam_len, target_len, minf(1.0, delta * 12.0))
     var ex: Array[RID] = [get_rid()]
     var target_fov: float = w["zoom"] if aiming else 70.0
@@ -227,8 +261,16 @@ func _update_camera(delta: float) -> void:
     camera.fov = lerpf(camera.fov, target_fov, minf(1.0, delta * 12.0))
     pivot.position.y = lerpf(pivot.position.y, 1.05 if crouching else 1.55, minf(1.0, delta * 10.0))
     pivot.rotation.x = pitch
-    rig.update(delta, pivot, camera, cam_len, SHOULDER, ex)
+    # First person: the camera sits at the eyes (no shoulder offset) and the
+    # soldier's own body is hidden so it doesn't block the view.
+    var sh := SHOULDER * clampf(cam_len / 1.4, 0.0, 1.0)
+    rig.update(delta, pivot, camera, maxf(cam_len, 0.0), sh, ex)
+    # First person hides only the head (you see your own arms and gun); a
+    # scope hides the whole soldier.
     model.visible = not (scoped and rig.distance < 0.6)
+    var head_off: bool = fp and rig.distance < 0.6
+    for m in _head_meshes():
+        m.visible = not head_off
     shake = move_toward(shake, 0.0, delta * 2.5)
     camera.h_offset = randf_range(-1.0, 1.0) * shake * 0.12
     camera.v_offset = randf_range(-1.0, 1.0) * shake * 0.12

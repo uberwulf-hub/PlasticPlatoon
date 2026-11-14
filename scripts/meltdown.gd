@@ -554,6 +554,12 @@ func is_player_damage(source: Vector3, explosive: bool) -> bool:
 func award(amount: int, pos: Vector3, _kill: bool) -> void:
     coins += amount
     coins_total += amount
+    coin_popup(amount, pos)
+    if level.net != null and not is_client():
+        level.net.md_coins(amount, pos)          # co-op: the "+10" shows for everyone
+
+
+func coin_popup(amount: int, pos: Vector3) -> void:
     var l := Label3D.new()
     l.text = "+%d" % amount
     l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -759,6 +765,18 @@ func _open_door(d: Dictionary) -> bool:
     return true
 
 
+## A pause that belongs to this node: if the level is left mid-way, the timer
+## goes with it and the waiting code never resumes on a freed object.
+func _wait(t: float) -> void:
+    var tm := Timer.new()
+    tm.one_shot = true
+    tm.wait_time = t
+    add_child(tm)
+    tm.start()
+    await tm.timeout
+    tm.queue_free()
+
+
 func _open_crate(f: Dictionary) -> void:
     _crate_busy = true
     var lbl: Label3D = f["label"]
@@ -766,7 +784,7 @@ func _open_crate(f: Dictionary) -> void:
     for i in 12:
         lbl.text = "MYSTERY CRATE\n" + NAMES[keys[i % keys.size()]]
         Game.play_ui("blip", -12.0)
-        await get_tree().create_timer(0.12).timeout
+        await _wait(0.12)
         if not is_instance_valid(lbl):
             return
     var p = level.player
@@ -780,7 +798,7 @@ func _open_crate(f: Dictionary) -> void:
         p.give_pickup(got)
     lbl.text = "MYSTERY CRATE\n%s!" % NAMES[got]
     level.notify("THE CRATE GAVE YOU THE %s" % NAMES[got], 2.0)
-    await get_tree().create_timer(1.6).timeout
+    await _wait(1.6)
     if is_instance_valid(lbl):
         lbl.text = "%s\n%d COINS" % [f["title"], f["cost"]]
     _crate_busy = false

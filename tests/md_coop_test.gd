@@ -81,6 +81,12 @@ func _client() -> void:
     L.player.invulnerable = true
     _check(await _wait(func(): return M.melties.size() >= 2, 25.0), "client sees the host's Melties (%d)" % M.melties.size())
     _check(await _wait(func(): return M.wave >= 1, 10.0), "wave number reached the client (%d)" % M.wave)
+    # A Spitter's acid shows up here too (the host's spits; ours is just a copy).
+    var spits := [0]
+    L.child_entered_tree.connect(func(n): if n.get("visual_only") == true: spits[0] += 1)
+    L.net._md_spit(0, L.player.global_position + Vector3(4, 2, 0), L.player.global_position)
+    await _frames(2)
+    _check(spits[0] >= 1, "a Spitter's acid glob shows on the client")
     # Shoot one through the host (what the shooter sees is what it hits).
     var m = M.melties.values().filter(func(x): return is_instance_valid(x) and x.alive)[0]
     await _frames(10)

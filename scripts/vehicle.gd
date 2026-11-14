@@ -732,6 +732,11 @@ func exit_vehicle() -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if driver == null or get_tree().paused:
         return
+    # The scroll wheel moves the chase camera in and out.
+    if event.is_action_pressed("zoom_in"):
+        Game.vehicle_zoom = maxf(0.55, Game.vehicle_zoom - 0.15)
+    elif event.is_action_pressed("zoom_out"):
+        Game.vehicle_zoom = minf(1.6, Game.vehicle_zoom + 0.15)
     if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not Game.touch_mode:
         look(event.relative)
 
@@ -905,7 +910,7 @@ func _update_camera(delta: float) -> void:
     cam_pivot.global_position = global_position + Vector3(0, k["cam_height"], 0)
     cam_pivot.rotation = Vector3(cam_pitch, cam_yaw, 0)
     var ex: Array[RID] = [get_rid()]
-    rig.update(delta, cam_pivot, camera, k["cam_dist"], Vector3(0, 0.4, 0), ex)
+    rig.update(delta, cam_pivot, camera, k["cam_dist"] * Game.vehicle_zoom, Vector3(0, 0.4, 0), ex)
     var shake: float = driver.shake if driver else 0.0
     camera.h_offset = randf_range(-1.0, 1.0) * shake * 0.12
     camera.v_offset = randf_range(-1.0, 1.0) * shake * 0.12
@@ -1051,6 +1056,28 @@ func take_damage(amount: float, _source: Vector3, hit_pos: Vector3, explosive :=
     return false
 
 
+## Burnt-out wreck: scorched near-black plastic, slumped onto one side, the
+## gun drooping, and a scorch mark burned into the ground underneath.
+func _char() -> void:
+    for m in mats:
+        m.albedo_color = Color(0.05, 0.045, 0.04).lerp(m.albedo_color, 0.07)
+        m.roughness = 1.0
+        m.metallic_specular = 0.15
+        m.rim_enabled = false
+    if not k.get("flies", false):
+        var tw := create_tween()
+        tw.tween_property(self, "rotation:z", randf_range(-0.09, 0.09), 0.6).set_ease(Tween.EASE_OUT)
+        tw.parallel().tween_property(self, "position:y", position.y - 0.12, 0.6)
+    if barrel:
+        barrel.rotation.x = -0.28
+    if turret:
+        turret.rotation.y += randf_range(-0.5, 0.5)
+    if hp_bar:
+        hp_bar.visible = false
+    if level and level.has_method("scorch_under"):
+        level.scorch_under(self, maxf(k["size"].x, k["size"].z) * 1.3)
+
+
 func _destroy() -> void:
     alive = false
     hp = 0.0
@@ -1058,9 +1085,7 @@ func _destroy() -> void:
     var p := global_position + Vector3(0, 1.2, 0)
     level.boom(p, 7.0, 6.0)
     Fx.fire(level, p, 1.5)
-    for m in mats:
-        m.albedo_color = m.albedo_color.darkened(0.7)
-        m.roughness = 0.9
+    _char()
     engine.stop()
     level.apply_explosion(p, 6.0, 60.0)   # before ejecting, so the driver isn't hit twice
     if ai:
@@ -1081,9 +1106,7 @@ func _destroy_visual() -> void:
     hp = 0.0
     remove_from_group("damageable")
     Fx.fire(level, global_position + Vector3(0, 1.2, 0), 1.5)
-    for m in mats:
-        m.albedo_color = m.albedo_color.darkened(0.7)
-        m.roughness = 0.9
+    _char()
     engine.stop()
     var d = driver
     exit_vehicle()

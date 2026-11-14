@@ -482,3 +482,85 @@ const MORE_OUTROS := [
         ],
     },
 ]
+
+
+# ----------------------------------------------------------- MELTDOWN ----
+# Short "PNN BREAKING" bulletins before each MELTDOWN map (index = map).
+
+static func meltdown(i: int) -> Dictionary:
+    var d: Dictionary = MELTDOWN_NEWS[clampi(i, 0, MELTDOWN_NEWS.size() - 1)].duplicate(true)
+    d["ticker"] = d.get("ticker", []) + [
+        "MELTIES: 'WE JUST WANT A HUG,' SAY MELTIES, WHILE NOT HUGGING",
+        "PNN REMINDER: KEEP YOUR PLASTIC COOL AND YOUR WINDOWS BOARDED",
+    ]
+    return d
+
+
+const MELTDOWN_NEWS := [
+    {"theme": "garage", "ticker": ["BASEMENT LIGHT BULB STILL NOT CHANGED", "BROKEN TOYS FORM SUPPORT GROUP"], "beats": [
+        {"who": "brenda", "line": "Breaking news. Something has gone very wrong with General Beige's paint.", "headline": "PNN BREAKING: MELTDOWN IN THE BASEMENT"},
+        {"who": "gary", "line": "Chip, I'm in the basement, where Tan soldiers have come back all melty, and they want our green plastic. I'm standing very still.", "headline": "LIVE: UNDER THE HOUSE"},
+        {"who": "chip", "line": "Officials advise boarding up every window and buying a bigger gun off the wall. That's not the official advice. That's mine.", "gesture": "Yes"},
+    ]},
+    {"theme": "bedroom", "ticker": ["ATTIC DUST REACHES RECORD LEVELS", "NINETIES TOY CHEST: STILL SMELLS LIKE NINETIES"], "beats": [
+        {"who": "brenda", "line": "Breaking news from the attic, where nobody has been up the ladder in years. Until tonight.", "headline": "PNN BREAKING: MELTIES IN THE ATTIC"},
+        {"who": "gary", "line": "Chip, I'm under the rafters. It's dusty, it's dark, and something is scratching at the toy chest. I've decided not to open it.", "headline": "LIVE: THE ATTIC"},
+        {"who": "chip", "line": "Good call, Gary. Nobody ever opens the toy chest and has a nice time.", "gesture": "No"},
+    ]},
+    {"theme": "yard", "ticker": ["GARDEN GNOME DECLARES NEUTRALITY", "COMPOST BIN: 'I'VE SEEN THINGS'"], "beats": [
+        {"who": "brenda", "line": "Breaking news: Melties are crawling out of the flower beds in the back garden.", "headline": "PNN BREAKING: GARDEN SHED UNDER SIEGE"},
+        {"who": "gary", "line": "I'm at the potting shed, Chip. The greenhouse is glass, which is lovely for tomatoes and terrible for keeping things out.", "headline": "LIVE: THE BACK GARDEN"},
+        {"who": "chip", "line": "Our advice tonight: hold the shed, mind the greenhouse, and do not, under any circumstances, trust the compost.", "gesture": "No"},
+    ]},
+    {"theme": "city", "ticker": ["TOY STORE CLOSED; TOYS STILL WORKING", "PRICE CHECK ON AISLE NINE CANCELLED"], "beats": [
+        {"who": "brenda", "line": "Breaking news from the mall. The toy store is shut for the night, but something tan is scratching at the front windows.", "headline": "PNN BREAKING: TOY STORE AFTER HOURS"},
+        {"who": "gary", "line": "Chip, I'm at the checkout. The lights are humming, the action figures are staring, and I'm told this is completely normal.", "headline": "LIVE: THE TOY STORE"},
+        {"who": "chip", "line": "Remember, if you break it, you bought it. That goes double for Melties.", "gesture": "Yes"},
+    ]},
+    {"theme": "table", "ticker": ["FRIDGE DOOR LEFT OPEN; ELECTRICITY BILL WEEPS", "LAST COOKIE MISSING; NO SUSPECTS"], "beats": [
+        {"who": "brenda", "line": "Breaking news from the kitchen, where something tan has crawled out from behind the fridge.", "headline": "PNN BREAKING: MIDNIGHT KITCHEN"},
+        {"who": "gary", "line": "I'm on the kitchen floor, Chip. It's after bedtime. The fridge is open. The Melties are hungry, and I don't think they want leftovers.", "headline": "LIVE: THE KITCHEN"},
+        {"who": "chip", "line": "Hold the kitchen, squeeze through the pantry, and somebody please close that fridge.", "gesture": "No"},
+    ]},
+    {"theme": "city", "ticker": ["SCHOOL BELL RINGS AT MIDNIGHT; NOBODY ANSWERS", "LOST PROPERTY BOX GROWS LEGS"], "beats": [
+        {"who": "brenda", "line": "Breaking news: recess is cancelled. The Melties have got into the school.", "headline": "PNN BREAKING: RECESS IS CANCELLED"},
+        {"who": "gary", "line": "Chip, I'm in Room 4B. The desks are in rows, the chalkboard is blank, and there is a very long hallway of lockers ahead of me.", "headline": "LIVE: ROOM 4B"},
+        {"who": "chip", "line": "Barricade the classroom, fight down the hallway, take the gym. And no running in the corridors. Unless something is chasing you.", "gesture": "Yes"},
+    ]},
+    {"theme": "beach", "ticker": ["SANDCASTLE PLANNING PERMISSION DENIED", "TIDE COMES IN; TIDE GOES OUT; EXPERTS BAFFLED"], "beats": [
+        {"who": "brenda", "line": "Breaking news from the beach, where the tide has brought in the Melties as the sun goes down.", "headline": "PNN BREAKING: SANDCASTLE BEACH AT DUSK"},
+        {"who": "gary", "line": "I'm at the lifeguard hut, Chip. Lovely sunset. Terrible company.", "headline": "LIVE: THE BEACH"},
+        {"who": "chip", "line": "If things go badly, the only way out is down the pier. The pier, I should mention, ends in the sea.", "gesture": "No"},
+    ]},
+    {"theme": "bath", "ticker": ["RUBBER DUCK REFUSES TO COMMENT", "BATH WATER STILL RUNNING; DAD NOT HAPPY"], "beats": [
+        {"who": "brenda", "line": "Breaking news from upstairs: the Melties came up the drain.", "headline": "PNN BREAKING: BATH TIME"},
+        {"who": "gary", "line": "Chip, I'm in the bathroom. The tub is full, the rubber duck is watching, and something just gurgled.", "headline": "LIVE: THE BATHROOM"},
+        {"who": "chip", "line": "Hold the bathroom, cross the landing, and make your stand in the kids' bedroom. Bedtime is officially postponed.", "gesture": "Yes"},
+    ]},
+    {"theme": "garage", "ticker": ["DAD'S GOOD SCREWDRIVER STILL MISSING", "FAMILY CAR: 'DON'T SCRATCH ME'"], "beats": [
+        {"who": "brenda", "line": "Breaking news: something tan is oozing under the garage door.", "headline": "PNN BREAKING: THE GARAGE"},
+        {"who": "gary", "line": "I'm at Dad's workbench, Chip. Everything here is labelled. The labels say do not touch. I'm touching nothing.", "headline": "LIVE: THE GARAGE"},
+        {"who": "chip", "line": "Fight round the family car, fall back to the paint store, and whatever you do, don't scratch the car.", "gesture": "No"},
+    ]},
+    {"theme": "couch", "ticker": ["SLEEPOVER CANCELLED DUE TO MELTIES", "PILLOW FORT PASSES SAFETY INSPECTION, BARELY"], "beats": [
+        {"who": "brenda", "line": "Breaking news from the living room: the sleepover is over. The Melties want in.", "headline": "PNN BREAKING: PILLOW FORT"},
+        {"who": "gary", "line": "Chip, I'm inside the pillow fort. It's cosy, it's made of blankets, and I'm not sure it's bulletproof.", "headline": "LIVE: THE PILLOW FORT"},
+        {"who": "chip", "line": "Hold the fort, take back the sofa, and dig in by the fireplace. And put the TV on mute. They can hear us.", "gesture": "Yes"},
+    ]},
+    {"theme": "bedroom", "ticker": ["GRANDPA'S TRAINS RUNNING LATE", "TICKET OFFICE CLOSED FOR MELTING"], "beats": [
+        {"who": "brenda", "line": "Breaking news from the loft, where the Melties have taken over Grandpa's model railway.", "headline": "PNN BREAKING: MODEL RAILWAY"},
+        {"who": "gary", "line": "I'm on the station platform, Chip. The next train is cancelled. So is the one after that.", "headline": "LIVE: THE PLATFORM"},
+        {"who": "chip", "line": "Hold the platform, fight through the train yard, and dig in at the engine shed. Grandpa says please don't touch the little trees.", "gesture": "No"},
+    ]},
+    {"theme": "couch", "ticker": ["CAKE STILL UNCUT; GUESTS WORRIED", "PINATA REFUSES TO BE HIT"], "beats": [
+        {"who": "brenda", "line": "Breaking news: a birthday party nobody cleaned up has been crashed by the Melties.", "headline": "PNN BREAKING: BIRTHDAY PARTY"},
+        {"who": "gary", "line": "Chip, I'm at the party table. Cake, balloons, presents everywhere, and the Melties want all of it.", "headline": "LIVE: THE PARTY"},
+        {"who": "chip", "line": "Hold the table, fight through the games room, and make your last stand on the bouncy castle. Happy birthday, everybody.", "gesture": "Yes"},
+    ]},
+    {"theme": "snow", "ticker": ["SCHOOL CLOSED; CHILDREN DELIGHTED", "SNOWMAN SEEN LOOKING NERVOUS"], "beats": [
+        {"who": "brenda", "line": "Breaking news: it snowed overnight, school is cancelled, and the Melties are slipping in over the drifts.", "headline": "PNN BREAKING: SNOW DAY"},
+        {"who": "gary", "line": "I'm in the snow fort, Chip. It's freezing. On the bright side, so are the Melties.", "headline": "LIVE: THE BACK YARD"},
+        {"who": "chip", "line": "Hold the fort, cross the snowman yard, and fall back to the sled shed. Wrap up warm out there.", "gesture": "Yes"},
+    ]},
+]
+

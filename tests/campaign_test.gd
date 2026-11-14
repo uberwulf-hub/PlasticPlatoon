@@ -65,8 +65,14 @@ func _news(first: int, last: int) -> void:
     Game.narration = true
     var unfilled := 0
     var themes := {}
+    var scripts: Array = []
     for op in range(first, last + 1):
-        for d in [NS.intro(op), NS.outro(op, true, st), NS.outro(op, false, st)]:
+        scripts.append_array([NS.intro(op), NS.outro(op, true, st), NS.outro(op, false, st)])
+    if last >= 12:
+        for i in NS.MELTDOWN_NEWS.size():       # MELTDOWN bulletins too
+            scripts.append(NS.meltdown(i))
+    for d in scripts:
+        if true:
             total += 1
             themes[d["theme"]] = true
             for b in d["beats"]:

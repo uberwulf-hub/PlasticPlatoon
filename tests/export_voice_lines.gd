@@ -23,6 +23,9 @@ func _ready() -> void:
             st["level"] = op
             scripts.append(NS.outro(op, true, st))
         scripts.append(NS.outro(op, false, stat_sets[0]))
+        if op == LD.META.size() - 1:
+            for i in NS.MELTDOWN_NEWS.size():
+                scripts.append(NS.meltdown(i))
         for d in scripts:
             for b in d["beats"]:
                 var who: String = b.get("who", "both")

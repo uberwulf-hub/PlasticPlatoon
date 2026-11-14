@@ -96,6 +96,7 @@ func _play_level(i: int) -> void:
     if i == 0:
         await _edge_test(L, p)
         await _fx_budget_test(L)
+        await _zoom_test(L, p)
     if i == 1:
         # Concrete Jungle lag fix: far soldiers/vehicles skip shadows, and flat or
         # small scenery is cheap to draw.
@@ -587,6 +588,22 @@ func _fx_budget_test(L) -> void:
     var f = Fx.fire(L, Vector3(0, 1, 64), 1.0, 0.2)
     await get_tree().create_timer(5.5).timeout
     _check(not is_instance_valid(f) or not f.emitting, "a fire dies down after its time")
+
+
+## Scroll wheel: zooms the camera; all the way in is first person (body hidden).
+func _zoom_test(L, p) -> void:
+    var keep: float = Game.view_dist
+    for k in 8:
+        p.zoom(-1)
+    _check(p.first_person() and Game.view_dist == 0.0, "wheel all the way in = first person")
+    await _frames(40)
+    _check(p.camera.global_position.distance_to(p.pivot.global_position) < 0.6 and not p._head_meshes()[0].visible, "first person: camera at the eyes, own head hidden (%.2f m)" % p.camera.global_position.distance_to(p.pivot.global_position))
+    for k in 8:
+        p.zoom(1)
+    _check(Game.view_dist >= 6.0, "wheel out = far third-person view")
+    await _frames(60)
+    _check(p.model.visible and p._head_meshes()[0].visible and p.camera.global_position.distance_to(p.pivot.global_position) > 2.0, "third person: body visible again")
+    Game.view_dist = keep
 
 
 ## Phone controls: the joystick walks, a right-side drag turns, FIRE holds.

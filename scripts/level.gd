@@ -74,6 +74,7 @@ func _ready() -> void:
     _apply_progression()
     if _ground_spec != null:
         _build_terrain()
+    _park_rides()
     _build_environment()
     optimize_static()
     player = Player.new()
@@ -419,6 +420,59 @@ func _scorch(pos: Vector3, radius: float) -> void:
     if h.is_empty() or not _marks_on(h["collider"]) or h["normal"].y < 0.6:
         return
     _add_mark(2, h["position"], h["normal"], clampf(radius * 0.8, 1.5, 5.0), _surface_color(h["collider"]), _scorches, MAX_SCORCH)
+
+
+## Street rides on the full-size outdoor operations: a few unarmed cars and
+## motorbikes parked on clear, flat ground near the start (searched outward
+## from the start point, so they never end up inside a rock or a wall; the
+## search has no randomness, so co-op PCs park the same ones).
+func _park_rides() -> void:
+    var want: Array = LevelData.RIDES.get(level_index, [])
+    if want.is_empty():
+        return
+    var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+    var box := BoxShape3D.new()
+    box.size = Vector3(3.2, 1.6, 5.6)
+    var base: Vector3 = info["spawn"]
+    var spots: Array = []
+    var need: int = want[0] + want[1]
+    for r in [11.0, 15.0, 19.0, 24.0, 30.0]:
+        for k in 20:
+            if spots.size() >= need:
+                break
+            var dir := Vector3.FORWARD.rotated(Vector3.UP, info.get("spawn_yaw", 0.0) + k * TAU / 20.0)
+            var p: Vector3 = base + dir * r
+            var g: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(p + Vector3(0, 40, 0), p + Vector3(0, -40, 0), 1))
+            if g.is_empty() or g["normal"].y < 0.94 or absf(g["position"].y - base.y) > 3.0:
+                continue
+            var q := PhysicsShapeQueryParameters3D.new()
+            q.shape = box
+            q.transform = Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z)), g["position"] + Vector3(0, 1.0, 0))
+            q.collision_mask = 1 | 4
+            if not space.intersect_shape(q, 1).is_empty():
+                continue
+            if spots.any(func(s): return s.distance_to(g["position"]) < 6.0):
+                continue
+            spots.append(g["position"])
+    var cols := [Color(0.75, 0.15, 0.12), Color(0.15, 0.3, 0.65), Color(0.12, 0.12, 0.12), Color(0.85, 0.75, 0.2)]
+    for i in spots.size():
+        var kind := "car" if i < want[0] else "bike"
+        var yaw := atan2(spots[i].x - base.x, spots[i].z - base.z) + PI * 0.5
+        add_vehicle(kind, spots[i] + Vector3(0, 0.3, 0), yaw, cols[i % cols.size()])
+    rides_parked = spots.size()
+
+
+var rides_parked := 0             # tests read it
+
+
+## A big scorch on the ground under a burnt-out wreck (the ray ignores the wreck).
+func scorch_under(n: CollisionObject3D, size: float) -> void:
+    var p: Vector3 = n.global_position
+    var q := PhysicsRayQueryParameters3D.create(p + Vector3(0, 1.0, 0), p + Vector3(0, -3.0, 0), 1, [n.get_rid()])
+    var h: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+    if h.is_empty() or not _marks_on(h["collider"]):
+        return
+    _add_mark(2, h["position"], h["normal"], size, _surface_color(h["collider"]), _scorches, MAX_SCORCH)
 
 
 ## Fixed scenery only: static bodies and the terrain, not soldiers, vehicles,
@@ -1443,7 +1497,7 @@ func _pause() -> void:
     vb.add_child(UI.button("Quit to Main Menu", func():
         get_tree().paused = false
         request_menu.emit()))
-    vb.add_child(UI.label("WASD move · Mouse aim · LMB fire · RMB aim/scope\nShift sprint · C crouch · Space jump · R reload\n1-5 / wheel weapons · G frag · F drone strike · E jeep/tank", 16, Color(0.8, 0.85, 0.75)))
+    vb.add_child(UI.label("WASD move · Mouse aim · LMB fire · RMB aim/scope\nShift sprint · C crouch · Space jump · R reload\n1-5 / Q weapons · Wheel zoom (first person) · G frag · F drone · E vehicles", 16, Color(0.8, 0.85, 0.75)))
 
 
 func _toggle_net_menu() -> void:

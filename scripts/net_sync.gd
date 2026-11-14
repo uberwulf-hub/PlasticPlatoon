@@ -485,3 +485,27 @@ func srv_md_rebuild(bi: int) -> void:
         level.mode.teammate_planks += 1
         level.mode.rebuild_board(level.mode.barricades[bi])
 
+
+## A Spitter spat: the other PCs show the glob flying (the host's does the damage).
+func md_spit(id: int, from: Vector3, at: Vector3) -> void:
+    _md_spit.rpc(id, from, at)
+
+
+@rpc("authority", "unreliable")
+func _md_spit(id: int, from: Vector3, at: Vector3) -> void:
+    if level.mode:
+        var m = level.mode.melties.get(id)
+        if m != null and is_instance_valid(m):
+            m.model.gesture("Punch")
+        load("res://scripts/melty.gd").spawn_spit(level, level.mode, from, at, 0.0, true)
+
+
+func md_coins(amount: int, pos: Vector3) -> void:
+    _md_coins.rpc(amount, pos)
+
+
+@rpc("authority", "unreliable")
+func _md_coins(amount: int, pos: Vector3) -> void:
+    if level.mode:
+        level.mode.coin_popup(amount, pos)
+

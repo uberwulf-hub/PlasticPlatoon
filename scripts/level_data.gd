@@ -115,6 +115,10 @@ const PROGRESSION := [
     {"vehicles": ALL_VEHICLES, "weapons": ALL_WEAPONS, "start": [], "drones": true, "tan": ["jeep", "tank"], "ramp": 1.3},
 ]
 const CIVILIAN := ["car", "bike"]    # street cars and motorbikes: drivable on every operation
+# Operations that get street rides parked near the start: index -> [cars, bikes].
+# Not the first operation: it has no vehicles while players learn the ropes.
+# (Concrete Jungle has its own, placed along the streets.)
+const RIDES := {3: [1, 2], 4: [0, 2], 6: [1, 2], 10: [1, 2]}
 const VEHICLE_NAMES := {"jeep": "Jeep", "tank": "Tank", "apc": "Troop carrier", "heli": "Helicopter"}
 const WEAPON_NAMES := {"carbine": "M4A1 Carbine", "lmg": "M249 SAW", "shotgun": "M1014 Shotgun", "sniper": "Mk 22 Sniper", "launcher": "AT4 Launcher"}
 

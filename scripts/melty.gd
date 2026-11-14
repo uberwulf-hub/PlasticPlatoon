@@ -310,10 +310,20 @@ func _can_see(t) -> bool:
 
 func _spit(at: Vector3) -> void:
     model.gesture("Punch")
+    var from: Vector3 = global_position + Vector3(0, 1.5 * k["size"].y / 0.85, 0)
+    spawn_spit(level, mode, from, at, damage * (0.8 if is_boss else 1.0), false)
+    if level.net != null:
+        level.net.md_spit(net_id, from, at)        # co-op: everyone sees it fly
+
+
+## A glob of acid. visual_only = a harmless copy on a co-op teammate's PC
+## (the host's real one does the damage and the splash).
+static func spawn_spit(lvl: Node, md: Node, from: Vector3, at: Vector3, dmg: float, visual_only: bool) -> void:
     var b := Spit.new()
-    b.setup(level, mode, global_position + Vector3(0, 1.5 * k["size"].y / 0.85, 0), at, damage * (0.8 if is_boss else 1.0))
-    level.add_child(b)
-    Game.play_sfx("throw", global_position, -4.0)
+    b.setup(lvl, md, from, at, dmg)
+    b.visual_only = visual_only
+    lvl.add_child(b)
+    Game.play_sfx("throw", from, -4.0)
 
 
 ## The Big Melt: a ground slam that hurts every green soldier nearby.
@@ -452,6 +462,7 @@ class Spit extends Node3D:
     var vel := Vector3.ZERO
     var damage := 15.0
     var life := 4.0
+    var visual_only := false
 
     func setup(lvl: Node, md: Node, from: Vector3, at: Vector3, dmg: float) -> void:
         level = lvl
@@ -490,6 +501,9 @@ class Spit extends Node3D:
 
     func _splash(p: Vector3) -> void:
         set_physics_process(false)
+        if visual_only:
+            queue_free()                  # the host's copy splashes for everyone
+            return
         level.boom(p, 1.2, -10.0)
         for t in mode.green_targets():
             if t.global_position.distance_to(p) < 2.5:

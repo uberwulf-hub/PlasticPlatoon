@@ -20,7 +20,17 @@ func _ready() -> void:
     _check(starts.size() == load("res://scripts/meltdown_maps.gd").META.size(), "menu: a START button per map (%d)" % starts.size())
     start = starts[0]          # The Basement
     _check(start != null, "menu: Meltdown screen has a START button")
+    var news_was: bool = Game.show_news
+    Game.show_news = true
     start.pressed.emit()
+    await _frames(5)
+    _check(main.news != null, "START plays a PNN MELTDOWN bulletin first")
+    var nb = main.news
+    if nb != null:
+        nb.finished.emit()                 # skip it (starts the map)...
+        nb.done = true                     # ...and stop it, so it can't start it twice
+        nb.queue_free()
+    Game.show_news = news_was
     await _frames(10)
     var L = main.level
     var M = L.mode

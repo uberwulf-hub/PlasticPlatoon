@@ -180,7 +180,7 @@ func show_meltdown() -> void:
         var best: int = Game.meltdown_best.get(i, 0)
         var row := HBoxContainer.new()
         row.add_theme_constant_override("separation", 16)
-        row.add_child(UI.button("START", func(): start_level(LevelData.MELTDOWN_BASE + i), 150))
+        row.add_child(UI.button("START", func(): _news(NewsScripts.meltdown(i), func(): start_level(LevelData.MELTDOWN_BASE + i)), 150))
         row.add_child(UI.label("Best: wave %d" % best if best > 0 else "Best: -", 16, UI.ACCENT))
         card.add_child(row)
         grid.add_child(card)
@@ -329,7 +329,7 @@ func show_controls() -> void:
     var rows := [
         ["W A S D", "Move"], ["Mouse", "Look / aim"], ["Left click", "Fire"],
         ["Right click", "Aim down sights / scope"], ["Shift", "Sprint"], ["C / Ctrl", "Crouch (harder to spot)"],
-        ["Space", "Jump"], ["R", "Reload"], ["1 - 5 / Wheel", "Switch weapon"],
+        ["Space", "Jump"], ["R", "Reload"], ["1 - 5 / Q", "Switch weapon"], ["Mouse wheel", "Zoom in / out (all the way in = first person)"],
         ["G", "Throw frag grenade"], ["E", "Get in / out of a jeep or tank"], ["T", "Squad: hold position / follow me"], ["F", "Call Reaper drone strike at crosshair"], ["Esc / P", "Pause"], ["In vehicles", "WASD drive, mouse aims the gun, LMB fire, RMB tank coax MG"],
     ]
     var grid := GridContainer.new()
