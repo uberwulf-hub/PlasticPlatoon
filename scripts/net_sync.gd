@@ -106,7 +106,10 @@ func _st(d: PackedFloat32Array, vd: PackedFloat32Array) -> void:
 
 func _send_snapshot() -> void:
     var en := PackedFloat32Array()
-    for e in level.enemies:
+    if level.mode != null:
+        # MELTDOWN: Melties come and go, so they travel by id on their own channel.
+        _md_pos.rpc(level.mode.pack_melties())
+    for e in ([] if level.mode != null else level.enemies):
         var alive: bool = is_instance_valid(e) and e.alive
         var pos: Vector3 = e.global_position if is_instance_valid(e) else Vector3.ZERO
         var flags := (1.0 if alive else 0.0) + (2.0 if is_instance_valid(e) and e.get("_net_shot") else 0.0)
@@ -404,3 +407,81 @@ func _check_squad_down(delta: float) -> void:
     _all_down_t = 0.0 if any_alive else _all_down_t + delta
     if _all_down_t > 1.0:
         level.net_squad_wiped()
+
+
+# ------------------------------------------------------------- MELTDOWN ----
+# The host runs the waves; these keep the other PCs' Melties, numbers,
+# windows and doors in step, and carry their purchases and repairs.
+
+func md_spawn(id: int, kind: String, pos: Vector3, max_hp: float, spd: float, bi: int, is_boss: bool) -> void:
+    _md_spawn.rpc(id, kind, pos, max_hp, spd, bi, is_boss)
+
+
+@rpc("authority", "reliable")
+func _md_spawn(id: int, kind: String, pos: Vector3, max_hp: float, spd: float, bi: int, is_boss: bool) -> void:
+    if level.mode:
+        level.mode.puppet_spawn(id, kind, pos, max_hp, spd, bi, is_boss)
+
+
+func md_dead(id: int) -> void:
+    _md_dead.rpc(id)
+
+
+@rpc("authority", "reliable")
+func _md_dead(id: int) -> void:
+    if level.mode:
+        level.mode.puppet_dead(id)
+
+
+@rpc("authority", "unreliable_ordered")
+func _md_pos(d: PackedFloat32Array) -> void:
+    if level.mode:
+        level.mode.apply_melties(d)
+
+
+func md_state(st: Dictionary) -> void:
+    _md_state.rpc(st)
+
+
+@rpc("authority", "unreliable_ordered")
+func _md_state(st: Dictionary) -> void:
+    if level.mode:
+        level.mode.apply_state(st)
+
+
+## A teammate buys something: "door" (index) or plain "coins" for a station item.
+func md_buy(what: String, i: int, cost: int) -> void:
+    srv_md_buy.rpc_id(1, what, i, cost)
+
+
+@rpc("any_peer", "reliable")
+func srv_md_buy(what: String, i: int, cost: int) -> void:
+    if not is_server() or level.mode == null:
+        return
+    if not level.mode.host_spend(cost):
+        return
+    if what == "door":
+        md_door(i)
+
+
+## Open door i on every PC (the host already took the coins).
+func md_door(i: int) -> void:
+    _md_door.rpc(i)
+
+
+@rpc("authority", "call_local", "reliable")
+func _md_door(i: int) -> void:
+    if level.mode:
+        level.mode.open_door_index(i)
+
+
+func md_rebuild(bi: int) -> void:
+    srv_md_rebuild.rpc_id(1, bi)
+
+
+@rpc("any_peer", "reliable")
+func srv_md_rebuild(bi: int) -> void:
+    if is_server() and level.mode and bi >= 0 and bi < level.mode.barricades.size():
+        level.mode.teammate_planks += 1
+        level.mode.rebuild_board(level.mode.barricades[bi])
+

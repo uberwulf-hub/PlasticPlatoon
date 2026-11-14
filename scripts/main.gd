@@ -653,8 +653,14 @@ func show_lobby() -> void:
         var pick := OptionButton.new()
         for i in LevelData.META.size():
             pick.add_item("%d. %s" % [i + 1, LevelData.META[i]["name"]], i)
-        pick.selected = clampi(get_meta("mp_op", 0), 0, LevelData.META.size() - 1)
-        pick.item_selected.connect(func(idx): set_meta("mp_op", idx))
+        # MELTDOWN maps too: hold off the waves together.
+        var MM = load("res://scripts/meltdown_maps.gd")
+        pick.add_separator("MELTDOWN")
+        for i in MM.META.size():
+            pick.add_item("MELTDOWN: %s" % MM.META[i]["name"], LevelData.MELTDOWN_BASE + i)
+        var want: int = get_meta("mp_op", 0)
+        pick.selected = maxi(0, pick.get_item_index(want))
+        pick.item_selected.connect(func(idx): set_meta("mp_op", pick.get_item_id(idx)))
         pick.custom_minimum_size = Vector2(520, 44)
         vb.add_child(pick)
         vb.add_child(UI.button("START", func(): Net.start_game(get_meta("mp_op", 0)), 520))

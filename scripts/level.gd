@@ -161,6 +161,8 @@ func _setup_net() -> void:
 func ref_of(n) -> Array:
     if n == null:
         return []
+    if mode != null and n.get("net_id") != null and n.net_id > 0:
+        return ["m", n.net_id]          # MELTDOWN: Melties by id (lists differ between PCs)
     for pair in [["e", enemies], ["ev", enemy_vehicles], ["v", vehicles], ["t", targets], ["b", barrels]]:
         var i: int = pair[1].find(n)
         if i >= 0:
@@ -171,6 +173,8 @@ func ref_of(n) -> Array:
 func node_of(ref: Array):
     if ref.size() != 2:
         return null
+    if ref[0] == "m":
+        return mode.melties.get(int(ref[1])) if mode != null else null
     var list: Array = {"e": enemies, "ev": enemy_vehicles, "v": vehicles, "t": targets, "b": barrels}.get(ref[0], [])
     var i: int = ref[1]
     if i < 0 or i >= list.size() or not is_instance_valid(list[i]):

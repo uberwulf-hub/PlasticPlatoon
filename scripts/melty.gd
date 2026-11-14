@@ -51,6 +51,13 @@ var _ability_t := 0.0             # spit / slam timer
 var _summon_t := 0.0
 var _fuse := -1.0                 # popper: counting down to boom
 var _belly: StandardMaterial3D
+# ---- co-op: on non-host PCs a Melty is a puppet that follows the host ----
+var net_id := 0
+var net_puppet := false
+var _net_pos := Vector3.ZERO
+var _net_yaw := 0.0
+var _net_hs := 0.0
+var _net_have := false
 
 
 func setup(lvl: Node, md: Node, b: Node, pos: Vector3, wave_hp: float, wave_speed: float, wave_damage: float, what := "shambler") -> void:
@@ -163,6 +170,12 @@ func _blob(pos: Vector3, r: float, m: Material) -> void:
 
 func _physics_process(delta: float) -> void:
     if not alive:
+        return
+    if net_puppet:
+        var kk := minf(1.0, delta * 12.0)
+        position = position.lerp(_net_pos, kk) if position.distance_to(_net_pos) < 8.0 else _net_pos
+        rotation.y = lerp_angle(rotation.y, _net_yaw, kk)
+        model.animate(delta, _net_hs, false)
         return
     if not is_on_floor():
         velocity.y -= GRAVITY * delta
@@ -306,7 +319,7 @@ func _spit(at: Vector3) -> void:
 ## The Big Melt: a ground slam that hurts every green soldier nearby.
 func _slam() -> void:
     model.gesture("Punch")
-    level.boom_local(global_position, 4.0, -2.0)
+    level.boom(global_position, 4.0, -2.0)
     for t in mode.green_targets():
         var d: float = t.global_position.distance_to(global_position)
         if d < 7.0:
@@ -325,7 +338,7 @@ func _light_fuse() -> void:
 func _pop() -> void:
     _fuse = -2.0                  # (so _die doesn't burst it a second time)
     var p := global_position + Vector3(0, 0.8, 0)
-    level.boom_local(p, 3.5, 0.0)
+    level.boom(p, 3.5, 0.0)
     for t in mode.green_targets():
         var d: float = t.global_position.distance_to(global_position)
         if d < 4.5:
@@ -339,13 +352,43 @@ func _face(d: Vector3) -> void:
         rotation.y = lerp_angle(rotation.y, atan2(-d.x, -d.z), 0.25)
 
 
+## Host snapshot for this Melty (non-host PCs).
+func net_apply(pos: Vector3, yaw: float, hs: float, flags: int) -> void:
+    _net_pos = pos
+    _net_yaw = yaw
+    _net_hs = hs
+    if not _net_have:
+        position = pos
+        rotation.y = yaw
+        _net_have = true
+    if flags & 2:
+        model.gesture("Punch")
+
+
+## The host says this Melty melted: play it out here, no rewards or rules.
+func die_visual() -> void:
+    if not alive:
+        return
+    alive = false
+    remove_from_group("enemies")
+    remove_from_group("damageable")
+    collision_layer = 0
+    collision_mask = 0
+    set_physics_process(false)
+    model.melt()
+    Game.play_sfx("melt", global_position, -2.0)
+    get_tree().create_timer(8.0).timeout.connect(func():
+        if is_instance_valid(self):
+            queue_free())
+
+
 func hear(_pos: Vector3) -> void:
     pass                          # they're already coming for you
 
 
 func take_damage(amount: float, source: Vector3, hit_pos: Vector3, explosive := false) -> bool:
-    if not alive:
-        return false
+    if not alive or net_puppet:
+        return false              # co-op: the host decides damage
     var headshot: bool = not explosive and (hit_pos.y - global_position.y) > 1.25 * k["size"].y / 0.85
     if headshot:
         amount *= 2.0
@@ -394,7 +437,7 @@ func _pop_on_death() -> void:
     get_tree().create_timer(0.25).timeout.connect(func():
         if not is_instance_valid(level):
             return
-        level.boom_local(p + Vector3(0, 0.6, 0), 3.5, 0.0)
+        level.boom(p + Vector3(0, 0.6, 0), 3.5, 0.0)
         for t in mode.green_targets():
             var d: float = t.global_position.distance_to(p)
             if d < 4.5:
@@ -447,7 +490,7 @@ class Spit extends Node3D:
 
     func _splash(p: Vector3) -> void:
         set_physics_process(false)
-        level.boom_local(p, 1.2, -10.0)
+        level.boom(p, 1.2, -10.0)
         for t in mode.green_targets():
             if t.global_position.distance_to(p) < 2.5:
                 t.take_damage(damage, p, t.global_position + Vector3(0, 1, 0), false)

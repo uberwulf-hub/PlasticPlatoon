@@ -44,6 +44,13 @@ var _boss_label: Label
 var _wave_hp := 50.0
 var _wave_speed := 1.8
 var _wave_damage := 18.0
+# ---- co-op (LAN or online) ----
+# The host runs the waves, the Melties, damage and the squad's shared coins.
+# Other PCs show puppet Melties and the host's numbers, and ask the host when
+# they buy something or nail a plank back up (see net_sync.gd "MELTDOWN").
+var melties := {}                  # net id -> Melty (every PC)
+var _next_id := 1
+var _md_send_t := 0.0
 
 
 func setup(lvl: Node, data: Dictionary) -> void:
@@ -201,10 +208,24 @@ func _build_station(s: Dictionary) -> Dictionary:
 
 # ------------------------------------------------------------------ waves ----
 
+func is_client() -> bool:
+    return level.net != null and not multiplayer.is_server()
+
+
 func _physics_process(delta: float) -> void:
-    if level.ended or not level.player.alive:
+    if level.ended:
         return
-    _interact(delta)
+    if level.player.alive:
+        _interact(delta)
+    if is_client():
+        return                     # the host runs the waves
+    if level.net != null:
+        _md_send_t -= delta
+        if _md_send_t <= 0.0:
+            _md_send_t = 0.25
+            level.net.md_state(net_state())
+    elif not level.player.alive:
+        return
     if _boss_due >= 0.0:
         _boss_due -= delta
         if _boss_due < 0.0:
@@ -283,6 +304,7 @@ func _spawn_one(what := "") -> Node:
     m.setup(level, self, b, pos, _wave_hp, spd, _wave_damage, kind)
     level.add_child(m)
     level.enemies.append(m)
+    _register(m, barricades.find(b))
     if what == "":
         to_spawn -= 1
     alive += 1
@@ -314,11 +336,108 @@ func boss_summon(m) -> void:
         s.state = s.HUNTING
         level.add_child(s)
         level.enemies.append(s)
+        _register(s, barricades.find(m.barricade))
         alive += 1
     level.notify("%s CALLED FOR BACKUP" % m.k["name"], 1.6)
 
 
-## Green soldiers on foot (what Melty splashes and slams can hurt).
+## Host: gives a new Melty its id and tells the other PCs about it.
+func _register(m, bi: int) -> void:
+    m.net_id = _next_id
+    _next_id += 1
+    melties[m.net_id] = m
+    if level.net != null:
+        level.net.md_spawn(m.net_id, m.kind, m.global_position, m.max_hp, m.speed, bi, m == boss)
+
+
+## Non-host PCs: the host sent a new Melty - make its puppet.
+func puppet_spawn(id: int, kind: String, pos: Vector3, max_hp: float, spd: float, bi: int, is_boss_now: bool) -> void:
+    if melties.has(id):
+        return
+    var m = Melty.new()
+    m.setup(level, self, barricades[clampi(bi, 0, barricades.size() - 1)], pos, 1.0, spd, 0.0, kind)
+    m.hp = max_hp
+    m.max_hp = max_hp
+    m.net_id = id
+    m.net_puppet = true
+    m.state = m.HUNTING
+    level.add_child(m)
+    level.enemies.append(m)
+    melties[id] = m
+    if is_boss_now:
+        boss = m
+        _boss_label.text = m.k["name"]
+
+
+func puppet_dead(id: int) -> void:
+    var m = melties.get(id)
+    melties.erase(id)
+    if m != null and is_instance_valid(m):
+        level.enemies.erase(m)
+        m.die_visual()
+        if m == boss:
+            boss = null
+
+
+## Host: positions of every live Melty for the other PCs (id x y z yaw speed flags).
+func pack_melties() -> PackedFloat32Array:
+    var out := PackedFloat32Array()
+    for id in melties:
+        var m = melties[id]
+        if not is_instance_valid(m) or not m.alive:
+            continue
+        var p: Vector3 = m.global_position
+        out.append_array([id, p.x, p.y, p.z, m.rotation.y, Vector2(m.velocity.x, m.velocity.z).length(), 1.0])
+    return out
+
+
+func apply_melties(d: PackedFloat32Array) -> void:
+    for i in d.size() / 7:
+        var o := i * 7
+        var m = melties.get(int(d[o]))
+        if m != null and is_instance_valid(m):
+            m.net_apply(Vector3(d[o + 1], d[o + 2], d[o + 3]), d[o + 4], d[o + 5], int(d[o + 6]))
+
+
+## Host: the numbers every PC shows, and each window's planks.
+func net_state() -> Dictionary:
+    var planks: Array = []
+    for b in barricades:
+        planks.append(b.planks)
+    var bhp := -1.0
+    if boss != null and is_instance_valid(boss) and boss.alive:
+        bhp = boss.hp
+    return {"wave": wave, "to_spawn": to_spawn, "alive": alive, "coins": coins, "break_t": break_t,
+        "killed": killed, "planks": planks, "boss": boss.net_id if bhp >= 0.0 else 0, "boss_hp": bhp}
+
+
+func apply_state(st: Dictionary) -> void:
+    if st.get("wave", 0) > wave:
+        level.notify("WAVE %d%s" % [st["wave"], "  -  BOSS WAVE" if int(st["wave"]) % 5 == 0 else ""], 3.0)
+        Game.play_ui("objective", -2.0)
+    wave = st.get("wave", wave)
+    best_wave = maxi(best_wave, wave)
+    to_spawn = st.get("to_spawn", to_spawn)
+    alive = st.get("alive", alive)
+    coins = st.get("coins", coins)
+    break_t = st.get("break_t", break_t)
+    killed = st.get("killed", killed)
+    var planks: Array = st.get("planks", [])
+    for i in mini(planks.size(), barricades.size()):
+        var b = barricades[i]
+        while b.planks > planks[i]:
+            b.tear()
+        while b.planks < planks[i]:
+            b.rebuild()
+    var bid: int = st.get("boss", 0)
+    boss = melties.get(bid) if bid != 0 else null
+    if boss != null and is_instance_valid(boss):
+        boss.hp = st.get("boss_hp", boss.hp)
+        _boss_label.text = boss.k["name"]
+
+
+## Green soldiers on foot (what Melty splashes and slams can hurt), including
+## co-op teammates (their damage is passed on to their own PCs).
 func green_targets() -> Array:
     var out: Array = []
     var p = level.player
@@ -327,6 +446,9 @@ func green_targets() -> Array:
     for m in level.squad:
         if m.alive and m.ride == null:
             out.append(m)
+    for r in level.remotes.values():
+        if is_instance_valid(r) and r.alive and r.vehicle == null:
+            out.append(r)
     return out
 
 
@@ -379,6 +501,9 @@ func on_melty_died(m) -> void:
     alive = maxi(0, alive - 1)
     killed += 1
     level.enemies.erase(m)
+    melties.erase(m.net_id)
+    if level.net != null:
+        level.net.md_dead(m.net_id)
     if m == boss:
         boss = null
         level.notify("%s IS DOWN!" % m.k["name"], 3.5)
@@ -401,6 +526,9 @@ func nearest_prey(pos: Vector3):
     for m in level.squad:
         if m.alive and m.ride == null:
             cands.append(m)
+    for r in level.remotes.values():
+        if is_instance_valid(r) and r.alive:
+            cands.append(r.vehicle if r.vehicle != null else r)
     for c in cands:
         var d: float = c.global_position.distance_to(pos)
         if d < bd:
@@ -415,7 +543,12 @@ func nearest_prey(pos: Vector3):
 func is_player_damage(source: Vector3, explosive: bool) -> bool:
     if explosive:
         return true
-    return source.distance_to(level.player.global_position) < 1.0
+    if source.distance_to(level.player.global_position) < 1.0:
+        return true
+    for r in level.remotes.values():                 # co-op: a teammate's shot
+        if is_instance_valid(r) and source.distance_to(r.global_position) < 2.0:
+            return true
+    return false
 
 
 func award(amount: int, pos: Vector3, _kill: bool) -> void:
@@ -439,6 +572,15 @@ func award(amount: int, pos: Vector3, _kill: bool) -> void:
 
 
 func _spend(cost: int) -> bool:
+    if is_client():
+        if coins < cost:
+            return _spend_fail(cost)
+        # Ask the host to take it from the squad's coins; the item is ours now
+        # (the host's next update corrects the count if it disagrees).
+        level.net.md_buy("coins", -1, cost)
+        coins -= cost
+        Game.play_ui("ui_confirm", -4.0)
+        return true
     if coins < cost:
         level.notify("NOT ENOUGH COINS  (%d / %d)" % [coins, cost], 1.4)
         Game.play_ui("ui_error", -4.0)
@@ -446,6 +588,41 @@ func _spend(cost: int) -> bool:
     coins -= cost
     Game.play_ui("ui_confirm", -4.0)
     return true
+
+
+func _spend_fail(cost: int) -> bool:
+    level.notify("NOT ENOUGH COINS  (%d / %d)" % [coins, cost], 1.4)
+    Game.play_ui("ui_error", -4.0)
+    return false
+
+
+## Host: a teammate wants to spend `cost` of the squad's coins.
+var teammate_buys := 0            # host: purchases made by co-op teammates (tests read it)
+var teammate_planks := 0          # host: planks teammates nailed back up
+
+
+func host_spend(cost: int) -> bool:
+    if coins < cost:
+        return false
+    coins -= cost
+    teammate_buys += 1
+    return true
+
+
+## Host: a door was bought (by anyone): open it on every PC.
+func open_door_index(i: int) -> void:
+    if i < 0 or i >= doors.size():
+        return
+    var d: Dictionary = doors[i]
+    sections[d["opens"]]["open"] = true
+    if is_instance_valid(d["node"]):
+        d["node"].queue_free()
+    if is_instance_valid(d["label"]):
+        d["label"].queue_free()
+    doors.remove_at(i)
+    level.notify("THE %s IS OPEN" % sections[d["opens"]]["name"], 2.5)
+    Game.play_sfx("explosion", d["pos"], -8.0)
+    get_tree().create_timer(0.1).timeout.connect(_bake_nav)
 
 
 # ------------------------------------------------------------ interaction ----
@@ -477,18 +654,33 @@ func _interact(delta: float) -> void:
             _rebuild_t -= delta
             if _rebuild_t <= 0.0:
                 _rebuild_t = 0.75
-                if _focus.rebuild() and _plank_coins < PLANK_COINS_PER_WAVE:
-                    _plank_coins += PLANK_COINS
-                    award(PLANK_COINS, _focus.global_position + Vector3(0, 2.4, 0), false)
+                if is_client():
+                    level.net.md_rebuild(barricades.find(_focus))
+                else:
+                    rebuild_board(_focus)
         else:
             _rebuild_t = 0.0
     elif _focus != null and Input.is_action_just_pressed("interact"):
         use(_focus)
 
 
+## Host: nail a plank back on (for any player) and pay the squad for it.
+func rebuild_board(b) -> void:
+    if b.rebuild() and _plank_coins < PLANK_COINS_PER_WAVE:
+        _plank_coins += PLANK_COINS
+        award(PLANK_COINS, b.global_position + Vector3(0, 2.4, 0), false)
+
+
 ## Buys / uses a door or station dictionary (also called by tests).
+## Co-op: on a non-host PC the checks run here ("already full"...), then the
+## host is asked to spend the squad's coins; it answers with grant().
 func use(f) -> bool:
     if f.has("opens"):
+        if is_client():
+            if coins < int(f["cost"]):
+                return _spend(f["cost"])          # just the "not enough coins" message
+            level.net.md_buy("door", doors.find(f), int(f["cost"]))
+            return true
         return _open_door(f)
     var p = level.player
     match f["kind"]:
@@ -554,6 +746,9 @@ func use(f) -> bool:
 func _open_door(d: Dictionary) -> bool:
     if not is_instance_valid(d["node"]) or not _spend(d["cost"]):
         return false
+    if level.net != null:
+        level.net.md_door(doors.find(d))      # host: open it everywhere
+        return true
     sections[d["opens"]]["open"] = true
     d["node"].queue_free()
     d["label"].queue_free()

@@ -74,6 +74,16 @@ jobs:
           cat host.log | grep -E "PASS|FAIL|===="
           test $C -eq 0 -a $H -eq 0
 
+      - name: MELTDOWN co-op test (host + client)
+        run: |
+          $GODOT --headless --path . res://tests/md_coop_test.tscn -- host > host.log 2>&1 &
+          HP=$!
+          sleep 3
+          $GODOT --headless --path . res://tests/md_coop_test.tscn -- client; C=$?
+          wait $HP; H=$?
+          cat host.log | grep -E "PASS|FAIL|===="
+          test $C -eq 0 -a $H -eq 0
+
       - name: Co-op test online (host + client through a local copy of the relay)
         run: |
           (cd tools/relay_local && npm install --no-audit --no-fund && node local.mjs) &
