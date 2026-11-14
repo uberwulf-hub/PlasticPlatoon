@@ -84,7 +84,7 @@ jobs:
           cat host.log | grep -E "PASS|FAIL|===="
           test $C -eq 0 -a $H -eq 0
 
-      - name: Co-op test online (host + client through a local copy of the relay)
+      - name: Co-op and friends tests online (through a local copy of the relay)
         run: |
           (cd tools/relay_local && npm install --no-audit --no-fund && node local.mjs) &
           sleep 3
@@ -96,6 +96,15 @@ jobs:
           wait $HP; H=$?
           cat host.log | grep -E "PASS|FAIL|===="
           test $C -eq 0 -a $H -eq 0
+          # Friends: see each other playing, invite, join from the invite.
+          export PLATOON_FRIENDS_TEST=1
+          $GODOT --headless --path . res://tests/friends_test.tscn -- dad > dad.log 2>&1 &
+          DP=$!
+          sleep 1
+          $GODOT --headless --path . res://tests/friends_test.tscn -- kid; K=$?
+          wait $DP; D=$?
+          cat dad.log | grep -E "PASS|FAIL|===="
+          test $K -eq 0 -a $D -eq 0
 
       - name: Export Windows build
         run: |

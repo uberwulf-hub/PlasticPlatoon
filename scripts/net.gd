@@ -10,6 +10,8 @@ signal hosts_changed
 signal host_left
 signal start_requested(op: int)
 signal join_failed(reason: String)
+signal friends_changed
+signal invite_received(name: String, room: String)
 
 const PORT := 7777
 const DISCOVERY_PORT := 7778
@@ -30,6 +32,10 @@ var in_game := false
 var online := false        # playing over the internet (relay) rather than LAN
 var room_code := ""        # online: the code friends type to join
 var _join_watch := 0.0
+# ---- friends (through the relay's friends hub) ----
+var friends_online := {}   # friend code -> true/false
+var _friend_t := 2.0
+var _friend_busy := false
 var _broadcast: PacketPeerUDP
 var _listen: PacketPeerUDP
 var _bcast_t := 0.0
@@ -86,6 +92,86 @@ func join(ip: String, name: String) -> void:
     multiplayer.multiplayer_peer = peer
     active = true
     set_meta("join_name", _clean(name))
+
+
+## The relay's web address (for the friends hub): wss:// -> https://.
+func web_url() -> String:
+    return relay_url().replace("wss://", "https://").replace("ws://", "http://")
+
+
+func _web(path: String, body: String) -> Dictionary:
+    var req := HTTPRequest.new()
+    req.timeout = 12.0
+    add_child(req)
+    if req.request(web_url() + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body) != OK:
+        req.queue_free()
+        return {"error": "offline"}
+    var res: Array = await req.request_completed
+    req.queue_free()
+    if int(res[0]) != HTTPRequest.RESULT_SUCCESS:
+        return {"error": "offline"}
+    var data = JSON.parse_string((res[3] as PackedByteArray).get_string_from_utf8())
+    return data if data is Dictionary else {"error": "odd reply"}
+
+
+# ----------------------------------------------------------------- friends ----
+# Every player has a friend code (Game.my_friend_code). While the game is open
+# it checks in every ~15 s: says it's playing, learns which friends are, and
+# picks up invites. Invites are only shown from people on your own list.
+
+func _friend_hello() -> void:
+    if _friend_busy or OS.get_environment("PLATOON_NO_FRIENDS") != "":
+        return
+    # Automated tests run headless: keep them off the live friends hub unless
+    # a test asks for it (with a local relay).
+    if DisplayServer.get_name() == "headless" and OS.get_environment("PLATOON_FRIENDS_TEST") == "":
+        return
+    _friend_busy = true
+    var ids: Array = Game.friends.map(func(f): return f["code"])
+    var res: Dictionary = await _web("/friends/hello", JSON.stringify({"id": Game.my_friend_code(),
+        "name": Game.player_name.substr(0, 12), "friends": ids}))
+    _friend_busy = false
+    if res.has("error"):
+        return
+    var changed := false
+    var online = res.get("online", {})
+    if online is Dictionary:
+        for id in online:
+            if bool(friends_online.get(id, false)) != bool(online[id]):
+                changed = true
+            friends_online[id] = bool(online[id])
+    var names = res.get("names", {})
+    if names is Dictionary:
+        for f in Game.friends:
+            var n := str(names.get(f["code"], "")).substr(0, 16)
+            if n != "" and n != f["name"]:
+                f["name"] = n
+                changed = true
+    if changed:
+        Game.save()
+        friends_changed.emit()
+    var invites = res.get("invites", [])
+    if invites is Array and not in_game:
+        for inv in invites:
+            var from := str(inv.get("from", "")) if inv is Dictionary else ""
+            if Game.friends.any(func(f): return f["code"] == from):
+                invite_received.emit(str(inv.get("name", "A friend")).substr(0, 16), str(inv.get("room", "")))
+
+
+func check_friends_soon() -> void:
+    _friend_t = minf(_friend_t, 0.5)
+
+
+func is_friend_online(code: String) -> bool:
+    return bool(friends_online.get(code, false))
+
+
+## Online lobby (host): invite a friend to this game.
+func invite_friend(code: String) -> void:
+    if not online or room_code == "":
+        return
+    await _web("/friends/invite", JSON.stringify({"id": Game.my_friend_code(), "name": Game.player_name.substr(0, 12),
+        "to": code, "room": room_code}))
 
 
 func relay_url() -> String:
@@ -269,6 +355,10 @@ func stop_discovery() -> void:
 
 
 func _process(delta: float) -> void:
+    _friend_t -= delta
+    if _friend_t <= 0.0:
+        _friend_t = 15.0 if not in_game else 30.0
+        _friend_hello()
     if _join_watch > 0.0:
         _join_watch -= delta
         if _join_watch <= 0.0 and players.is_empty():

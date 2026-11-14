@@ -11,6 +11,8 @@ var mouse_sensitivity := 0.0025
 var invert_y := false
 var show_news := true
 var player_name := "Soldier"
+var friend_code := ""            # this player's code for friends to add (made once)
+var friends: Array = []          # [{"code", "name"}] - people added by their code
 var narration := true           # PNN anchors read their lines with the speech voices on this PC
 var squad_size := 2             # friendly AI squadmates in single-player (0-3)
 var meltdown_best := {}         # MELTDOWN map index -> best wave reached
@@ -203,6 +205,40 @@ func unlock(level_index: int) -> void:
         save()
 
 
+## This player's friend code: 8 letters/digits (no look-alikes), made once.
+func my_friend_code() -> String:
+    if friend_code == "":
+        var chars := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        for i in 8:
+            friend_code += chars[randi() % chars.length()]
+        save()
+    return friend_code
+
+
+func add_friend(code: String) -> String:
+    code = code.strip_edges().to_upper().replace(" ", "").replace("-", "")
+    if code.length() < 6 or code.length() > 10:
+        return "That doesn't look like a friend code."
+    for c in code:
+        if not "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".contains(c):
+            return "That doesn't look like a friend code."
+    if code == my_friend_code():
+        return "That's your own code!"
+    for f in friends:
+        if f["code"] == code:
+            return "Already on your list."
+    if friends.size() >= 50:
+        return "Your friends list is full."
+    friends.append({"code": code, "name": "Friend"})
+    save()
+    return ""
+
+
+func remove_friend(code: String) -> void:
+    friends = friends.filter(func(f): return f["code"] != code)
+    save()
+
+
 func save() -> void:
     var cfg := ConfigFile.new()
     cfg.set_value("settings", "mouse_sensitivity", mouse_sensitivity)
@@ -210,6 +246,8 @@ func save() -> void:
     cfg.set_value("settings", "difficulty", difficulty)
     cfg.set_value("settings", "show_news", show_news)
     cfg.set_value("settings", "player_name", player_name)
+    cfg.set_value("friends", "code", friend_code)
+    cfg.set_value("friends", "list", friends)
     cfg.set_value("settings", "narration", narration)
     cfg.set_value("settings", "squad_size", squad_size)
     cfg.set_value("settings", "graphics", graphics)
@@ -236,6 +274,8 @@ func _load() -> void:
     difficulty = clampi(cfg.get_value("settings", "difficulty", difficulty), 0, 2)
     show_news = cfg.get_value("settings", "show_news", show_news)
     player_name = cfg.get_value("settings", "player_name", player_name)
+    friend_code = cfg.get_value("friends", "code", friend_code)
+    friends = cfg.get_value("friends", "list", friends)
     narration = cfg.get_value("settings", "narration", narration)
     squad_size = clampi(cfg.get_value("settings", "squad_size", squad_size), 0, 3)
     graphics = clampi(cfg.get_value("settings", "graphics", graphics), 0, 2)

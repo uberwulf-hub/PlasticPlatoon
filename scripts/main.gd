@@ -26,6 +26,12 @@ func _ready() -> void:
     Net.players_changed.connect(func():
         if get_meta("in_lobby", false):
             show_lobby())
+    Net.friends_changed.connect(func():
+        if get_meta("in_friends", false):
+            show_multiplayer()
+        elif get_meta("in_lobby", false):
+            show_lobby())
+    Net.invite_received.connect(_on_invite)
     show_main_menu()
 
 
@@ -44,6 +50,7 @@ func _process(delta: float) -> void:
 # ------------------------------------------------------------ plumbing ----
 
 func _new_ui(dim := 0.0) -> Control:
+    set_meta("in_friends", false)     # screens that list friends set it again
     if ui:
         ui.queue_free()
     ui = CanvasLayer.new()
@@ -528,6 +535,7 @@ func _build_diorama() -> void:
 
 func show_multiplayer() -> void:
     set_meta("in_lobby", false)
+    Net.check_friends_soon()
     if Net.active:
         Net.leave()
     Net.start_discovery()
@@ -563,6 +571,7 @@ func show_multiplayer() -> void:
         if Net.active:
             show_lobby(), 160))
     vb.add_child(code_row)
+    _friends_section(vb)
     vb.add_child(UI.label("On the same Wi-Fi (LAN)", 19, UI.ACCENT))
     vb.add_child(UI.button("Host a LAN game", func():
         var err := Net.host(Game.player_name)
@@ -588,6 +597,68 @@ func show_multiplayer() -> void:
     vb.add_child(ip_row)
     vb.add_child(UI.label("Allow Plastic Platoon through Windows Firewall when asked (UDP ports 7777-7778).", 14, Color(0.75, 0.78, 0.68)))
     vb.add_child(UI.button("Back", show_main_menu, 560))
+
+
+## Friends: your code to share, add a friend by code, who's playing now.
+func _friends_section(vb: VBoxContainer) -> void:
+    set_meta("in_friends", true)
+    var head := HBoxContainer.new()
+    head.add_child(UI.label("Friends   -   your friend code: ", 17))
+    head.add_child(UI.label(Game.my_friend_code(), 20, Color(1.0, 0.85, 0.3)))
+    vb.add_child(head)
+    var add_row := HBoxContainer.new()
+    var add_edit := LineEdit.new()
+    add_edit.placeholder_text = "add a friend by their code"
+    add_edit.max_length = 10
+    add_edit.custom_minimum_size = Vector2(380, 36)
+    add_row.add_child(add_edit)
+    add_row.add_child(UI.button("Add", func():
+        var err := Game.add_friend(add_edit.text)
+        if err != "":
+            add_edit.text = ""
+            add_edit.placeholder_text = err
+        else:
+            Net.check_friends_soon()
+            show_multiplayer(), 160))
+    vb.add_child(add_row)
+    # The list scrolls once there are more than a few friends.
+    var list := VBoxContainer.new()
+    if Game.friends.size() > 2:
+        var sc := ScrollContainer.new()
+        sc.custom_minimum_size = Vector2(560, 96)
+        sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+        sc.add_child(list)
+        vb.add_child(sc)
+    else:
+        vb.add_child(list)
+    # Friends playing now first.
+    var sorted: Array = Game.friends.duplicate()
+    sorted.sort_custom(func(a, b): return Net.is_friend_online(a["code"]) and not Net.is_friend_online(b["code"]))
+    for f in sorted:
+        var row := HBoxContainer.new()
+        var on: bool = Net.is_friend_online(f["code"])
+        row.add_child(UI.label(("  ● " if on else "  ○ ") + "%s  (%s)%s" % [f["name"], f["code"], "  - playing now" if on else ""], 16,
+            Color(0.55, 0.95, 0.45) if on else Color(0.7, 0.72, 0.65)))
+        var code: String = f["code"]
+        row.add_child(UI.button("Remove", func():
+            Game.remove_friend(code)
+            show_multiplayer(), 110))
+        list.add_child(row)
+
+
+## A friend invited us to their online game.
+func _on_invite(who: String, room: String) -> void:
+    if Net.active or level != null:
+        return                       # busy: invites only pop up on the menus
+    var root := _new_ui(0.55)
+    var vb := UI.centered_panel(root, 560)
+    vb.add_child(UI.label("INVITE!", 40, UI.ACCENT))
+    vb.add_child(UI.label("%s wants you in their squad." % who, 22))
+    vb.add_child(UI.button("Join %s's game" % who, func():
+        Net.join_online(room, Game.player_name)
+        if Net.active:
+            show_lobby(), 480))
+    vb.add_child(UI.button("Not now", show_main_menu, 480))
 
 
 func _on_hosts_changed() -> void:
@@ -648,6 +719,17 @@ func show_lobby() -> void:
             var tag := "  (host)" if id == 1 else ""
             tag += "  (you)" if id == Net.my_id() else ""
             vb.add_child(UI.label("  ■  " + Net.player_name(id) + tag, 20, Net.SLOT_COLORS[Net.players[id]["slot"] % 4].lightened(0.35)))
+    if host and Net.online and Net.room_code != "":
+        var on_now: Array = Game.friends.filter(func(f): return Net.is_friend_online(f["code"]))
+        if not on_now.is_empty():
+            vb.add_child(UI.label("Friends playing now", 17, UI.ACCENT))
+            for f in on_now:
+                var code: String = f["code"]
+                var b := UI.button("Invite %s" % f["name"], func(): Net.invite_friend(code), 520)
+                b.pressed.connect(func():
+                    b.text = "Invited %s!" % f["name"]
+                    b.disabled = true)
+                vb.add_child(b)
     if host:
         vb.add_child(UI.label("Operation", 19, UI.ACCENT))
         var pick := OptionButton.new()

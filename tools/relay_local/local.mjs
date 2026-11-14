@@ -1,12 +1,27 @@
 // A relay for testing on one computer (or running on your own server):
 //   cd server/relay && npm install && node local.mjs   (listens on port 24690)
 // Then point the game at ws://127.0.0.1:24690 (PLATOON_RELAY_URL environment variable).
+import http from "node:http";
 import { WebSocketServer } from "ws";
 import { Room, newCode, PROTOCOL } from "./relay-core.mjs";
+import { Friends, MemoryStorage } from "./friends.mjs";
 
 const port = Number(process.env.PORT || 24690);
 const rooms = new Map();
-const wss = new WebSocketServer({ port });
+// The friends hub (POST /friends/hello, /friends/invite), kept in memory.
+const friends = new Friends(new MemoryStorage());
+const server = http.createServer(async (req, res) => {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  let data = null;
+  try { data = JSON.parse(body); } catch {}
+  const out = req.url.endsWith("/friends/hello") ? await friends.hello(data)
+    : req.url.endsWith("/friends/invite") ? await friends.invite(data) : { error: "Not found" };
+  res.writeHead(out.error ? 400 : 200, { "content-type": "application/json" });
+  res.end(JSON.stringify(out));
+});
+const wss = new WebSocketServer({ server });
+server.listen(port);
 
 const send = (ws, data) => { if (ws.readyState === 1) ws.send(typeof data === "string" ? data : Buffer.from(data), { binary: typeof data !== "string" }); };
 const close = (ws, code, reason) => ws.close(code, reason);
