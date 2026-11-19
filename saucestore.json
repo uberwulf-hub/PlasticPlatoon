@@ -1,16 +1,17 @@
 {
   "name": "Plastic Platoon: Revenge 2026",
   "category": "Game",
-  "description": "A third-person plastic-soldier shooter. Lead the green army against the Tan Army with modern weapons, frag grenades and drone strikes across 13 operations: deserts, cities, jungles, snowy mountains, a beach landing, a night-time port, and a house overrun from the kitchen table to the couch.",
+  "description": "A third-person plastic-soldier shooter for Windows and Android. Lead the green army against the Tan Army with modern weapons, frag grenades, drone strikes and vehicles across 13 operations: deserts, cities, jungles, snowy mountains, a beach landing, a night-time port, and a house overrun from the kitchen table to the couch. Plus MELTDOWN, a wave-survival mode with 14 maps, and co-op with friends online.",
   "icon": "store/icon.png",
   "assets": {
-    "windows": "PlasticPlatoon-windows.zip"
+    "windows": "PlasticPlatoon-windows.zip",
+    "android": "PlasticPlatoon-android.apk"
   },
   "requirements": [
-    "Windows 10 or 11 (64-bit)",
-    "Graphics card with Vulkan support (or switch to the Compatibility renderer)",
-    "About 250 MB of disk space",
-    "Keyboard and mouse"
+    "Windows 10 or 11 (64-bit), keyboard and mouse",
+    "A 64-bit Android phone or tablet (touch controls)",
+    "Graphics card with Vulkan support on Windows (or switch to the Compatibility renderer)",
+    "About 250 MB of space"
   ],
   "rightsConfirmed": true,
   "credits": [
