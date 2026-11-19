@@ -780,6 +780,23 @@ func _jeep_point_blank_test(L, p) -> void:
         p.global_position = spot                       # stay put
         await get_tree().physics_frame
     _check(j.ai_shots > shots0, "L0 a Tan jeep on top of you backs off and opens fire (%.1fs)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+    # Same, with a wall right behind the jeep (found by CI in Concrete Jungle:
+    # it had nowhere to back into, so it sat on top of the player for good).
+    var wall: Node3D = L.box(spot + Vector3(0, 3, -6.5), Vector3(30, 6, 1), Color.GRAY)
+    await get_tree().physics_frame
+    j.global_position = spot + Vector3(0, 0, -2.5)
+    j.rotation.y = 0.0
+    j.velocity = Vector3.ZERO
+    j.speed = 0.0
+    shots0 = j.ai_shots
+    t0 = Time.get_ticks_msec()
+    while j.ai_shots == shots0 and Time.get_ticks_msec() - t0 < 12000:
+        j.ai_alert = 6.0
+        j.ai_last_seen = p.global_position + Vector3(0, 1, 0)
+        p.global_position = spot
+        await get_tree().physics_frame
+    _check(j.ai_shots > shots0, "L0 ...and with a wall behind it, it pulls away sideways and fires (%.1fs)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+    wall.queue_free()
     p.global_position = keep
 
 

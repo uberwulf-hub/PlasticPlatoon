@@ -1196,7 +1196,7 @@ func _ai_update(delta: float) -> Vector2:
                 # Right on top of them: the gun can't depress that far, so pull
                 # away to firing range (and stop charging) before circling back.
                 _ai_charge_t = 0.0
-                dest = _ai_clear_point(global_position, global_position - to_t.normalized() * (pref - d))
+                dest = _ai_back_off(to_t, pref - d)
             elif d > pref + 12.0 or _ai_charge_t > 0.0:
                 dest = ai_last_seen
             else:
@@ -1318,6 +1318,27 @@ func _ai_hunt_point(delta: float) -> Vector3:
 
 
 ## Pulls `want` back toward `from` if there's a wall in between.
+## Pull away from a target that's too close to shoot. Straight back if
+## there's room; with a wall behind, out to whichever side is clearer; boxed
+## in, just reverse. (A blocked point a few metres away used to count as
+## "arrived", so the jeep sat on top of you and never fired.)
+func _ai_back_off(to_t: Vector3, want_dist: float) -> Vector3:
+    var away := -to_t.normalized()
+    var best := global_position
+    var best_d := 0.0
+    for dir in [away, away.rotated(Vector3.UP, 1.1), away.rotated(Vector3.UP, -1.1), away.rotated(Vector3.UP, PI / 2), away.rotated(Vector3.UP, -PI / 2)]:
+        var p := _ai_clear_point(global_position, global_position + dir * maxf(want_dist, 10.0))
+        var dd := p.distance_to(global_position)
+        if dd > best_d + 0.5:
+            best = p
+            best_d = dd
+        if dd > 8.0:
+            break
+    if best_d < 5.0:
+        _ai_reverse_t = maxf(_ai_reverse_t, 0.6)
+    return best
+
+
 func _ai_clear_point(from: Vector3, want: Vector3) -> Vector3:
     var ex: Array[RID] = [get_rid()]
     var a := from + Vector3(0, 1.0, 0)
