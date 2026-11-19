@@ -244,6 +244,31 @@ func _head_meshes() -> Array:
     return _heads
 
 
+## First person: ride along with the head bone, just in front of the face.
+## Running leans the soldier forward; a camera fixed at standing eye height
+## ended up behind the head and saw the back of it bob across the screen.
+var _eye_y := 0.0
+func _eye_follow(delta: float) -> void:
+    var sk = model.get("skeleton") if model != null else null
+    if not sk is Skeleton3D:
+        return
+    var bi: int = sk.find_bone("Head")
+    if bi < 0:
+        return
+    var head: Vector3 = (sk.global_transform * sk.get_bone_global_pose(bi)).origin
+    var fwd := -global_transform.basis.z
+    var eye := head + fwd * 0.38 + Vector3(0, 0.14, 0)
+    # Never through a wall you're pressed up against.
+    var ex: Array[RID] = [get_rid()]
+    var hit := Fx.ray(self, pivot.global_position, eye + fwd * 0.12, 1, ex)
+    if not hit.is_empty():
+        eye = hit["position"] - fwd * 0.14
+    # Keep the forward lean exact, but smooth the up-and-down a little so the
+    # view sways with the stride instead of jittering.
+    _eye_y = eye.y if absf(_eye_y - eye.y) > 0.6 else lerpf(_eye_y, eye.y, minf(1.0, delta * 14.0))
+    camera.global_position = Vector3(eye.x, _eye_y, eye.z)
+
+
 func first_person() -> bool:
     return Game.view_dist < 0.3
 
@@ -271,6 +296,8 @@ func _update_camera(delta: float) -> void:
     var head_off: bool = fp and rig.distance < 0.6
     for m in _head_meshes():
         m.visible = not head_off
+    if head_off and not scoped:
+        _eye_follow(delta)
     shake = move_toward(shake, 0.0, delta * 2.5)
     camera.h_offset = randf_range(-1.0, 1.0) * shake * 0.12
     camera.v_offset = randf_range(-1.0, 1.0) * shake * 0.12
