@@ -528,6 +528,8 @@ func take_damage(amount: float, _source: Vector3, _hit_pos: Vector3, _explosive 
     health -= amount
     show_damage(_hit_pos, _explosive)
     shake = maxf(shake, 0.35)
+    if level != null and self == level.player:
+        Game.buzz(int(30 + amount * 2.0), clampf(0.3 + amount / 60.0, 0.3, 1.0))
     took_damage.emit(amount)
     stats_changed.emit()
     if health <= 0.0:

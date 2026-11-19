@@ -77,6 +77,14 @@ func _ready() -> void:
     slots_label = UI.label("", 15, Color(0.8, 0.85, 0.75), 5)
     slots_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     wp.add_child(slots_label)
+    if Game.touch_mode:
+        # Phones: the fire buttons live bottom-right, so the gun and ammo
+        # move to the bottom middle, smaller.
+        UI.place(wp, Vector2(0.5, 1), Rect2(-40, -128, 300, 118))
+        for l in [weapon_label, ammo_label, slots_label]:
+            l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        weapon_label.add_theme_font_size_override("font_size", 19)
+        ammo_label.add_theme_font_size_override("font_size", 32)
 
     # Objective (top-left)
     var ob := VBoxContainer.new()
@@ -188,10 +196,12 @@ func _refresh_vehicle() -> void:
     else:
         ammo_label.text = "%d km/h" % int(absf(v.speed) * 3.6)
     slots_label.text = "E exit" if v.k["primary"] == "none" else "LMB fire   %sE exit" % ("RMB coax MG   " if v.kind == "tank" else "")
+    if Game.touch_mode:
+        slots_label.text = ""         # the buttons say it
     ord_label.text = "%d km/h" % int(absf(v.speed) * 3.6) if v.kind == "tank" else "Ram Tan soldiers to flatten them"
     if v.kind == "heli":
         var alt: float = v.altitude()
-        slots_label.text = "LMB gun   RMB rockets   SPACE up   C down   E exit"
+        slots_label.text = "" if Game.touch_mode else "LMB gun   RMB rockets   SPACE up   C down   E exit"
         ord_label.text = "ALT %d m" % int(alt) if alt < 900.0 else "ALT ---"
     if not level.squad.is_empty() and not v.passengers.is_empty():
         ord_label.text += "     SQUAD ABOARD %d/%d" % [v.passengers.size() - v.free_seats(), mini(level.squad.size(), v.passengers.size())]
@@ -244,6 +254,7 @@ func _process(delta: float) -> void:
         prompt_label.text = ("Press E to drive the %s" % near.kind.to_upper()) if near != null else ""
         if near == null and level.mode != null and player.alive:
             prompt_label.text = level.mode.prompt_text()
+        prompt_label.text = Game.key_text(prompt_label.text)
     overlay.queue_redraw()
 
 

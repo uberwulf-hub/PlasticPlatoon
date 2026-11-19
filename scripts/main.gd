@@ -9,6 +9,7 @@ const NewsBreak = preload("res://scripts/news_break.gd")
 const NewsScripts = preload("res://scripts/news_scripts.gd")
 const Soldier = preload("res://scripts/plastic_soldier.gd")
 const Fx = preload("res://scripts/fx.gd")
+const TouchControls = preload("res://scripts/touch_controls.gd")
 
 var ui: CanvasLayer
 var level: Node3D
@@ -155,7 +156,7 @@ func show_meltdown() -> void:
     var vb := UI.centered_panel(root, 1080)
     vb.add_child(UI.label("MELTDOWN", 44, Color(1.0, 0.6, 0.25)))
     vb.add_child(UI.label("Wave survival  -  how long can you hold out?", 19))
-    vb.add_child(UI.label("Coins: hits +10, kills +60, headshot kills +100, boards +10.  Hold E to rebuild, tap E to buy.", 16, Color(0.85, 0.85, 0.75)))
+    vb.add_child(UI.label(Game.key_text("Coins: hits +10, kills +60, headshot kills +100, boards +10.  Hold E to rebuild, tap E to buy."), 16, Color(0.85, 0.85, 0.75)))
     var grid := GridContainer.new()
     grid.columns = 3
     grid.add_theme_constant_override("h_separation", 22)
@@ -304,7 +305,7 @@ func show_settings() -> void:
         Game.apply_graphics()
         Game.save()
         show_settings())
-    choice_row.call(right, "Frame rate", [[0, "Match screen"], [60, "60 cap"], [120, "120 cap"]], Game.fps_cap, func(v):
+    choice_row.call(right, "Frame rate", [[0, "Match screen"], [30, "30 (battery)"], [60, "60 cap"], [120, "120 cap"]], Game.fps_cap, func(v):
         Game.fps_cap = v
         Game.apply_graphics()
         Game.save()
@@ -316,11 +317,54 @@ func show_settings() -> void:
         Game.apply_graphics())
     check.call(right, "On-screen touch controls", Game.touch_controls, func(on):
         Game.touch_controls = on
-        Game.touch_mode = on)
+        Game.touch_mode = on
+        Game.save()
+        show_settings())
+    if Game.touch_controls:
+        check.call(right, "Vibration (phones)", Game.vibration, func(on): Game.vibration = on)
+        right.add_child(UI.button("Arrange touch buttons", show_touch_layout, 480))
 
     vb.add_child(UI.button("Back", func():
         Game.save()
         show_main_menu(), 480))
+
+
+## Settings > Arrange touch buttons: drag the buttons, pick a size.
+func show_touch_layout() -> void:
+    var root := _new_ui(0.55)
+    var ed = TouchControls.new()
+    ed.editing = true
+    root.add_child(ed)
+    var panel := PanelContainer.new()
+    UI.place(panel, Vector2(0.0, 0.0), Rect2(24, 90, 470, 0))
+    root.add_child(panel)
+    var vb := VBoxContainer.new()
+    vb.add_theme_constant_override("separation", 12)
+    panel.add_child(vb)
+    vb.add_child(UI.label("ARRANGE TOUCH BUTTONS", 26, UI.ACCENT))
+    var tip := UI.label("Drag each button to where your thumbs like it. The joystick appears wherever your left thumb lands.", 17)
+    tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    tip.custom_minimum_size.x = 400
+    vb.add_child(tip)
+    vb.add_child(UI.label("Button size", 18))
+    var sl := HSlider.new()
+    sl.min_value = 0.7
+    sl.max_value = 1.4
+    sl.step = 0.05
+    sl.value = Game.touch_size
+    sl.custom_minimum_size = Vector2(400, 32)
+    sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    sl.value_changed.connect(func(v): ed.set_size(v))
+    vb.add_child(sl)
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 12)
+    vb.add_child(row)
+    row.add_child(UI.button("Reset", func():
+        ed.reset_layout()
+        sl.set_value_no_signal(Game.touch_size), 190))
+    row.add_child(UI.button("Done", func():
+        Game.save()
+        show_settings(), 190))
 
 
 func show_controls() -> void:
@@ -333,6 +377,16 @@ func show_controls() -> void:
         ["Space", "Jump"], ["R", "Reload"], ["1 - 5 / Q", "Switch weapon"], ["Mouse wheel", "Zoom in / out (all the way in = first person)"],
         ["G", "Throw frag grenade"], ["E", "Get in / out of a jeep or tank"], ["T", "Squad: hold position / follow me"], ["F", "Call Reaper drone strike at crosshair"], ["Esc / P", "Pause"], ["In vehicles", "WASD drive, mouse aims the gun, LMB fire, RMB tank coax MG"],
     ]
+    if Game.touch_mode:
+        rows = [
+            ["Left thumb", "Joystick appears where you touch - push all the way up to sprint"],
+            ["Right thumb", "Drag to look and aim"], ["FIRE / AIM", "Hold to shoot / aim down sights"],
+            ["USE", "Get in or out, buy, repair (glows when there's something to use)"],
+            ["VIEW", "First person on / off (camera distance in vehicles)"],
+            ["NADE / DRONE", "Grenade / drone strike (hidden when you have none)"],
+            ["In vehicles", "Buttons change: FIRE, FIRE 2, EXIT (UP / DOWN when flying)"],
+            ["Settings", "Arrange touch buttons: move them and change their size"],
+        ]
     var grid := GridContainer.new()
     grid.columns = 2
     grid.add_theme_constant_override("h_separation", 40)

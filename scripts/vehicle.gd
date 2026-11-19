@@ -693,7 +693,11 @@ func enter(p) -> void:
     Game.play_ui("ui_confirm", -6.0)
     var extra := ", RMB coax MG" if kind == "tank" else (", RMB rockets, Space/C climb/descend" if kind == "heli" else "")
     var aim := "mouse look" if k["primary"] == "none" else "mouse aim, LMB fire"
-    level.notify("%s  -  %s, %s%s, E to exit%s" % [k["name"], "WASD fly" if kind == "heli" else "WASD drive", aim, extra,
+    var how := "%s, %s%s, E to exit" % ["WASD fly" if kind == "heli" else "WASD drive", aim, extra]
+    if Game.touch_mode:
+        how = "stick %s, drag %s%s" % ["flies" if kind == "heli" else "drives", "looks" if k["primary"] == "none" else "aims",
+            ", FIRE 2 = coax MG" if kind == "tank" else (", UP / DOWN climb" if kind == "heli" else "")]
+    level.notify("%s  -  %s%s" % [k["name"], how,
         "  (squad climbs aboard)" if not level.squad.is_empty() and not passengers.is_empty() else ""], 3.0)
 
 
@@ -814,7 +818,7 @@ func _physics_process(delta: float) -> void:
         steer = -inp.x
         if _enter_cd <= 0.0 and Input.is_action_just_pressed("interact"):
             if k.get("flies", false) and altitude() > 2.5:
-                level.notify("LAND FIRST  -  hold C to descend", 1.5)
+                level.notify(Game.key_text("LAND FIRST  -  hold C to descend"), 1.5)
             else:
                 exit_vehicle()
         elif Game.aiming_input():
@@ -1050,6 +1054,8 @@ func take_damage(amount: float, _source: Vector3, hit_pos: Vector3, explosive :=
         hear(_source)
     if driver:
         driver.took_damage.emit(amount * 0.5)
+        if driver == level.player:
+            Game.buzz(int(25 + amount * 0.6), 0.5 if explosive else 0.25)
         driver.shake = maxf(driver.shake, 0.25)
     if hp <= 0.0:
         _destroy()

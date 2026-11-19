@@ -653,8 +653,100 @@ func _touch_test(L, p) -> void:
     tc._on_touch(2, fire, false)
     await _frames(2)
     _check(not Input.is_action_pressed("fire"), "L0 releasing FIRE stops")
+    # Stick all the way forward sprints.
+    tc._on_touch(0, o, true)
+    tc._on_drag(0, o + Vector2(0, -400), Vector2(0, -400))
+    await _frames(2)
+    _check(Input.is_action_pressed("sprint"), "L0 joystick pushed all the way forward sprints")
+    tc._on_touch(0, o + Vector2(0, -400), false)
+    await _frames(2)
+    _check(not Input.is_action_pressed("sprint"), "L0 letting go of the joystick stops sprinting")
+    # VIEW: first person on and off.
+    var keep_view: float = Game.view_dist
+    Game.view_dist = 3.4
+    tc.toggle_view()
+    _check(p.first_person(), "L0 VIEW button switches to first person")
+    tc.toggle_view()
+    _check(not p.first_person(), "L0 VIEW button switches back to third person")
+    Game.view_dist = keep_view
+    # Buttons follow what you're doing.
+    var by := func(id: String) -> Dictionary:
+        for b in tc.buttons:
+            if b["action"] == id:
+                return b
+        return {}
+    tc._apply_context("vehicle")
+    _check(by.call("interact")["label"] == "EXIT" and by.call("fire")["shown"] and not by.call("jump")["shown"] and not by.call("grenade")["shown"],
+        "L0 in a vehicle the buttons become FIRE / FIRE 2 / EXIT")
+    tc._apply_context("air")
+    _check(by.call("jump")["shown"] and by.call("jump")["label"] == "UP" and by.call("crouch")["label"] == "DOWN", "L0 in a helicopter UP / DOWN appear")
+    tc._apply_context("ride")
+    _check(not by.call("fire")["shown"] and by.call("interact")["shown"], "L0 on a street car there's no FIRE, just EXIT")
+    tc._apply_context("foot")
+    _check(by.call("grenade")["label"].begins_with("NADE ") and by.call("reload")["shown"], "L0 back on foot the soldier buttons return (NADE shows the count)")
+    var keep_drones: int = p.drones
+    p.drones = 0
+    tc._apply_context("foot")
+    _check(not by.call("drone")["shown"], "L0 DRONE hides when there are no drone strikes")
+    p.drones = keep_drones
+    L.hud.prompt_label.text = "Tap USE to drive the JEEP"
+    tc._apply_context("foot")
+    _check(by.call("interact")["glow"], "L0 USE glows when there's something to use")
+    L.hud.prompt_label.text = ""
+    _check(Game.key_text("Press E to drive the JEEP") == "Tap USE to drive the JEEP" and Game.key_text("Hold E to nail") == "Hold USE to nail",
+        "L0 prompts say USE instead of E on touch")
+    # Moved buttons and button size.
+    var keep_layout: Dictionary = Game.touch_layout.duplicate()
+    var keep_size: float = Game.touch_size
+    Game.touch_layout = {"fire": Vector2(0.3, 0.3)}
+    tc.apply_layout()
+    var hit = tc._button_at(Vector2(0.3, 0.3) * s)
+    _check(hit != null and hit["action"] == "fire", "L0 a moved FIRE button is where the player put it")
+    Game.touch_size = 1.3
+    tc.apply_layout()
+    _check(absf(by.call("fire")["r"] - 78.0 * 1.3) < 0.01, "L0 button size setting makes the buttons bigger")
+    # The layout editor: drag a button, it's saved.
+    Game.touch_layout = {}
+    Game.touch_size = 1.0
+    var ed = L.TouchControls.new()
+    ed.editing = true
+    add_child(ed)
+    await _frames(2)
+    var from: Vector2 = DEFAULTS_POS(ed, "reload") * s
+    ed._on_touch(5, from, true)
+    ed._on_drag(5, Vector2(s.x * 0.4, s.y * 0.5), Vector2.ZERO)
+    ed._on_touch(5, Vector2(s.x * 0.4, s.y * 0.5), false)
+    var saved = Game.touch_layout.get("reload")
+    _check(saved is Vector2 and saved.distance_to(Vector2(0.4, 0.5)) < 0.02, "L0 dragging RELOAD in the layout editor saves its new spot")
+    ed.reset_layout()
+    _check(Game.touch_layout.is_empty() and Game.touch_size == 1.0, "L0 Reset puts the buttons back")
+    ed.queue_free()
+    Game.touch_layout = keep_layout
+    Game.touch_size = keep_size
+    tc.apply_layout()
+    # Haptics: getting hit buzzes the phone.
+    var keep_vib: bool = Game.vibration
+    Game.vibration = true
+    var n0: int = Game.buzzes
+    Game._buzz_t = 0
+    var hp0: float = p.health
+    p.last_fire_ms = Time.get_ticks_msec()     # firing drops safe-zone protection
+    var keep_inv: bool = p.invulnerable
+    p.invulnerable = false
+    p.take_damage(5.0, p.global_position + Vector3(0, 0, -5), p.global_position)
+    _check(Game.buzzes > n0, "L0 getting hit buzzes the phone (touch mode)")
+    p.health = hp0
+    p.invulnerable = keep_inv
+    Game.vibration = keep_vib
     Game.touch_mode = keep
     await _frames(1)
+
+
+func DEFAULTS_POS(tc, id: String) -> Vector2:
+    for b in tc.buttons:
+        if b["action"] == id:
+            return b["pos"]
+    return Vector2.ZERO
 
 
 ## Regression (found by CI): a Tan jeep that ended up right on top of the

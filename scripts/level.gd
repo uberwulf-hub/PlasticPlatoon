@@ -397,6 +397,8 @@ func boom_local(pos: Vector3, radius: float, db := 0.0) -> void:
     if player and is_instance_valid(player):
         var pd: float = player.global_position.distance_to(pos)
         player.shake = maxf(player.shake, clampf(1.3 - pd / 30.0, 0.0, 1.3))
+        if pd < 25.0:
+            Game.buzz(int(160 - pd * 5.0), clampf(1.0 - pd / 30.0, 0.2, 1.0))
 
 
 # ------------------------------------------------- bullet holes and scorch ----
@@ -1209,6 +1211,8 @@ func apply_explosion(pos: Vector3, radius: float, damage: float) -> void:
     if player and is_instance_valid(player):
         var pd: float = player.global_position.distance_to(pos)
         player.shake = maxf(player.shake, clampf(1.3 - pd / 30.0, 0.0, 1.3))
+        if pd < 25.0:
+            Game.buzz(int(160 - pd * 5.0), clampf(1.0 - pd / 30.0, 0.2, 1.0))
 
 
 func on_enemy_killed(e, headshot: bool) -> void:
@@ -1504,7 +1508,7 @@ func _pause() -> void:
     vb.add_child(UI.button("Quit to Main Menu", func():
         get_tree().paused = false
         request_menu.emit()))
-    vb.add_child(UI.label("WASD move · Mouse aim · LMB fire · RMB aim/scope\nShift sprint · C crouch · Space jump · R reload\n1-5 / Q weapons · Wheel zoom (first person) · G frag · F drone · E vehicles", 16, Color(0.8, 0.85, 0.75)))
+    vb.add_child(UI.label("Left thumb moves (push all the way to sprint) · Right thumb aims\nVIEW = first person · USE = vehicles, buying, repairs\nSettings > Arrange touch buttons to move them" if Game.touch_mode else "WASD move · Mouse aim · LMB fire · RMB aim/scope\nShift sprint · C crouch · Space jump · R reload\n1-5 / Q weapons · Wheel zoom (first person) · G frag · F drone · E vehicles", 16, Color(0.8, 0.85, 0.75)))
 
 
 func _toggle_net_menu() -> void:

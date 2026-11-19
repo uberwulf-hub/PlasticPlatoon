@@ -30,6 +30,9 @@ var _res_good := 0
 var show_fps := false
 var touch_controls := OS.has_feature("mobile")   # on-screen joystick + buttons
 var touch_mode := false         # touch controls are in use right now
+var touch_layout := {}          # touch button id -> Vector2 position (fraction of the screen)
+var touch_size := 1.0           # touch button size (0.7 - 1.4)
+var vibration := true           # phones buzz when you're hit or something blows up close by
 var weather := true             # clouds, rain and thunderstorms on outdoor maps
 var view_dist := 3.4             # on-foot camera distance (0 = first person); the wheel sets it
 var vehicle_zoom := 1.0          # vehicle chase-camera distance multiplier
@@ -137,6 +140,28 @@ func _unhandled_input(event: InputEvent) -> void:
 ##   Low:    no anti-aliasing, no ambient occlusion or glow, short shadows, 3D at 75% (FSR upscaled)
 ##   Medium: 2x MSAA, glow, medium shadows, full resolution
 ##   High:   4x MSAA, ambient occlusion, glow, long shadows
+## A short buzz on phones (getting hit, a blast nearby). ms = how long.
+var buzzes := 0                   # tests read it
+var _buzz_t := 0
+func buzz(ms: int, strength := 0.6) -> void:
+    if not vibration or not touch_mode:
+        return
+    var now := Time.get_ticks_msec()
+    if now - _buzz_t < 90:
+        return                        # don't drone on during an automatic burst
+    _buzz_t = now
+    buzzes += 1
+    if OS.has_feature("mobile"):
+        Input.vibrate_handheld(clampi(ms, 15, 400), clampf(strength, 0.05, 1.0))
+
+
+## Touch players read "Tap USE" where the PC prompt says "Press E".
+func key_text(s: String) -> String:
+    if not touch_mode:
+        return s
+    return s.replace("Press E", "Tap USE").replace("Hold E", "Hold USE").replace("press E", "tap USE").replace("tap E", "tap USE").replace("hold E", "hold USE").replace("hold C to descend", "hold DOWN to descend")
+
+
 ## True when gameplay input should drive the soldier: the mouse is captured
 ## (desktop) or the on-screen touch controls are up (phones).
 func aiming_input() -> bool:
@@ -264,6 +289,9 @@ func save() -> void:
     cfg.set_value("settings", "vehicle_zoom", vehicle_zoom)
     cfg.set_value("settings", "auto_res", auto_res)
     cfg.set_value("settings", "touch_controls", touch_controls)
+    cfg.set_value("settings", "touch_layout", touch_layout)
+    cfg.set_value("settings", "touch_size", touch_size)
+    cfg.set_value("settings", "vibration", vibration)
     cfg.set_value("progress", "meltdown_best", meltdown_best)
     cfg.set_value("settings", "music_volume", music_volume)
     cfg.set_value("settings", "sfx_volume", sfx_volume)
@@ -275,6 +303,7 @@ func _load() -> void:
     var cfg := ConfigFile.new()
     if OS.has_feature("mobile"):
         graphics = 0                  # phones start on Low (changeable in Settings)
+        fps_cap = 60                  # and capped at 60 fps, which saves battery
     if cfg.load(SAVE_PATH) != OK:
         touch_mode = touch_controls
         return
@@ -296,6 +325,9 @@ func _load() -> void:
     auto_res = cfg.get_value("settings", "auto_res", auto_res)
     touch_controls = cfg.get_value("settings", "touch_controls", touch_controls)
     touch_mode = touch_controls
+    touch_layout = cfg.get_value("settings", "touch_layout", {})
+    touch_size = clampf(cfg.get_value("settings", "touch_size", 1.0), 0.7, 1.4)
+    vibration = cfg.get_value("settings", "vibration", vibration)
     meltdown_best = cfg.get_value("progress", "meltdown_best", {})
     music_volume = cfg.get_value("settings", "music_volume", music_volume)
     sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
