@@ -99,10 +99,18 @@ func _client() -> void:
     var st = M.stations.filter(func(s): return s["kind"] == "weapon" and s["weapon"] == "shotgun")[0]
     _check(M.use(st) and L.player.owned.has("shotgun"), "client bought the shotgun")
     # Nail a plank back on a window that's missing some.
-    var b = M.barricades[0]
-    _check(await _wait(func(): return b.planks < 5, 30.0), "client sees a window's boards torn off (%d)" % b.planks)
+    # (Whichever window the Melties went for: they pick among the nearest few.)
+    var torn := func():
+        for x in M.barricades:
+            if x.planks < 5:
+                return x
+        return null
+    _check(await _wait(func(): return torn.call() != null, 30.0), "client sees a window's boards torn off")
+    var b = torn.call()
+    if b == null:
+        b = M.barricades[0]
     var before: int = b.planks
-    M.level.net.md_rebuild(0)
+    M.level.net.md_rebuild(M.barricades.find(b))
     _check(await _wait(func(): return b.planks > before or b.planks == 5, 10.0), "client's plank shows on the client")
     # Open the first door.
     var doors0: int = M.doors.size()
