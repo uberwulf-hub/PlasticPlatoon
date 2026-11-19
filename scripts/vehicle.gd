@@ -1205,6 +1205,14 @@ func _ai_update(delta: float) -> Vector2:
                 var radial := -to_t.normalized()
                 var tangent := radial.cross(Vector3.UP) * _ai_orbit
                 dest = _ai_clear_point(ai_last_seen, ai_last_seen + radial * pref + tangent * 14.0)
+                if _flat_dist(dest) < 5.0:
+                    # That way's blocked (the point landed right where we are,
+                    # which would count as arrived and we'd sit still): circle
+                    # the other way, or failing that, drive at them.
+                    _ai_orbit = -_ai_orbit
+                    dest = _ai_clear_point(ai_last_seen, ai_last_seen + radial * pref - tangent * 14.0)
+                    if _flat_dist(dest) < 5.0:
+                        dest = ai_last_seen
         if global_position.distance_to(home) > a["leash"]:
             dest = home
     else:
@@ -1215,6 +1223,18 @@ func _ai_update(delta: float) -> Vector2:
             _ai_patrol = home + Vector3(cos(ang), 0, sin(ang)) * randf_range(6.0, 18.0)
 
     dest = level.outside_safe_zone(dest, global_position)
+    if ai_alert > 0.0 and not hold and kind != "tank" and dist > 10.0 and _flat_dist(dest) < 5.0:
+        # Nowhere to go from here (typically the point we wanted is in the
+        # safe zone and got pushed back onto its edge, right where we are):
+        # drive along the edge instead of parking there as a sitting duck.
+        var out: Vector3 = global_position - level.safe_center
+        out.y = 0.0
+        if out.length() < 0.1:
+            out = global_transform.basis.z
+        var along: Vector3 = out.normalized().cross(Vector3.UP) * _ai_orbit
+        dest = level.outside_safe_zone(global_position + along * 16.0 + out.normalized() * 3.0, global_position)
+        if _flat_dist(dest) < 5.0:
+            _ai_orbit = -_ai_orbit
     # ---- steering ----
     var to_d := dest - global_position
     to_d.y = 0.0
@@ -1318,6 +1338,10 @@ func _ai_hunt_point(delta: float) -> Vector3:
 
 
 ## Pulls `want` back toward `from` if there's a wall in between.
+func _flat_dist(p: Vector3) -> float:
+    return Vector2(p.x - global_position.x, p.z - global_position.z).length()
+
+
 ## Pull away from a target that's too close to shoot. Straight back if
 ## there's room; with a wall behind, out to whichever side is clearer; boxed
 ## in, just reverse. (A blocked point a few metres away used to count as
