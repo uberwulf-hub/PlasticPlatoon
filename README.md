@@ -95,10 +95,17 @@ Something went wrong with General Beige's paint. The Tan soldiers it touched cam
 | **Midnight Kitchen** | Kitchen Floor (open fridge, island) → narrow Pantry → Laundry Room | 750, 1250 |
 | **Recess Is Cancelled** | Classroom (rows of desks) → long locker Hallway → Gym | 750, 1000 |
 | **Sandcastle Beach at Dusk** | Lifeguard Hut → Sandcastle Courtyard → the Pier over the sea | 750, 1250 |
+| **Bath Time** | Bathroom → Landing → Kids' Bedroom | 750, 1000 |
+| **The Garage** | Workbench → Car Bay → Paint Store | 750, 1250 |
+| **Pillow Fort** | Pillow Fort → Living Room → Fireplace Den | 750, 1250 |
+| **Model Railway** | Station Platform → Train Yard → Engine Shed | 1000, 1250 |
+| **Birthday Party** | Party Table → Games Room → Bouncy Castle | 750, 1500 |
+| **Snow Day** | Snow Fort → Snowman Yard → Sled Shed | 750, 1250 |
+| **The Big Flush** | Inside the toilet bowl (Melties crack the porcelain; plaster the cracks) → up the toilet-paper ramp to the Bathroom Floor → the Corner behind the towels → a towel ramp into the Bathtub | 750, 1000, 1250 |
 
 The toy store's sniper is on the checkout wall, so it's available from the start.
 
-New maps go in `scripts/meltdown_maps.gd`. `_rooms()` builds a row of rooms with window gaps and junk-pile doors. `tests/meltdown_test` checks every map's windows, stations and paths automatically.
+New maps go in `scripts/meltdown_maps.gd`. `_rooms()` builds a row of rooms with window gaps and junk-pile doors. A door can also be a ramp (`"ramp": [points]`): nothing blocks the way, but there's no way up until you buy it and the paper or towel unrolls. A window can be a `"porcelain"` crack instead of boards. `tests/meltdown_test` checks every map's windows, stations and paths automatically.
 
 - **Waves.** Melties gather in the crawlspace outside, rip the boards off the windows, climb in and come for you. Each wave has more of them, with more health, more speed and harder swipes.
 - **Kinds of Melty:**

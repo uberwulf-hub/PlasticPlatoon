@@ -562,5 +562,10 @@ const MELTDOWN_NEWS := [
         {"who": "gary", "line": "I'm in the snow fort, Chip. It's freezing. On the bright side, so are the Melties.", "headline": "LIVE: THE BACK YARD"},
         {"who": "chip", "line": "Hold the fort, cross the snowman yard, and fall back to the sled shed. Wrap up warm out there.", "gesture": "Yes"},
     ]},
+    {"theme": "bath", "ticker": ["TOILET LID LEFT UP; NOBODY ADMITS IT", "RUBBER DUCK DECLINES TO COMMENT"], "beats": [
+        {"who": "brenda", "line": "Breaking news: a green platoon has been spotted at the bottom of the toilet. Yes, that toilet.", "headline": "PNN BREAKING: THE BIG FLUSH"},
+        {"who": "gary", "line": "Chip, I'm on the rim. The Melties are crawling through the porcelain and cracking the bowl. Please, nobody flush.", "headline": "LIVE: THE BATHROOM, AT TOY SIZE"},
+        {"who": "chip", "line": "Plaster the cracks, buy the toilet paper, and climb out. Then take the floor, the corner, and the tub. And wash your hands.", "gesture": "Yes"},
+    ]},
 ]
 

@@ -32,6 +32,7 @@ var barricades: Array = []
 var doors: Array = []              # {"node", "cost", "opens", "label"}
 var stations: Array = []           # {"node", "kind", "cost", "weapon", "label", "pos"}
 var nav_region: NavigationRegion3D
+var ramps: Array = []              # walkable strips laid by ramp doors
 var _plank_coins := 0
 var _rebuild_t := 0.0
 var _crate_busy := false
@@ -65,6 +66,10 @@ func _ready() -> void:
     for w in layout["windows"]:
         var b = Barricade.new()
         b.setup(level, w[0], w[1], w[2])
+        if w.size() > 3 and w[3] == "porcelain":
+            b.style = "porcelain"           # a crack in the toilet: the Melties are in the hollow porcelain
+            b.spawn_depth = Vector2(1.9, 2.8)
+            b.spawn_side = 0.6
         level.add_child(b)
         barricades.append(b)
     for d in layout["doors"]:
@@ -134,6 +139,8 @@ func _solid(parent: Node3D, pos: Vector3, size: Vector3, m: Material) -> void:
 
 
 func _build_door(d: Dictionary) -> Dictionary:
+    if d.has("ramp"):
+        return _build_ramp_door(d)
     var body := StaticBody3D.new()
     body.collision_layer = 1
     body.position = d["pos"]
@@ -145,9 +152,120 @@ func _build_door(d: Dictionary) -> Dictionary:
     _solid(body, Vector3(w * 0.3, 3.1, -0.1), Vector3(1.1, 0.7, 1.1), junk[2])
     _solid(body, Vector3(0.2, 0.45, 0.8), Vector3(1.0, 0.9, 0.7), junk[3])
     var opens: String = d["opens"]
-    var text := "CLEAR THE JUNK\n%s  -  %d COINS" % [sections[opens]["name"], d["cost"]]
+    var text := "%s\n%s  -  %d COINS" % [d.get("verb", "CLEAR THE JUNK"), sections[opens]["name"], d["cost"]]
     var lbl := _label(text, d["pos"] + Vector3(0, 4.3, 0), Color(1.0, 0.85, 0.35))
-    return {"node": body, "cost": d["cost"], "opens": opens, "label": lbl, "pos": d["pos"] + Vector3(0, 1.0, 0)}
+    return {"node": body, "cost": d["cost"], "opens": opens, "label": lbl, "pos": d["pos"] + Vector3(0, 1.0, 0),
+        "prompt": "Press E to %s into the %s  -  %d coins" % [d.get("verb", "clear the junk").to_lower(), sections[opens]["name"], d["cost"]]}
+
+
+## A door that's a ramp: nothing blocks the way, there's just no way up (or
+## down) until you buy it. Then a strip of toilet paper or a towel unrolls
+## along "ramp" (a list of points on its top surface) and you can walk it.
+##   "ramp": [Vector3...], "ramp_width": float, "ramp_look": "paper" | "towel",
+##   "roll": Vector3 (where the roll sits until it's bought), "verb": "UNROLL THE TOILET PAPER"
+func _build_ramp_door(d: Dictionary) -> Dictionary:
+    var opens: String = d["opens"]
+    var look: String = d.get("ramp_look", "paper")
+    var holder := Node3D.new()
+    level.add_child(holder)
+    var roll := MeshInstance3D.new()
+    var cm := CylinderMesh.new()
+    var w: float = d.get("ramp_width", 4.0)
+    cm.top_radius = w * 0.45
+    cm.bottom_radius = w * 0.45
+    cm.height = w
+    roll.mesh = cm
+    roll.material_override = _ramp_mat(look)
+    roll.position = d.get("roll", d["pos"] + Vector3(0, 2, 0))
+    var path: Array = d["ramp"]
+    var along: Vector3 = (path[1] - path[0]) if path.size() > 1 else Vector3.FORWARD
+    roll.rotation.y = atan2(along.x, along.z)
+    roll.rotation.z = PI / 2
+    roll.rotate_object_local(Vector3.UP, 0.0)
+    holder.add_child(roll)
+    var text := "%s\n%s  -  %d COINS" % [d.get("verb", "UNROLL THE RAMP"), sections[opens]["name"], d["cost"]]
+    var lbl := _label(text, d["pos"] + Vector3(0, 3.2, 0), Color(1.0, 0.85, 0.35))
+    return {"node": holder, "roll": roll, "cost": d["cost"], "opens": opens, "label": lbl, "pos": d["pos"] + Vector3(0, 1.0, 0),
+        "ramp": path, "ramp_width": w, "ramp_look": look,
+        "prompt": "Press E to %s up to the %s  -  %d coins" % [d.get("verb", "unroll the ramp").to_lower(), sections[opens]["name"], d["cost"]]}
+
+
+func _ramp_mat(look: String) -> StandardMaterial3D:
+    var m := StandardMaterial3D.new()
+    m.roughness = 1.0
+    var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+    if look == "towel":
+        m.albedo_color = Color(0.45, 0.7, 0.95)
+        img.fill(Color(1, 1, 1))
+        for y in 64:
+            for x in 64:
+                if y % 32 < 5:
+                    img.set_pixel(x, y, Color(1.0, 0.95, 0.55))           # a stripe across it
+                elif (x * 7 + y * 13) % 5 == 0:
+                    img.set_pixel(x, y, Color(0.85, 0.85, 0.85))          # fluffy loops
+    else:
+        m.albedo_color = Color(1.0, 0.94, 0.8)
+        img.fill(Color(1, 1, 1))
+        for x in range(0, 64, 4):
+            img.set_pixel(x, 0, Color(0.75, 0.75, 0.75))                 # perforations
+            img.set_pixel(x + 1, 0, Color(0.75, 0.75, 0.75))
+        for y in 64:
+            for x in 64:
+                if (x + y) % 16 == 0 or (x - y + 64) % 16 == 0:
+                    img.set_pixel(x, y, Color(0.92, 0.92, 0.92))          # quilting
+    img.generate_mipmaps()
+    m.albedo_texture = ImageTexture.create_from_image(img)
+    m.uv1_triplanar = true
+    m.uv1_scale = Vector3.ONE * 0.25
+    return m
+
+
+## Lay the ramp: one continuous strip along the path (no seams for the
+## navigation mesh to trip on), solid from both sides.
+func _build_ramp(d: Dictionary) -> void:
+    var path: Array = d["ramp"]
+    var w: float = d["ramp_width"] * 0.5
+    var body := StaticBody3D.new()
+    body.collision_layer = 1
+    body.name = "Ramp"
+    level.add_child(body)
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    for i in path.size() - 1:
+        var a: Vector3 = path[i]
+        var b: Vector3 = path[i + 1]
+        var flat := Vector3(b.x - a.x, 0, b.z - a.z)
+        if flat.length() < 0.01:
+            flat = Vector3.FORWARD
+        var side := flat.normalized().cross(Vector3.UP) * w
+        for tri in [[a - side, a + side, b + side], [a - side, b + side, b - side]]:
+            var v0: Vector3 = tri[0]
+            var v1: Vector3 = tri[1]
+            var v2: Vector3 = tri[2]
+            # Godot's front faces wind clockwise: keep the top facing up.
+            if (v1 - v0).cross(v2 - v0).y > 0.0:
+                var t := v1
+                v1 = v2
+                v2 = t
+            for v in [v0, v1, v2]:
+                st.set_uv(Vector2(v.x + v.z, v.y) * 0.25)
+                st.add_vertex(v)
+    st.generate_normals()
+    var mesh := st.commit()
+    var mi := MeshInstance3D.new()
+    mi.mesh = mesh
+    var m := _ramp_mat(d["ramp_look"])
+    m.cull_mode = BaseMaterial3D.CULL_DISABLED
+    m.uv1_triplanar = false
+    mi.material_override = m
+    body.add_child(mi)
+    var cs := CollisionShape3D.new()
+    var shape := ConcavePolygonShape3D.new()
+    shape.set_faces(mesh.get_faces())
+    shape.backface_collision = true
+    cs.shape = shape
+    body.add_child(cs)
+    ramps.append(body)
 
 
 func _build_station(s: Dictionary) -> Dictionary:
@@ -296,8 +414,8 @@ func _spawn_one(what := "") -> Node:
     var p: Vector3 = level.player.global_position
     open.sort_custom(func(a, b): return a.global_position.distance_to(p) < b.global_position.distance_to(p))
     var b = open[randi() % mini(4, open.size())] if randf() < 0.8 else open.pick_random()
-    var side: Vector3 = b.normal.cross(Vector3.UP) * randf_range(-1.6, 1.6)
-    var pos: Vector3 = b.global_position + b.normal * randf_range(3.2, 4.4) + side + Vector3(0, 0.3, 0)
+    var side: Vector3 = b.normal.cross(Vector3.UP) * randf_range(-b.spawn_side, b.spawn_side)
+    var pos: Vector3 = b.global_position + b.normal * randf_range(b.spawn_depth.x, b.spawn_depth.y) + side + Vector3(0, 0.3, 0)
     var spd := _wave_speed * randf_range(0.85, 1.15)
     var kind: String = what if what != "" else pick_kind(wave)
     var m = Melty.new()
@@ -621,14 +739,35 @@ func open_door_index(i: int) -> void:
         return
     var d: Dictionary = doors[i]
     sections[d["opens"]]["open"] = true
-    if is_instance_valid(d["node"]):
+    if d.has("ramp"):
+        _build_ramp(d)
+        _roll_away(d)
+    elif is_instance_valid(d["node"]):
         d["node"].queue_free()
     if is_instance_valid(d["label"]):
         d["label"].queue_free()
     doors.remove_at(i)
     level.notify("THE %s IS OPEN" % sections[d["opens"]]["name"], 2.5)
-    Game.play_sfx("explosion", d["pos"], -8.0)
+    Game.play_sfx("throw" if d.has("ramp") else "explosion", d["pos"], -4.0 if d.has("ramp") else -8.0)
     get_tree().create_timer(0.1).timeout.connect(_bake_nav)
+
+
+## The roll bounces down the new ramp and is gone.
+func _roll_away(d: Dictionary) -> void:
+    var holder: Node3D = d["node"]
+    var roll: Node3D = d.get("roll")
+    if not is_instance_valid(holder) or not is_instance_valid(roll):
+        return
+    var path: Array = d["ramp"]
+    var tw := holder.create_tween()
+    var from_top: Array = path.duplicate()
+    from_top.sort_custom(func(a, b): return a.y > b.y)
+    var start: Vector3 = from_top[0]
+    var end: Vector3 = path[0] if path[0].y < path[path.size() - 1].y else path[path.size() - 1]
+    tw.tween_property(roll, "position", start + Vector3(0, 2.0, 0), 0.25)
+    tw.tween_property(roll, "position", end + Vector3(0, roll.mesh.top_radius, 0), 0.9).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+    tw.tween_property(roll, "scale", Vector3(0.3, 1.0, 0.3), 0.4)
+    tw.tween_callback(holder.queue_free)
 
 
 # ------------------------------------------------------------ interaction ----
@@ -755,13 +894,7 @@ func _open_door(d: Dictionary) -> bool:
     if level.net != null:
         level.net.md_door(doors.find(d))      # host: open it everywhere
         return true
-    sections[d["opens"]]["open"] = true
-    d["node"].queue_free()
-    d["label"].queue_free()
-    doors.erase(d)
-    level.notify("THE %s IS OPEN" % sections[d["opens"]]["name"], 2.5)
-    Game.play_sfx("explosion", d["pos"], -8.0)
-    get_tree().create_timer(0.1).timeout.connect(_bake_nav)    # once the junk is gone
+    open_door_index(doors.find(d))
     return true
 
 
@@ -825,9 +958,10 @@ func prompt_text() -> String:
     if _focus == null:
         return ""
     if _focus is Node:
-        return "Hold E to nail the boards back up  (+%d coins each)" % PLANK_COINS if _plank_coins < PLANK_COINS_PER_WAVE else "Hold E to nail the boards back up"
+        var what := "plaster the crack" if _focus.get("style") == "porcelain" else "nail the boards back up"
+        return "Hold E to %s  (+%d coins each)" % [what, PLANK_COINS] if _plank_coins < PLANK_COINS_PER_WAVE else "Hold E to %s" % what
     if _focus.has("opens"):
-        return "Press E to clear the junk into the %s  -  %d coins" % [sections[_focus["opens"]]["name"], _focus["cost"]]
+        return _focus.get("prompt", "Press E to clear the junk into the %s  -  %d coins" % [sections[_focus["opens"]]["name"], _focus["cost"]])
     var f: Dictionary = _focus
     if f["kind"] == "weapon" and level.player.owned.has(f["weapon"]):
         return "Press E for %s ammo  -  %d coins" % [NAMES[f["weapon"]], int(f["cost"] / 2)]

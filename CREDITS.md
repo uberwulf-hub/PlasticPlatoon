@@ -17,6 +17,9 @@ Every third-party asset in this project is released under **CC0 1.0 (public doma
 | `assets/packs/kenney_modular_buildings/` | Modular Buildings | Kenney | CC0 | https://opengameart.org/content/modular-buildings |
 | `assets/packs/kenney_retro_urban/` | Retro Urban Kit | Kenney | CC0 | https://opengameart.org/content/retro-urban-kit |
 | `assets/packs/kenney_nature/` | Nature Kit 2.1 (rocks, cacti, palms, trees) | Kenney | CC0 | https://opengameart.org/content/nature-kit |
+| `assets/packs/bathroom/kenney/` | Furniture Kit 2.0: bathroom vanity, sink, mirror, bin, rug (Giant Bathroom map) | Kenney | CC0 | https://kenney.nl/assets/furniture-kit |
+| `assets/packs/bathroom/tiny_treats/` | Tiny Treats - Bubbly Bathroom 1.0: slippers, towels, toothbrush and cup, bottles | Isa Lousberg | CC0 | https://opengameart.org/content/tiny-treats-bubbly-bathroom-set |
+| `assets/packs/bathroom/polyhaven/` | Rubber duck toy; bleach bottle, plunger and modern ceiling lamp 01 (James Ray Cock) - packed into .glb | Poly Haven | CC0 | https://polyhaven.com/models |
 
 Kenney's packs are also available at https://kenney.nl/assets, and each pack folder includes its own `License.txt`.
 

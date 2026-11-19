@@ -82,6 +82,12 @@ const META := [
         "briefing": "It snowed overnight, and the Melties are slipping in over the drifts. Hold the snow fort, cross the snowman yard and fall back to the sled shed.",
         "blurb": "A snow fort, a yard full of snowmen, and the sled shed.",
     },
+    {
+        "name": "The Big Flush",
+        "location": "The bathroom - and you're the size of a bottle cap",
+        "briefing": "You woke up at the bottom of the toilet. The Melties are crawling through the hollow porcelain and cracking the bowl to get at you.\n\nPlaster the cracks, earn coins, and buy the toilet paper: it unrolls into a ramp up and over the rim. Then take the bathroom floor, clear the towels out of the corner, and climb into the tub for the Re-Mold Press.",
+        "blurb": "Start inside a giant toilet bowl, escape up the toilet paper, take the floor, the corner and the tub.",
+    },
 ]
 
 
@@ -112,6 +118,8 @@ static func build(i: int, L) -> Dictionary:
             d = _party(L)
         12:
             d = _snow_day(L)
+        13:
+            d = _big_flush(L)
         _:
             d = _basement(L)
     d["name"] = META[clampi(i, 0, META.size() - 1)]["name"]
@@ -1126,3 +1134,278 @@ static func _snow_day(L) -> Dictionary:
             ],
         },
     }
+
+
+# ===================================================== THE BIG FLUSH ====
+# A whole bathroom at toy scale (1 m = 32 units; the toilet is a bit bigger
+# than life). Four areas, opened in order:
+#   A  The Bowl     inside the toilet; the floor is the water, 12 up.
+#                   Melties crawl through the hollow porcelain and crack the
+#                   bowl in three places (porcelain "windows").
+#   B  The Floor    the front of the room: rug, slippers, duck, the vanity.
+#                   Reached by buying the toilet paper (a ramp over the rim).
+#   C  The Corner   behind a heap of towels on the right: bin, plunger, bleach.
+#   D  The Tub      a towel ramp up and over the side; the Re-Mold Press is in it.
+const FLUSH_T := 60.0             # toilet scale: profile metres -> units
+const FLUSH_C := Vector3(4, 0, -19)   # toilet centre
+const FLUSH_OVAL := 1.25          # the bowl is longer front to back
+## The toilet's shape, [radius m, height m]: inside from the middle of the
+## water up to the rim (a short wall all round the water, then slopes too
+## steep to climb), the rim, then the outside down to the floor.
+const FLUSH_IN := [[0.0, 0.2], [0.105, 0.2], [0.11, 0.245], [0.15, 0.275], [0.18, 0.32], [0.195, 0.37], [0.2, 0.41]]
+const FLUSH_OUT := [[0.205, 0.415], [0.25, 0.415], [0.262, 0.39], [0.245, 0.3], [0.19, 0.2], [0.135, 0.12], [0.12, 0.05], [0.15, 0.0]]
+const FLUSH_CRACKS := [30.0, 150.0, 270.0]    # degrees round the bowl (90 = front)
+
+
+static func _flush_pt(r: float, y: float, deg: float) -> Vector3:
+    var a := deg_to_rad(deg)
+    return FLUSH_C + Vector3(cos(a) * r, y, sin(a) * r * FLUSH_OVAL) * FLUSH_T
+
+
+## Outward normal of the oval bowl at an angle.
+static func _flush_normal(deg: float) -> Vector3:
+    var a := deg_to_rad(deg)
+    return Vector3(cos(a), 0, sin(a) / FLUSH_OVAL).normalized()
+
+
+static func _big_flush(L) -> Dictionary:
+    var porcelain: StandardMaterial3D = L.mat(Color(0.93, 0.95, 0.98), 0.18)
+    porcelain.cull_mode = BaseMaterial3D.CULL_DISABLED
+    # ---- floor, walls, ceiling ----
+    L.box(Vector3(0, -0.5, 0), Vector3(104, 1, 128), Color.GRAY, 0.0, true, L.tex("concrete", Color(0.45, 0.43, 0.42), 9.0))
+    L.box(Vector3(0, 0.02, 0), Vector3(72, 0.04, 96), Color.GRAY, 0.0, false, L.tex("tiles", Color(0.82, 0.9, 1.0), 9.6, 0.3))
+    L.bounds(50, 62)
+    var wall = L.tex("tiles", Color(0.92, 0.97, 1.0), 4.8, 0.3)
+    var H := 78.0
+    # Holes at floor level: [centre, width, floor height]. Melties come in
+    # under the door, through a mouse hole, a heating vent, behind the bin and
+    # up the tub's overflow pipe.
+    _flush_wall(L, true, 48, -36, 36, [[10, 2.8, 0.0]], H, wall)                  # front: under the door
+    _flush_wall(L, true, -48, -36, 36, [[28, 2.8, 0.0], [-25, 2.8, 2.0]], H, wall) # back: corner, tub pipe
+    _flush_wall(L, false, -36, -48, 48, [[30, 2.8, 0.0]], H, wall)                # left: mouse hole
+    _flush_wall(L, false, 36, -48, 48, [[40, 2.8, 0.0], [-30, 2.8, 0.0]], H, wall) # right: vent, corner
+    L.box(Vector3(0, H + 0.5, 0), Vector3(74, 1, 98), Color(0.95, 0.95, 0.93), 0.0, false)
+    L.box(Vector3(10, 41.7, 47.45), Vector3(26, 76.6, 0.3), Color(0.85, 0.82, 0.76), 0.0, false)   # the door (a gap under it)
+    L.box(Vector3(-25, 1.0, -52), Vector3(8, 2.0, 8), Color(0.5, 0.5, 0.52), 0.0, true)        # the overflow pipe outside
+    # ---- the toilet ----
+    _flush_toilet(L, porcelain)
+    # ---- the tub (D): built so you can stand in it ----
+    var tub_m: StandardMaterial3D = L.mat(Color(0.95, 0.96, 0.98), 0.2)
+    L.box(Vector3(-24.8, 1.0, -20.8), Vector3(22.4, 2.0, 54.4), Color.WHITE, 0.0, true, tub_m)      # floor of the tub
+    L.box(Vector3(-35.2, 9.6, -20.8), Vector3(1.6, 15.2, 54.4), Color.WHITE, 0.0, true, tub_m)      # against the wall
+    L.box(Vector3(-14.4, 8.8, -20.8), Vector3(1.6, 17.6, 54.4), Color.WHITE, 0.0, true, tub_m)      # room side
+    L.box(Vector3(-24.8, 8.8, 5.6), Vector3(22.4, 17.6, 1.6), Color.WHITE, 0.0, true, tub_m)        # front end
+    # back end, with the overflow hole the Melties climb out of
+    L.box(Vector3(-31.4, 8.8, -47.2), Vector3(9.2, 17.6, 1.6), Color.WHITE, 0.0, true, tub_m)
+    L.box(Vector3(-18.2, 8.8, -47.2), Vector3(9.2, 17.6, 1.6), Color.WHITE, 0.0, true, tub_m)
+    L.box(Vector3(-24.8, 11.4, -47.2), Vector3(4.0, 12.4, 1.6), Color.WHITE, 0.0, true, tub_m)
+    for z in [-20.8]:
+        L.cyl(Vector3(-14.4, 17.6, z), 0.95, 54.4, Color.WHITE, false, Vector3(PI / 2, 0, 0), tub_m)  # rounded rim
+    L.cyl(Vector3(-24.8, 17.6, 5.6), 0.95, 22.4, Color.WHITE, false, Vector3(0, 0, PI / 2), tub_m)
+    var chrome: StandardMaterial3D = L.mat(Color(0.82, 0.84, 0.88), 0.15, 0.9)
+    L.cyl(Vector3(-24.8, 14.0, -44.5), 0.8, 5.0, Color.GRAY, false, Vector3(PI / 2, 0, 0), chrome)   # tap
+    L.cyl(Vector3(-24.8, 2.05, -38), 1.6, 0.1, Color(0.2, 0.2, 0.22), false)                          # plughole
+    L.water(Vector3(-27, 2.1, -34), Vector2(9, 12), Color(0.6, 0.8, 0.95, 0.55))
+    # ---- props ----
+    var P := "bathroom/"
+    _prop_at(L, P + "polyhaven/rubber_duck_toy.glb", Vector3(-4, 0, 18), 2.4, Vector3(0, 5.2, 0))
+    _prop_at(L, P + "polyhaven/rubber_duck_toy.glb", Vector3(-22, 2, -28), -0.7, Vector3(0, 4.0, 0))     # in the tub
+    _prop_at(L, P + "kenney/rugRounded.glb", Vector3(-2, 0.05, 26), 0.0, Vector3(30, 0, 0), false)
+    _prop_at(L, P + "tiny_treats/slippers.glb", Vector3(20, 0, 30), -0.4, Vector3(10, 0, 0))
+    _prop_at(L, P + "tiny_treats/towel_stacked.glb", Vector3(-30, 0, 24), 0.2, Vector3(0, 5.8, 0))
+    _prop_at(L, P + "tiny_treats/towel_blue.glb", Vector3(14, 0, 42), 0.6, Vector3(13, 0, 0))
+    _prop_at(L, P + "tiny_treats/towel_pink.glb", Vector3(-8, 0, 41), -0.9, Vector3(12, 0, 0))
+    _prop_at(L, P + "kenney/bathroomSink.glb", Vector3(29.5, 0, 14), -PI / 2, Vector3(0, 27, 0))
+    _prop_at(L, P + "kenney/bathroomMirror.glb", Vector3(33.4, 32, 14), -PI / 2, Vector3(0, 16, 0), false)
+    _prop_at(L, P + "kenney/bathroomCabinetDrawer.glb", Vector3(-28, 0, 44), PI, Vector3(0, 14, 0))
+    _prop_at(L, P + "tiny_treats/toothbrush_cup.glb", Vector3(-30, 14, 44), 0.0, Vector3(0, 3.5, 0), false)
+    _prop_at(L, P + "tiny_treats/toothbrush_blue.glb", Vector3(-26, 14.4, 44), 0.4, Vector3(0, 0, 5.5), false)
+    _prop_at(L, P + "kenney/trashcan.glb", Vector3(30, 0, -38), 0.3, Vector3(0, 9.6, 0))
+    _prop_at(L, P + "polyhaven/plunger.glb", Vector3(24, 0, -43), 0.5, Vector3(0, 15, 0))
+    _prop_at(L, P + "polyhaven/bleach_bottle.glb", Vector3(31, 0, -22), 0.8, Vector3(0, 8.6, 0))
+    _prop_at(L, P + "tiny_treats/container_bathroom_A_blue.glb", Vector3(-35.2, 18.6, -10), 0.0, Vector3(0, 6.4, 0), false)
+    _prop_at(L, P + "tiny_treats/container_bathroom_C_pink.glb", Vector3(-35.2, 18.6, -4), 0.0, Vector3(0, 5.8, 0), false)
+    _prop_at(L, P + "tiny_treats/container_bathroom_B_yellow.glb", Vector3(-35.2, 18.6, 2), 0.0, Vector3(0, 6.4, 0), false)
+    # A crumpled towel on the floor (cover).
+    for i in 6:
+        var a := i * 1.1
+        L.sphere(Vector3(-14 + cos(a) * 2.4, 1.2, 34 + sin(a) * 1.8), 2.4, Color(0.98, 0.85, 0.35), Vector3(1.0, 0.55, 1.0))
+    # The heap of towels across the corner (C), with its doorway.
+    var towel_m = L.tex("carpet", Color(1.3, 1.3, 1.25), 3.0)
+    L.box(Vector3(15.75, 3.0, -14), Vector3(23.5, 6.0, 3.0), Color.WHITE, 0.0, true, towel_m)
+    L.box(Vector3(33.85, 3.0, -14), Vector3(4.3, 6.0, 3.0), Color.WHITE, 0.0, true, towel_m)
+    var towel_cols := [Color(0.55, 0.78, 1.0), Color(1.0, 0.75, 0.82), Color(1.0, 0.9, 0.45), Color(0.95, 0.95, 0.95)]
+    for k in 9:
+        var x := 6.0 + k * 3.0 if k < 8 else 33.8
+        L.sphere(Vector3(x, 5.6 + (k % 2) * 0.6, -14 + ((k % 3) - 1) * 0.6), 2.2, towel_cols[k % 4], Vector3(1.0, 0.6, 0.9), L.tex("carpet", towel_cols[k % 4] * 1.3, 2.0))
+    # The waste pipe behind the toilet keeps the corner shut off underneath it.
+    L.box(Vector3(4, 4.0, -39), Vector3(4.0, 8.0, 18.0), Color.WHITE, 0.0, true, porcelain)
+    # ---- lights: two ceiling lamps that flicker, plus fill ----
+    var lights: Array = []
+    var glow: Array = []
+    for x in [-12.0, 14.0]:
+        L.prop(P + "polyhaven/modern_ceiling_lamp_01.glb", Vector3(x, H - 9.0, 2), 0.0, Vector3(10, 0, 0), false)
+        var gm: StandardMaterial3D = L.glow_mat(Color(1.0, 0.93, 0.78), 3.0)
+        L.sphere(Vector3(x, H - 8.0, 2), 2.0, Color.WHITE, Vector3.ONE, gm)
+        glow.append(gm)
+        lights.append(L.lamp(Vector3(x, H - 12.0, 2), Color(1.0, 0.92, 0.78), 110.0, 2.4, false))
+    for p in [Vector3(4, 34, -19), Vector3(0, 24, 26), Vector3(28, 20, -30), Vector3(-25, 24, -20)]:
+        lights.append(L.lamp(p, Color(1.0, 0.94, 0.85), 40.0, 1.0, false))
+    var fl = preload("res://scripts/flicker_lights.gd").new()
+    fl.setup(L, lights, glow)
+    L.add_child(fl)
+
+    # ---- MELTDOWN layout ----
+    var windows: Array = []
+    for deg in FLUSH_CRACKS:
+        var n := _flush_normal(deg)
+        windows.append([_flush_pt(0.1075, 0.2, deg), n, "A", "porcelain"])
+    windows += [
+        [Vector3(10, 0, 48), Vector3(0, 0, 1), "B"], [Vector3(-36, 0, 30), Vector3(-1, 0, 0), "B"], [Vector3(36, 0, 40), Vector3(1, 0, 0), "B"],
+        [Vector3(36, 0, -30), Vector3(1, 0, 0), "C"], [Vector3(28, 0, -48), Vector3(0, 0, -1), "C"],
+        [Vector3(-25, 2, -46.4), Vector3(0, 0, -1), "D"],
+    ]
+    # The toilet paper: from the water, up and over the front rim, down to the floor.
+    var paper: Array = []
+    for p in [[0.2, -0.02], [0.43, 0.27], [0.43, 0.335], [0.0, 0.885]]:
+        paper.append(FLUSH_C + Vector3(0, p[0], p[1]) * FLUSH_T)
+    var towel := [Vector3(-24.8, 0, 30), Vector3(-24.8, 18.8, 7.6), Vector3(-24.8, 18.8, 3.8), Vector3(-24.8, 2.0, -16)]
+    var lip := func(deg: float) -> Vector3: return _flush_pt(0.1075, 0.2, deg)
+    return {
+        "spawn": FLUSH_C + Vector3(0, 12.5, -3), "spawn_yaw": PI, "drones": 0, "safe_radius": 0.0,
+        "start_weapons": ["carbine"],
+        "sky_top": Color(0.1, 0.1, 0.12), "sky_horizon": Color(0.2, 0.2, 0.22),
+        "sun_color": Color(1.0, 0.95, 0.88), "sun_energy": 0.25, "sun_rot": Vector3(-70, 30, 0),
+        "fog": 0.002, "ambient": 1.1, "exposure": 1.1,
+        "music": "res://assets/audio/music/determined_pursuit.ogg", "ambience": "res://assets/audio/ambience/clock_tick.ogg", "ambience_db": -16.0,
+        "objectives": [],
+        "meltdown": {
+            "start": "A",
+            "sections": {"A": "BOWL", "B": "BATHROOM FLOOR", "C": "CORNER", "D": "BATHTUB"},
+            "windows": windows,
+            "doors": [
+                {"pos": FLUSH_C + Vector3(0, 12, 6), "width": 6.6, "cost": 750, "opens": "B", "verb": "UNROLL THE TOILET PAPER",
+                    "ramp": paper, "ramp_width": 6.6, "ramp_look": "paper", "roll": FLUSH_C + Vector3(0, 25.8 + 3.2, 19)},
+                {"pos": Vector3(29.6, 0, -14), "width": 4.2, "cost": 1000, "opens": "C", "verb": "MOVE THE TOWELS"},
+                {"pos": Vector3(-24.8, 0, 32), "width": 6.0, "cost": 1250, "opens": "D", "verb": "LAY THE TOWEL",
+                    "ramp": towel, "ramp_width": 6.0, "ramp_look": "towel", "roll": Vector3(-24.8, 2.8, 33)},
+            ],
+            "stations": [
+                {"kind": "weapon", "weapon": "shotgun", "cost": 500, "pos": lip.call(210.0), "facing": -_flush_normal(210.0)},
+                {"kind": "medic", "cost": 300, "pos": lip.call(330.0), "facing": -_flush_normal(330.0)},
+                {"kind": "weapon", "weapon": "lmg", "cost": 1250, "pos": Vector3(-35.55, 0, 16), "facing": Vector3(1, 0, 0)},
+                {"kind": "armor", "cost": 400, "pos": Vector3(-20, 0, 47.55), "facing": Vector3(0, 0, -1)},
+                {"kind": "crate", "cost": 950, "pos": Vector3(12, 0, 22), "facing": Vector3(0, 0, 1)},
+                {"kind": "weapon", "weapon": "sniper", "cost": 1000, "pos": Vector3(35.55, 0, 30), "facing": Vector3(-1, 0, 0)},
+                {"kind": "weapon", "weapon": "launcher", "cost": 2000, "pos": Vector3(35.55, 0, -42), "facing": Vector3(-1, 0, 0)},
+                {"kind": "press", "cost": 3000, "pos": Vector3(-24.8, 2, -22), "facing": Vector3(0, 0, 1)},
+            ],
+        },
+    }
+
+
+## L.prop puts a model's origin at pos; these models' origins are at a corner,
+## so move each one so its middle is at pos.
+static func _prop_at(L, path: String, pos: Vector3, rot_y := 0.0, fit := Vector3.ZERO, collide := true) -> Node3D:
+    var n: Node3D = L.prop(path, pos, rot_y, fit, collide)
+    if n == null:
+        return null
+    var box := AABB()
+    var first := true
+    for m in n.find_children("*", "MeshInstance3D", true, false):
+        var b: AABB = m.global_transform * m.get_aabb()
+        box = b if first else box.merge(b)
+        first = false
+    if not first:
+        n.position += Vector3(pos.x - box.get_center().x, 0, pos.z - box.get_center().z)
+    return n
+
+
+## A tall wall along X (along=true, constant z) or Z with small holes at the
+## bottom: [centre, width, floor height]. Each hole is 3.2 tall.
+static func _flush_wall(L, along_x: bool, at: float, a0: float, a1: float, holes: Array, h: float, m: Material) -> void:
+    var cuts: Array = [[a0, a0]]
+    for g in holes:
+        cuts.append([g[0] - g[1] * 0.5, g[0] + g[1] * 0.5])
+    cuts.append([a1, a1])
+    cuts.sort_custom(func(x, y): return x[0] < y[0])
+    for k in cuts.size() - 1:
+        var lo: float = cuts[k][1]
+        var hi: float = cuts[k + 1][0]
+        if hi - lo > 0.05:
+            var c := (lo + hi) * 0.5
+            L.box(Vector3(c, h * 0.5, at) if along_x else Vector3(at, h * 0.5, c), Vector3(hi - lo, h, 0.8) if along_x else Vector3(0.8, h, hi - lo), Color.GRAY, 0.0, true, m)
+    for g in holes:
+        var y0: float = g[2]
+        var top := y0 + 3.2
+        var c: float = g[0]
+        var w: float = g[1]
+        L.box(Vector3(c, (top + h) * 0.5, at) if along_x else Vector3(at, (top + h) * 0.5, c), Vector3(w, h - top, 0.8) if along_x else Vector3(0.8, h - top, w), Color.GRAY, 0.0, true, m)
+        if y0 > 0.0:
+            L.box(Vector3(c, y0 * 0.5, at) if along_x else Vector3(at, y0 * 0.5, c), Vector3(w, y0, 0.8) if along_x else Vector3(0.8, y0, w), Color.GRAY, 0.0, true, m)
+
+
+## The toilet: a lathe of the profile, with holes cut in the short wall round
+## the water where the cracks are, a hidden floor inside the porcelain for the
+## Melties to crawl along, and the cistern behind.
+static func _flush_toilet(L, porcelain: Material) -> void:
+    var prof: Array = FLUSH_IN.duplicate()
+    prof += FLUSH_OUT
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var seg := 72
+    var hole_pts: Array = FLUSH_CRACKS.map(func(d): return _flush_pt(0.1075, 0.2, d))
+    for i in prof.size() - 1:
+        for j in seg:
+            var d0 := 360.0 * j / seg
+            var d1 := 360.0 * (j + 1) / seg
+            if i == 1:                     # the short wall round the water: cut the cracks
+                var mid := _flush_pt(0.1075, 0.2, (d0 + d1) * 0.5)
+                var cut := false
+                for hp in hole_pts:
+                    if mid.distance_to(hp) < 1.6:
+                        cut = true
+                if cut:
+                    continue
+            var p00 := _flush_pt(prof[i][0], prof[i][1], d0)
+            var p01 := _flush_pt(prof[i][0], prof[i][1], d1)
+            var p10 := _flush_pt(prof[i + 1][0], prof[i + 1][1], d0)
+            var p11 := _flush_pt(prof[i + 1][0], prof[i + 1][1], d1)
+            for v in [p00, p10, p11, p00, p11, p01]:
+                st.add_vertex(v)
+    st.generate_normals()
+    var mesh := st.commit()
+    var mi := MeshInstance3D.new()
+    mi.mesh = mesh
+    mi.material_override = porcelain
+    L.add_child(mi)
+    var body := StaticBody3D.new()
+    body.collision_layer = 1
+    var cs := CollisionShape3D.new()
+    var shape := ConcavePolygonShape3D.new()
+    shape.set_faces(mesh.get_faces())
+    shape.backface_collision = true
+    cs.shape = shape
+    body.add_child(cs)
+    L.add_child(body)
+    # The hollow inside the porcelain: a ring of floor at water height.
+    var ring := StaticBody3D.new()
+    ring.collision_layer = 1
+    L.add_child(ring)
+    for j in 36:
+        var deg := j * 10.0
+        var c := _flush_pt(0.15, 0.2, deg) - Vector3(0, 0.25, 0)
+        var rcs := CollisionShape3D.new()
+        var bs := BoxShape3D.new()
+        bs.size = Vector3(2.8, 0.5, 6.0)
+        rcs.shape = bs
+        rcs.position = c
+        rcs.rotation.y = atan2(_flush_normal(deg).x, _flush_normal(deg).z)
+        ring.add_child(rcs)
+    # Dark in the cracks, so you see them from inside the bowl.
+    for hp in hole_pts:
+        L.sphere(hp + Vector3(0, 1.5, 0) - (hp - FLUSH_C).normalized() * Vector3(1, 0, 1) * -2.2, 1.8, Color(0.05, 0.04, 0.04), Vector3(1.0, 1.0, 1.0))
+    # Cistern and flush handle, against the back wall.
+    L.box(FLUSH_C + Vector3(0, 37.2, -24.0), Vector3(26.4, 25.2, 10.2), Color.WHITE, 0.0, true, porcelain)
+    L.box(FLUSH_C + Vector3(0, 50.7, -24.0), Vector3(27.6, 1.8, 11.4), Color.WHITE, 0.0, true, porcelain)
+    L.box(FLUSH_C + Vector3(-8.4, 46.8, -18.6), Vector3(3.6, 1.2, 1.8), Color.GRAY, 0.0, false, L.mat(Color(0.82, 0.84, 0.88), 0.15, 0.9))

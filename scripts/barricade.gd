@@ -13,6 +13,9 @@ var width := 2.2
 var planks := PLANKS
 var outside_point := Vector3.ZERO
 var inside_point := Vector3.ZERO
+var style := "wood"               # "wood" planks, or "porcelain": a crack in a toilet bowl
+var spawn_depth := Vector2(3.2, 4.4)   # how far outside the Melties appear
+var spawn_side := 1.6
 var _boards: Array = []           # [StaticBody3D, rest transform]
 
 
@@ -29,7 +32,11 @@ func _ready() -> void:
     rotation.y = atan2(normal.x, normal.z)      # local +Z = outside
     var wood := StandardMaterial3D.new()
     wood.albedo_color = Color(0.55, 0.4, 0.25)
-    if ResourceLoader.exists("res://assets/textures/table_wood/albedo.jpg"):
+    if style == "porcelain":
+        # Shards of porcelain stuck back over the crack with plaster.
+        wood.albedo_color = Color(0.93, 0.94, 0.96)
+        wood.roughness = 0.2
+    elif ResourceLoader.exists("res://assets/textures/table_wood/albedo.jpg"):
         wood = level.tex("table_wood", Color(0.85, 0.7, 0.55), 2.0)
     for i in PLANKS:
         var sb := StaticBody3D.new()

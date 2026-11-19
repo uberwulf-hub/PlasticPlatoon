@@ -1,0 +1,6 @@
+Poly Haven models (https://polyhaven.com), CC0 1.0 (public domain).
+rubber_duck_toy        - https://polyhaven.com/a/rubber_duck_toy
+bleach_bottle          - https://polyhaven.com/a/bleach_bottle (James Ray Cock)
+plunger                - https://polyhaven.com/a/plunger (James Ray Cock)
+modern_ceiling_lamp_01 - https://polyhaven.com/a/modern_ceiling_lamp_01 (James Ray Cock)
+Downloaded at 1k texture resolution; the glTF files and textures were packed into single .glb files.

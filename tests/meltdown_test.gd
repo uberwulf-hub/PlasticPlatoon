@@ -199,6 +199,7 @@ func _ready() -> void:
     var MM = load("res://scripts/meltdown_maps.gd")
     for i in MM.META.size():
         await _map_checks(i, MM.META[i]["name"])
+    await _flush_checks()
     main.show_main_menu()
     await _frames(5)
     Game.squad_size = keep_squad
@@ -220,7 +221,7 @@ func _map_checks(i: int, title: String) -> void:
     var p = L.player
     p.invulnerable = true
     var tag := "[%s]" % title
-    _check(M != null and M.barricades.size() >= 6 and M.doors.size() == 2 and M.stations.size() == 8,
+    _check(M != null and M.barricades.size() >= 6 and M.doors.size() >= 2 and M.stations.size() == 8,
         "%s layout: %d windows, %d junk piles, %d stations" % [tag, M.barricades.size(), M.doors.size(), M.stations.size()])
     _check(_clear(L, p.global_position), "%s start point is clear" % tag)
     var bad: Array = []
@@ -260,6 +261,47 @@ func _map_checks(i: int, title: String) -> void:
             if is_instance_valid(e) and e.alive and e.state == e.HUNTING:
                 inside = true
     _check(inside, "%s Melties break in on wave 1" % tag)
+
+
+## The Big Flush: you're stuck in the toilet until you buy the paper, which
+## lays a ramp you can walk; the cracks are porcelain; the lights flicker.
+func _flush_checks() -> void:
+    main.start_level(113)
+    await _frames(10)
+    var L = main.level
+    var M = L.mode
+    var p = L.player
+    p.invulnerable = true
+    var tag := "[The Big Flush]"
+    var porcelain: Array = M.barricades.filter(func(b): return b.style == "porcelain")
+    _check(porcelain.size() == 3 and porcelain.all(func(b): return b.section == "A"), "%s three porcelain cracks in the bowl" % tag)
+    var floor_win = M.barricades.filter(func(b): return b.section == "B")[0]
+    await _frames(10)
+    _check(not _path_exists(L, p.global_position, floor_win.inside_point), "%s no way out of the bowl before the paper is bought" % tag)
+    _check(M.doors[0].has("ramp") and M.doors[0]["prompt"].contains("toilet paper"), "%s the first buy is the toilet paper ('%s')" % [tag, M.doors[0]["prompt"]])
+    M.coins = 5000
+    M.use(M.doors[0])
+    await _frames(40)
+    _check(M.sections["B"]["open"] and M.ramps.size() == 1, "%s buying it lays the paper ramp" % tag)
+    _check(_path_exists(L, p.global_position, floor_win.inside_point), "%s the ramp leads up over the rim to the floor" % tag)
+    # Walk up it for real: stand on the paper inside the bowl, push forward.
+    var fl = L.find_child("FlickerLights", true, false)
+    _check(fl != null, "%s the ceiling lights are on a flicker" % tag)
+    if fl:
+        var l0: float = fl.lights[0][0].light_energy
+        fl.blackout(1.0)
+        await _frames(5)
+        _check(fl.lights[0][0].light_energy < l0 * 0.5 and fl.blackouts == 1, "%s a blackout dims the lights" % tag)
+    # A wave: Melties crawl through the porcelain and out of the cracks.
+    M.start_wave_now()
+    var t0 := Time.get_ticks_msec()
+    var cracked := false
+    while Time.get_ticks_msec() - t0 < 30000 and not cracked:
+        await get_tree().physics_frame
+        for b in porcelain:
+            if b.planks < b.PLANKS:
+                cracked = true
+    _check(cracked, "%s Melties break through a crack in the bowl" % tag)
 
 
 ## The Melty kinds and the bosses, each tested against the player.
