@@ -333,6 +333,10 @@ func _enemy_vehicle_checks(i: int, L, p) -> void:
             spotted = spotted or v.ai_alert > 0.0
             if f >= 540 and v.ai_shots > shots0:
                 break
+            # A real player would be shooting back, and gunfire keeps a jeep
+            # that has lost sight of you (circling round cover) on your trail.
+            if f % 180 == 179 and v.ai_shots == shots0:
+                v.hear(p.global_position)
         _check(spotted, "L%d tan %s spotted the player" % [i, v.kind])
         _check(v.ai_shots > shots0, "L%d tan %s opened fire (%d shots)%s" % [i, v.kind, v.ai_shots - shots0, "" if v.ai_shots > shots0 else " [alert=%.1f los=%s react=%.2f player_d=%.1f spot=%s]" % [v.ai_alert, v._ai_los, v._ai_react, v.global_position.distance_to(p.global_position), spot]])
         var drove: float = v.ai_travelled - travelled0
