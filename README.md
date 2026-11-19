@@ -350,3 +350,7 @@ It plays through every operation (spawning, firing, grenades, drone strikes, AI 
 - More recorded SFX from the Sonniss GDC bundle (see docs/ASSET_RESEARCH.md)
 - Navmesh pathfinding (the current AI uses steering and line of sight)
 - Split-screen or online co-op
+
+## License
+
+Copyright (c) 2025-2026 uberwulf. **All rights reserved.** The code is public so you can read it, but you may not copy, modify or redistribute it without permission. See [LICENSE](LICENSE). Third-party engine and asset licenses are listed in [CREDITS.md](CREDITS.md) and `licenses/`.

@@ -1,0 +1,18 @@
+Plastic Platoon: Revenge 2026
+Copyright (c) 2025-2026 uberwulf. All rights reserved.
+
+This repository is public so people can see how the game is made. That does
+not give anyone permission to use it. You may read the code, and you may
+download and play the official releases. Without written permission from the
+copyright holder you may not:
+
+  - copy, modify, or reuse this game's code, levels, voices or other original
+    content in another project;
+  - publish, sell, or share builds of this game, or versions changed from it;
+  - re-upload the game to any other store or website.
+
+Third-party parts keep their own licenses and are not covered by this notice:
+the Godot Engine (MIT, see licenses/godot-LICENSE.txt) and the CC0 assets
+listed in CREDITS.md.
+
+THE GAME IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
