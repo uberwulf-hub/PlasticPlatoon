@@ -1154,7 +1154,7 @@ const FLUSH_OVAL := 1.25          # the bowl is longer front to back
 ## steep to climb), the rim, then the outside down to the floor.
 const FLUSH_IN := [[0.0, 0.2], [0.105, 0.2], [0.11, 0.245], [0.15, 0.275], [0.18, 0.32], [0.195, 0.37], [0.2, 0.41]]
 const FLUSH_OUT := [[0.205, 0.415], [0.25, 0.415], [0.262, 0.39], [0.245, 0.3], [0.19, 0.2], [0.135, 0.12], [0.12, 0.05], [0.15, 0.0]]
-const FLUSH_CRACKS := [30.0, 150.0, 270.0]    # degrees round the bowl (90 = front)
+const FLUSH_CRACKS := [0.0, 45.0, 120.0]      # degrees round the bowl (90 = front, where the paper goes)
 
 
 static func _flush_pt(r: float, y: float, deg: float) -> Vector3:
@@ -1222,7 +1222,7 @@ static func _big_flush(L) -> Dictionary:
     _prop_at(L, P + "tiny_treats/toothbrush_blue.glb", Vector3(-26, 14.4, 44), 0.4, Vector3(0, 0, 5.5), false)
     _prop_at(L, P + "kenney/trashcan.glb", Vector3(30, 0, -38), 0.3, Vector3(0, 9.6, 0))
     _prop_at(L, P + "polyhaven/plunger.glb", Vector3(24, 0, -43), 0.5, Vector3(0, 15, 0))
-    _prop_at(L, P + "polyhaven/bleach_bottle.glb", Vector3(31, 0, -22), 0.8, Vector3(0, 8.6, 0))
+    _prop_at(L, P + "polyhaven/bleach_bottle.glb", Vector3(24, 0, -27), 0.8, Vector3(0, 8.6, 0))
     _prop_at(L, P + "tiny_treats/container_bathroom_A_blue.glb", Vector3(-35.2, 18.6, -10), 0.0, Vector3(0, 6.4, 0), false)
     _prop_at(L, P + "tiny_treats/container_bathroom_C_pink.glb", Vector3(-35.2, 18.6, -4), 0.0, Vector3(0, 5.8, 0), false)
     _prop_at(L, P + "tiny_treats/container_bathroom_B_yellow.glb", Vector3(-35.2, 18.6, 2), 0.0, Vector3(0, 6.4, 0), false)
@@ -1259,7 +1259,12 @@ static func _big_flush(L) -> Dictionary:
     var windows: Array = []
     for deg in FLUSH_CRACKS:
         var n := _flush_normal(deg)
-        windows.append([_flush_pt(0.1075, 0.2, deg), n, "A", "porcelain"])
+        var at := _flush_pt(0.1075, 0.2, deg)
+        # The Melties climb up the outside of the toilet and appear on the
+        # landing at the top of their melted-plastic ramp.
+        var landing := _flush_pt(0.205, 0.2, deg) + n * 1.5
+        var depth := (landing - at).dot(n)
+        windows.append([at, n, "A", "porcelain", Vector2(depth - 0.8, depth + 0.8)])
     windows += [
         [Vector3(10, 0, 48), Vector3(0, 0, 1), "B"], [Vector3(-36, 0, 30), Vector3(-1, 0, 0), "B"], [Vector3(36, 0, 40), Vector3(1, 0, 0), "B"],
         [Vector3(36, 0, -30), Vector3(1, 0, 0), "C"], [Vector3(28, 0, -48), Vector3(0, 0, -1), "C"],
@@ -1292,7 +1297,7 @@ static func _big_flush(L) -> Dictionary:
             ],
             "stations": [
                 {"kind": "weapon", "weapon": "shotgun", "cost": 500, "pos": lip.call(210.0), "facing": -_flush_normal(210.0)},
-                {"kind": "medic", "cost": 300, "pos": lip.call(330.0), "facing": -_flush_normal(330.0)},
+                {"kind": "medic", "cost": 300, "pos": lip.call(300.0), "facing": -_flush_normal(300.0)},
                 {"kind": "weapon", "weapon": "lmg", "cost": 1250, "pos": Vector3(-35.55, 0, 16), "facing": Vector3(1, 0, 0)},
                 {"kind": "armor", "cost": 400, "pos": Vector3(-20, 0, 47.55), "facing": Vector3(0, 0, -1)},
                 {"kind": "crate", "cost": 950, "pos": Vector3(12, 0, 22), "facing": Vector3(0, 0, 1)},
@@ -1319,6 +1324,63 @@ static func _prop_at(L, path: String, pos: Vector3, rot_y := 0.0, fit := Vector3
     if not first:
         n.position += Vector3(pos.x - box.get_center().x, 0, pos.z - box.get_center().z)
     return n
+
+
+## The broken rim of a crack: a jagged band of chipped porcelain round an
+## oval hole (see-through), with hairline cracks running out from it.
+static func _flush_crack_tex() -> ImageTexture:
+    var W := 256
+    var Hh := 224
+    var img := Image.create(W, Hh, false, Image.FORMAT_RGBA8)
+    img.fill(Color(0, 0, 0, 0))
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 42
+    var c := Vector2(W * 0.5, Hh * 0.52)
+    var rx := W * 0.24
+    var ry := Hh * 0.27
+    var edge := PackedFloat32Array()            # jagged radius per angle
+    for k in 72:
+        edge.append(1.0 + rng.randf_range(-0.06, 0.12) + (0.12 if k % 7 == 0 else 0.0))
+    for y in Hh:
+        for x in W:
+            var d := Vector2(x, y) - c
+            var a := fposmod(atan2(d.y / ry, d.x / rx), TAU)
+            var r := Vector2(d.x / rx, d.y / ry).length()
+            var e: float = edge[int(a / TAU * 72.0) % 72]
+            if r > e and r < e + 0.16:
+                # chipped edge: rough grey porcelain, darker toward the hole
+                var t := (r - e) / 0.16
+                img.set_pixel(x, y, Color(0.55, 0.53, 0.5).lerp(Color(0.82, 0.83, 0.85), t))
+    # hairline cracks running out from the edge
+    for k in 9:
+        var a := rng.randf() * TAU
+        var p := c + Vector2(cos(a) * rx, sin(a) * ry) * 1.15
+        var dir := Vector2(cos(a), sin(a))
+        for s in 40:
+            dir = dir.rotated(rng.randf_range(-0.35, 0.35))
+            p += dir * 2.0
+            if p.x < 1 or p.y < 1 or p.x > W - 2 or p.y > Hh - 2:
+                break
+            img.set_pixel(int(p.x), int(p.y), Color(0.45, 0.43, 0.42))
+            img.set_pixel(int(p.x) + 1, int(p.y), Color(0.62, 0.62, 0.62))
+    img.generate_mipmaps()
+    return ImageTexture.create_from_image(img)
+
+
+static func _flush_goo(body: StaticBody3D, m: Material, pos: Vector3, size: Vector3, rot: Vector3) -> void:
+    var mi := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = size
+    mi.mesh = bm
+    mi.material_override = m
+    var cs := CollisionShape3D.new()
+    var bs := BoxShape3D.new()
+    bs.size = size
+    cs.shape = bs
+    for n in [mi, cs]:
+        n.position = pos
+        n.rotation = rot
+        body.add_child(n)
 
 
 ## A tall wall along X (along=true, constant z) or Z with small holes at the
@@ -1359,11 +1421,13 @@ static func _flush_toilet(L, porcelain: Material) -> void:
         for j in seg:
             var d0 := 360.0 * j / seg
             var d1 := 360.0 * (j + 1) / seg
-            if i == 1:                     # the short wall round the water: cut the cracks
-                var mid := _flush_pt(0.1075, 0.2, (d0 + d1) * 0.5)
+            if i == 1 or i == 10:          # the short wall round the water, and the outside: cut the cracks through
+                var outer := i == 10
+                var mid := _flush_pt(0.2175 if outer else 0.1075, 0.25 if outer else 0.2, (d0 + d1) * 0.5)
                 var cut := false
-                for hp in hole_pts:
-                    if mid.distance_to(hp) < 1.6:
+                for k in hole_pts.size():
+                    var hp: Vector3 = _flush_pt(0.2175, 0.25, FLUSH_CRACKS[k]) if outer else hole_pts[k]
+                    if mid.distance_to(hp) < (1.9 if outer else 1.6):
                         cut = true
                 if cut:
                     continue
@@ -1402,9 +1466,60 @@ static func _flush_toilet(L, porcelain: Material) -> void:
         rcs.position = c
         rcs.rotation.y = atan2(_flush_normal(deg).x, _flush_normal(deg).z)
         ring.add_child(rcs)
-    # Dark in the cracks, so you see them from inside the bowl.
-    for hp in hole_pts:
-        L.sphere(hp + Vector3(0, 1.5, 0) - (hp - FLUSH_C).normalized() * Vector3(1, 0, 1) * -2.2, 1.8, Color(0.05, 0.04, 0.04), Vector3(1.0, 1.0, 1.0))
+    # Through each crack: the broken porcelain floor of the passage, and the
+    # Melties' ramp of melted tan plastic up the outside of the toilet.
+    var goo: StandardMaterial3D = L.mat(Color(0.72, 0.52, 0.33), 0.18)
+    var ramps := StaticBody3D.new()
+    ramps.collision_layer = 4        # Melties walk it; not part of the navigation mesh
+    ramps.collision_mask = 0
+    L.add_child(ramps)
+    for deg in FLUSH_CRACKS:
+        var n := _flush_normal(deg)
+        var yaw := atan2(n.x, n.z)
+        var floor_pt := _flush_pt(0.155, 0.2, deg) - Vector3(0, 0.15, 0)
+        var fl := MeshInstance3D.new()
+        var fbm := BoxMesh.new()
+        fbm.size = Vector3(3.4, 0.3, 7.0)
+        fl.mesh = fbm
+        fl.material_override = porcelain
+        L.add_child(fl)
+        fl.position = floor_pt
+        fl.rotation.y = yaw
+        # Broken edges and cracks spreading out round the hole (inside the bowl).
+        var dec := MeshInstance3D.new()
+        var qm := QuadMesh.new()
+        qm.size = Vector2(6.4, 5.6)
+        dec.mesh = qm
+        var dm := StandardMaterial3D.new()
+        dm.albedo_texture = _flush_crack_tex()
+        dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+        dm.alpha_scissor_threshold = 0.4
+        dm.cull_mode = BaseMaterial3D.CULL_DISABLED
+        dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        dm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+        dec.material_override = dm
+        L.add_child(dec)
+        dec.position = _flush_pt(0.1075, 0.2, deg) - n * 0.18 + Vector3(0, 1.4, 0)
+        dec.rotation.y = yaw
+        var top := _flush_pt(0.205, 0.2, deg)
+        var land_c := top + n * 1.5 - Vector3(0, 0.3, 0)
+        _flush_goo(ramps, goo, land_c, Vector3(4.0, 0.6, 3.6), Vector3(0, yaw, 0))
+        L.lamp(land_c + Vector3(0, 3.0, 0) - n * 2.0, Color(1.0, 0.9, 0.75), 12.0, 1.4, false)   # light through the crack
+        var drop := 12.0
+        var run := drop / tan(deg_to_rad(38.0))
+        var slope_len := sqrt(drop * drop + run * run)
+        var mid := top + n * (3.3 + run * 0.5) + Vector3(0, -drop * 0.5 - 0.3, 0)
+        _flush_goo(ramps, goo, mid, Vector3(4.0, 0.6, slope_len + 0.6), Vector3(atan2(drop, run), yaw, 0))
+        # drips down the sides
+        for k in 4:
+            var d := MeshInstance3D.new()
+            var sm := SphereMesh.new()
+            sm.radius = randf_range(0.4, 0.7)
+            sm.height = sm.radius * 3.0
+            d.mesh = sm
+            d.material_override = goo
+            L.add_child(d)
+            d.position = top + n * (3.6 + k * run * 0.25) + Vector3(0, -k * drop * 0.25 - 0.8, 0) + n.cross(Vector3.UP) * (2.0 if k % 2 == 0 else -2.0)
     # Cistern and flush handle, against the back wall.
     L.box(FLUSH_C + Vector3(0, 37.2, -24.0), Vector3(26.4, 25.2, 10.2), Color.WHITE, 0.0, true, porcelain)
     L.box(FLUSH_C + Vector3(0, 50.7, -24.0), Vector3(27.6, 1.8, 11.4), Color.WHITE, 0.0, true, porcelain)

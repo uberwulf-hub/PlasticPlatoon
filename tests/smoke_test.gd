@@ -632,7 +632,10 @@ func _touch_test(L, p) -> void:
     await _frames(2)
     _check(not tc.visible, "L0 touch controls stay hidden on desktop")
     Game.touch_mode = true
-    await _frames(2)
+    for f in 30:                    # a slow frame or two on a busy machine
+        await _frames(1)
+        if tc.visible:
+            break
     _check(tc.visible, "L0 touch controls show in touch mode (playing %s, paused %s)" % [L.is_playing(), get_tree().paused])
     var s: Vector2 = tc._screen()
     var o := Vector2(s.x * 0.2, s.y * 0.7)

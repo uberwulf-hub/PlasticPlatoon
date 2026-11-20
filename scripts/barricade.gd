@@ -34,11 +34,17 @@ func _ready() -> void:
     wood.albedo_color = Color(0.55, 0.4, 0.25)
     if style == "porcelain":
         # Shards of porcelain stuck back over the crack with plaster.
-        wood.albedo_color = Color(0.93, 0.94, 0.96)
-        wood.roughness = 0.2
+        wood.albedo_color = Color(0.93, 0.95, 0.98)
+        wood.roughness = 0.18
+        wood.cull_mode = BaseMaterial3D.CULL_DISABLED
+        wood.emission_enabled = true                 # glazed: stays white in the shadow of the lip
+        wood.emission = Color(0.9, 0.92, 0.95)
+        wood.emission_energy_multiplier = 0.35
     elif ResourceLoader.exists("res://assets/textures/table_wood/albedo.jpg"):
         wood = level.tex("table_wood", Color(0.85, 0.7, 0.55), 2.0)
-    for i in PLANKS:
+    if style == "porcelain":
+        _build_shards(wood)
+    for i in (0 if style == "porcelain" else PLANKS):
         var sb := StaticBody3D.new()
         sb.collision_layer = 1
         sb.collision_mask = 0
@@ -71,6 +77,103 @@ func _ready() -> void:
     add_child(blk)
 
 
+## The crack in a toilet bowl: five jagged pieces of porcelain that fit
+## together like a cracked puzzle, filling the hole. Melties knock them out
+## one at a time; nailing back = plastering a piece back in.
+func _build_shards(m: StandardMaterial3D) -> void:
+    var rng := RandomNumberGenerator.new()
+    rng.seed = int(absf(position.x * 131.0 + position.z * 17.0)) + 7
+    var c := Vector2(0, 1.35)
+    var rx := 1.4
+    var ry := 1.35
+    var cuts: Array = []                  # the cracks between pieces, centre -> edge
+    for k in PLANKS:
+        var a := (k + rng.randf_range(-0.2, 0.2)) * TAU / PLANKS + 0.3
+        var line: Array = [c + Vector2(rng.randf_range(-0.12, 0.12), rng.randf_range(-0.12, 0.12))]
+        for t in [0.35, 0.7]:
+            var p: Vector2 = c + Vector2(cos(a) * rx, sin(a) * ry) * t
+            line.append(p + Vector2(rng.randf_range(-0.14, 0.14), rng.randf_range(-0.14, 0.14)))
+        line.append(c + Vector2(cos(a) * rx, sin(a) * ry) * 1.12)
+        cuts.append([a, line])
+    # Every piece shares its two cracks with its neighbours, so they fit.
+    var plaster := m.duplicate()
+    plaster.albedo_color = Color(0.5, 0.47, 0.42)       # dark lines between the pieces
+    for k in PLANKS:
+        var a0: float = cuts[k][0]
+        var a1: float = cuts[(k + 1) % PLANKS][0] + (TAU if k == PLANKS - 1 else 0.0)
+        var poly := PackedVector2Array()
+        for p in cuts[k][1]:
+            poly.append(p)
+        for j in range(1, 6):
+            var a := lerpf(a0, a1, j / 6.0)
+            poly.append(c + Vector2(cos(a) * rx, sin(a) * ry) * (1.12 + rng.randf_range(-0.05, 0.05)))
+        var back: Array = cuts[(k + 1) % PLANKS][1].duplicate()
+        back.reverse()
+        for p in back:
+            poly.append(p)
+        # A hairline gap between pieces (the cracks show).
+        var mid := Vector2.ZERO
+        for p in poly:
+            mid += p
+        mid /= poly.size()
+        for i in poly.size():
+            poly[i] = mid + (poly[i] - mid) * 0.95
+        var sb := StaticBody3D.new()
+        sb.collision_layer = 1
+        sb.collision_mask = 0
+        sb.position = Vector3(mid.x, mid.y, 0)
+        var local := PackedVector2Array()
+        for p in poly:
+            local.append(p - mid)
+        var mi := MeshInstance3D.new()
+        mi.mesh = _slab(local, 0.22)
+        mi.material_override = m
+        sb.add_child(mi)
+        var edge := MeshInstance3D.new()           # plaster round the edge of each piece
+        edge.mesh = _slab(local, 0.16)
+        edge.scale = Vector3(1.06, 1.06, 1.0)
+        edge.material_override = plaster
+        sb.add_child(edge)
+        var lo := Vector2(INF, INF)
+        var hi := Vector2(-INF, -INF)
+        for p in local:
+            lo = lo.min(p)
+            hi = hi.max(p)
+        var cs := CollisionShape3D.new()
+        var bs := BoxShape3D.new()
+        bs.size = Vector3(maxf(hi.x - lo.x, 0.3), maxf(hi.y - lo.y, 0.3), 0.25)
+        cs.shape = bs
+        cs.position = Vector3((hi.x + lo.x) * 0.5, (hi.y + lo.y) * 0.5, 0)
+        sb.add_child(cs)
+        add_child(sb)
+        _boards.append([sb, sb.transform])
+
+
+## A flat piece cut to a 2D outline, depth thick (drawn from both sides,
+## with its own normals so it lights like the rest of the porcelain).
+static func _slab(poly: PackedVector2Array, depth: float) -> ArrayMesh:
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var tris := Geometry2D.triangulate_polygon(poly)
+    if tris.is_empty():
+        poly = Geometry2D.convex_hull(poly)
+        tris = Geometry2D.triangulate_polygon(poly)
+    var h := depth * 0.5
+    for i in range(0, tris.size(), 3):
+        for z in [h, -h]:
+            st.set_normal(Vector3(0, 0, signf(z)))
+            for j in [tris[i], tris[i + 1], tris[i + 2]]:
+                st.add_vertex(Vector3(poly[j].x, poly[j].y, z))
+    for i in poly.size():
+        var a := poly[i]
+        var b := poly[(i + 1) % poly.size()]
+        var e := (b - a).normalized()
+        st.set_normal(Vector3(e.y, -e.x, 0))
+        for v in [Vector3(a.x, a.y, h), Vector3(b.x, b.y, h), Vector3(b.x, b.y, -h), Vector3(a.x, a.y, h), Vector3(b.x, b.y, -h), Vector3(a.x, a.y, -h)]:
+            st.add_vertex(v)
+    return st.commit()
+
+
 ## A Melty rips the top plank off.
 func tear() -> void:
     if planks <= 0:
@@ -80,7 +183,9 @@ func tear() -> void:
     b.collision_layer = 0
     var tw := create_tween()
     tw.set_parallel(true)
-    tw.tween_property(b, "position", b.position + Vector3(randf_range(-0.6, 0.6), -0.3, 1.4), 0.35)
+    # Boards fly outward; porcelain pieces get pushed in and drop into the bowl.
+    var push := Vector3(randf_range(-0.6, 0.6), -0.3, 1.4) if style != "porcelain" else Vector3(randf_range(-0.5, 0.5), -b.position.y + 0.15, -randf_range(1.2, 2.0))
+    tw.tween_property(b, "position", b.position + push, 0.35)
     tw.tween_property(b, "rotation", b.rotation + Vector3(randf_range(-1, 1), randf_range(-1, 1), 1.2), 0.35)
     tw.chain().tween_callback(func(): b.visible = false)
     Game.play_sfx("reload_shotgun", global_position, -2.0)

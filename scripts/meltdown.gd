@@ -67,9 +67,11 @@ func _ready() -> void:
         var b = Barricade.new()
         b.setup(level, w[0], w[1], w[2])
         if w.size() > 3 and w[3] == "porcelain":
-            b.style = "porcelain"           # a crack in the toilet: the Melties are in the hollow porcelain
+            b.style = "porcelain"           # a crack in the toilet bowl
             b.spawn_depth = Vector2(1.9, 2.8)
             b.spawn_side = 0.6
+        if w.size() > 4:
+            b.spawn_depth = w[4]            # where the Melties appear outside it
         level.add_child(b)
         barricades.append(b)
     for d in layout["doors"]:
@@ -184,7 +186,9 @@ func _build_ramp_door(d: Dictionary) -> Dictionary:
     roll.rotate_object_local(Vector3.UP, 0.0)
     holder.add_child(roll)
     var text := "%s\n%s  -  %d COINS" % [d.get("verb", "UNROLL THE RAMP"), sections[opens]["name"], d["cost"]]
-    var lbl := _label(text, d["pos"] + Vector3(0, 3.2, 0), Color(1.0, 0.85, 0.35))
+    # The sign goes over the roll, not in the middle of the room.
+    var lbl := _label(text, roll.position + Vector3(0, cm.top_radius + 2.5, 0), Color(1.0, 0.85, 0.35))
+    lbl.visibility_range_end = 80.0
     return {"node": holder, "roll": roll, "cost": d["cost"], "opens": opens, "label": lbl, "pos": d["pos"] + Vector3(0, 1.0, 0),
         "ramp": path, "ramp_width": w, "ramp_look": look,
         "prompt": "Press E to %s up to the %s  -  %d coins" % [d.get("verb", "unroll the ramp").to_lower(), sections[opens]["name"], d["cost"]]}
