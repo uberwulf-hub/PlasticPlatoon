@@ -765,21 +765,35 @@ func _touch_test(L, p) -> void:
     if foe != null and cam != null:
         var keep_pos: Vector3 = foe.global_position
         foe.set_physics_process(false)
-        var fwd: Vector3 = -cam.global_transform.basis.z
-        var flat := Vector3(fwd.x, 0, fwd.z).normalized()
-        var side: Vector3 = flat.cross(Vector3.UP)
+        # Park the other enemies out of the way so only this one is a candidate.
+        var parked: Array = []
+        for e in L.enemies:
+            if e != foe and is_instance_valid(e) and e.get("alive"):
+                parked.append([e, e.global_position])
+                e.set_physics_process(false)
+                e.global_position += Vector3(0, -500, 0)
         # On the ground 18 m ahead, a little to the side; tilt the view level
-        # with its chest so it's just off the crosshair (a few degrees).
-        foe.global_position = Vector3(cam.global_position.x, p.global_position.y, cam.global_position.z) + flat * 18.0 + side * 1.3
-        p.pitch = atan2(foe.global_position.y + 1.0 - cam.global_position.y, 18.0)
-        await _frames(5)
+        # with its chest so it's just off the crosshair (a few degrees). Turn
+        # until nothing on the map stands between us (the assist needs a clear
+        # line of sight).
+        for turn in 8:
+            var fwd: Vector3 = -cam.global_transform.basis.z
+            var flat := Vector3(fwd.x, 0, fwd.z).normalized()
+            var side: Vector3 = flat.cross(Vector3.UP)
+            foe.global_position = Vector3(cam.global_position.x, p.global_position.y, cam.global_position.z) + flat * 18.0 + side * 1.3
+            p.pitch = atan2(foe.global_position.y + 1.0 - cam.global_position.y, 18.0)
+            await _frames(5)
+            if tc.assist_target == foe:
+                break
+            p.rotation.y += PI / 4.0
+        await _frames(1)
         var aim0: float = (-cam.global_transform.basis.z).angle_to(foe.global_position + Vector3(0, 1, 0) - cam.global_position)
         Input.action_press("aim")
         for f in 30:
             await _frames(1)
         Input.action_release("aim")
         var aim1: float = (-cam.global_transform.basis.z).angle_to(foe.global_position + Vector3(0, 1, 0) - cam.global_position)
-        _check(aim1 < aim0 * 0.7, "L0 aim assist pulls the crosshair toward a nearby enemy (%.1f -> %.1f deg)" % [rad_to_deg(aim0), rad_to_deg(aim1)])
+        _check(aim1 < aim0 * 0.7, "L0 aim assist pulls the crosshair toward a nearby enemy (%.1f -> %.1f deg, locked %s)" % [rad_to_deg(aim0), rad_to_deg(aim1), tc.assist_target == foe])
         Game.aim_assist = false
         var yaw_a: float = p.rotation.y
         Input.action_press("aim")
@@ -789,6 +803,10 @@ func _touch_test(L, p) -> void:
         Game.aim_assist = true
         foe.global_position = keep_pos
         foe.set_physics_process(true)
+        for pe in parked:
+            if is_instance_valid(pe[0]):
+                pe[0].global_position = pe[1]
+                pe[0].set_physics_process(true)
     # Haptics: getting hit buzzes the phone.
     var keep_vib: bool = Game.vibration
     Game.vibration = true

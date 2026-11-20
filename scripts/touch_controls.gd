@@ -299,7 +299,7 @@ func _aim_assist(delta: float) -> void:
         if a < best_a:
             var ex: Array[RID] = [p.get_rid()]
             var hit: Dictionary = p.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, aim_at, 1, ex))
-            if hit.is_empty() or hit["collider"] == e:
+            if hit.is_empty() or hit["collider"] == e or (hit["collider"] is Node and e.is_ancestor_of(hit["collider"])):
                 best = e
                 best_a = a
     assist_target = best
