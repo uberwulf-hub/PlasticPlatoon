@@ -34,12 +34,14 @@ func _ready() -> void:
     wood.albedo_color = Color(0.55, 0.4, 0.25)
     if style == "porcelain":
         # Shards of porcelain stuck back over the crack with plaster.
-        wood.albedo_color = Color(0.93, 0.95, 0.98)
-        wood.roughness = 0.18
+        # The very same glaze as the toilet (level.mat hands back its shared
+        # material), so the patch matches the bowl's colour and sheen.
+        if level != null and level.has_method("mat"):
+            wood = level.mat(Color(0.93, 0.95, 0.98), 0.18)
+        else:
+            wood.albedo_color = Color(0.93, 0.95, 0.98)
+            wood.roughness = 0.18
         wood.cull_mode = BaseMaterial3D.CULL_DISABLED
-        wood.emission_enabled = true                 # glazed: stays white in the shadow of the lip
-        wood.emission = Color(0.9, 0.92, 0.95)
-        wood.emission_energy_multiplier = 0.35
     elif ResourceLoader.exists("res://assets/textures/table_wood/albedo.jpg"):
         wood = level.tex("table_wood", Color(0.85, 0.7, 0.55), 2.0)
     if style == "porcelain":
@@ -96,7 +98,7 @@ func _build_shards(m: StandardMaterial3D) -> void:
         line.append(c + Vector2(cos(a) * rx, sin(a) * ry) * 1.12)
         cuts.append([a, line])
     # Every piece shares its two cracks with its neighbours, so they fit.
-    var plaster := m.duplicate()
+    var plaster: StandardMaterial3D = m.duplicate()
     plaster.albedo_color = Color(0.5, 0.47, 0.42)       # dark lines between the pieces
     for k in PLANKS:
         var a0: float = cuts[k][0]
@@ -161,17 +163,34 @@ static func _slab(poly: PackedVector2Array, depth: float) -> ArrayMesh:
     var h := depth * 0.5
     for i in range(0, tris.size(), 3):
         for z in [h, -h]:
-            st.set_normal(Vector3(0, 0, signf(z)))
-            for j in [tris[i], tris[i + 1], tris[i + 2]]:
-                st.add_vertex(Vector3(poly[j].x, poly[j].y, z))
+            var n := Vector3(0, 0, signf(z))
+            _tri(st, n, Vector3(poly[tris[i]].x, poly[tris[i]].y, z), Vector3(poly[tris[i + 1]].x, poly[tris[i + 1]].y, z), Vector3(poly[tris[i + 2]].x, poly[tris[i + 2]].y, z))
+    # Which way the outline runs decides which side of an edge is outside.
+    var area := 0.0
+    for i in poly.size():
+        area += poly[i].cross(poly[(i + 1) % poly.size()])
+    var flip := 1.0 if area < 0.0 else -1.0
     for i in poly.size():
         var a := poly[i]
         var b := poly[(i + 1) % poly.size()]
         var e := (b - a).normalized()
-        st.set_normal(Vector3(e.y, -e.x, 0))
-        for v in [Vector3(a.x, a.y, h), Vector3(b.x, b.y, h), Vector3(b.x, b.y, -h), Vector3(a.x, a.y, h), Vector3(b.x, b.y, -h), Vector3(a.x, a.y, -h)]:
-            st.add_vertex(v)
+        var n := Vector3(e.y, -e.x, 0) * flip
+        _tri(st, n, Vector3(a.x, a.y, h), Vector3(b.x, b.y, h), Vector3(b.x, b.y, -h))
+        _tri(st, n, Vector3(a.x, a.y, h), Vector3(b.x, b.y, -h), Vector3(a.x, a.y, -h))
     return st.commit()
+
+
+## One triangle, wound so its front face (clockwise in Godot) is the side
+## its normal points to, so it lights the same from either side.
+static func _tri(st: SurfaceTool, n: Vector3, a: Vector3, b: Vector3, c: Vector3) -> void:
+    st.set_normal(n)
+    if (b - a).cross(c - a).dot(n) < 0.0:
+        var t := b
+        b = c
+        c = t
+    st.add_vertex(a)
+    st.add_vertex(b)
+    st.add_vertex(c)
 
 
 ## A Melty rips the top plank off.

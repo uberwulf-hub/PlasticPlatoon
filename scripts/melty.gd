@@ -41,6 +41,9 @@ var _attack_cd := 0.0
 var _tear_cd := 0.0
 var _repath_t := 0.0
 var _stuck_t := 0.0
+var lost_t := 0.0                 # seconds without getting any closer to where it's going
+var _lost_best := INF
+var rescues := 0                  # tests read it
 var _groan_t := 0.0
 var _target = null
 var type := "melty"               # read by shared code that expects enemies to have a type
@@ -232,7 +235,62 @@ func _physics_process(delta: float) -> void:
         if _stuck_t > 2.5:
             _stuck_t = 0.0
             velocity += dir.cross(Vector3.UP) * [-3.0, 3.0].pick_random()   # shoulder past whatever's in the way
+    _unstick(delta)
     model.animate(delta, hs, false)
+
+
+## Safety net so a wave can always end: a Melty that has fallen off its
+## climb, or stops getting any closer to its crack (or, once inside, to
+## anyone to eat) for long enough, is put back where it can carry on.
+func _unstick(delta: float) -> void:
+    var goal: Vector3
+    var limit := 8.0
+    match state:
+        OUTSIDE:
+            goal = barricade.outside_point
+            limit = 5.0
+        CLIMBING:
+            goal = barricade.inside_point
+        HUNTING:
+            if _target == null or not is_instance_valid(_target):
+                lost_t = 0.0
+                _lost_best = INF
+                return
+            goal = _target.global_position
+            limit = 15.0
+        _:
+            lost_t = 0.0
+            _lost_best = INF
+            return
+    var d := global_position.distance_to(goal)
+    var fell: bool = state != HUNTING and global_position.y < barricade.global_position.y - 3.0
+    if d < _lost_best - 0.75:
+        _lost_best = d
+        lost_t = 0.0
+    else:
+        lost_t += delta
+    if not fell and (lost_t < limit or (state == HUNTING and d < 6.0)):
+        return
+    rescues += 1
+    lost_t = 0.0
+    _lost_best = INF
+    velocity = Vector3.ZERO
+    if state == HUNTING:
+        # Come back in through the open crack nearest whoever it's after.
+        var best = barricade
+        var bd := INF
+        for b in mode.barricades:
+            if mode.sections[b.section]["open"]:
+                var bdist: float = b.inside_point.distance_to(goal)
+                if bdist < bd:
+                    bd = bdist
+                    best = b
+        barricade = best
+        global_position = best.inside_point + Vector3(0, 0.3, 0)
+        _repath_t = 0.0
+    else:
+        global_position = barricade.outside_point + Vector3(0, 0.3, 0)
+        state = BREAKING if barricade.planks > 0 else CLIMBING
 
 
 func _hunt(_delta: float) -> Vector3:

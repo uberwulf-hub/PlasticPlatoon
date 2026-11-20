@@ -1240,7 +1240,7 @@ static func _big_flush(L) -> Dictionary:
         L.sphere(Vector3(x, 5.6 + (k % 2) * 0.6, -14 + ((k % 3) - 1) * 0.6), 2.2, towel_cols[k % 4], Vector3(1.0, 0.6, 0.9), L.tex("carpet", towel_cols[k % 4] * 1.3, 2.0))
     # The waste pipe behind the toilet keeps the corner shut off underneath it.
     L.box(Vector3(4, 4.0, -39), Vector3(4.0, 8.0, 18.0), Color.WHITE, 0.0, true, porcelain)
-    # ---- lights: two ceiling lamps that flicker, plus fill ----
+    # ---- lights: two ceiling lamps, plus fill ----
     var lights: Array = []
     var glow: Array = []
     for x in [-12.0, 14.0]:
@@ -1251,9 +1251,6 @@ static func _big_flush(L) -> Dictionary:
         lights.append(L.lamp(Vector3(x, H - 12.0, 2), Color(1.0, 0.92, 0.78), 110.0, 2.4, false))
     for p in [Vector3(4, 34, -19), Vector3(0, 24, 26), Vector3(28, 20, -30), Vector3(-25, 24, -20)]:
         lights.append(L.lamp(p, Color(1.0, 0.94, 0.85), 40.0, 1.0, false))
-    var fl = preload("res://scripts/flicker_lights.gd").new()
-    fl.setup(L, lights, glow)
-    L.add_child(fl)
 
     # ---- MELTDOWN layout ----
     var windows: Array = []

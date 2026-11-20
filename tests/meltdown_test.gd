@@ -264,7 +264,7 @@ func _map_checks(i: int, title: String) -> void:
 
 
 ## The Big Flush: you're stuck in the toilet until you buy the paper, which
-## lays a ramp you can walk; the cracks are porcelain; the lights flicker.
+## lays a ramp you can walk; the cracks are porcelain; the lights stay steady.
 func _flush_checks() -> void:
     main.start_level(113)
     await _frames(10)
@@ -279,19 +279,21 @@ func _flush_checks() -> void:
     await _frames(10)
     _check(not _path_exists(L, p.global_position, floor_win.inside_point), "%s no way out of the bowl before the paper is bought" % tag)
     _check(M.doors[0].has("ramp") and M.doors[0]["prompt"].contains("toilet paper"), "%s the first buy is the toilet paper ('%s')" % [tag, M.doors[0]["prompt"]])
+    var low = M.doors[0].get("label_low")
+    _check(low != null and absf(low.global_position.y - p.global_position.y) < 4.0, "%s a sign at eye level shows where to buy the toilet paper" % tag)
+    var keep_pp: Vector3 = p.global_position
+    p.global_position = M.doors[0]["pos"] + Vector3(2.5, -1.0, 0)
+    await _frames(3)
+    _check(M._focus == M.doors[0], "%s standing on the end of the paper offers to buy it" % tag)
+    p.global_position = keep_pp
+    await _frames(3)
     M.coins = 5000
     M.use(M.doors[0])
     await _frames(40)
     _check(M.sections["B"]["open"] and M.ramps.size() == 1, "%s buying it lays the paper ramp" % tag)
     _check(_path_exists(L, p.global_position, floor_win.inside_point), "%s the ramp leads up over the rim to the floor" % tag)
     # Walk up it for real: stand on the paper inside the bowl, push forward.
-    var fl = L.find_child("FlickerLights", true, false)
-    _check(fl != null, "%s the ceiling lights are on a flicker" % tag)
-    if fl:
-        var l0: float = fl.lights[0][0].light_energy
-        fl.blackout(1.0)
-        await _frames(5)
-        _check(fl.lights[0][0].light_energy < l0 * 0.5 and fl.blackouts == 1, "%s a blackout dims the lights" % tag)
+    _check(L.find_child("FlickerLights", true, false) == null, "%s the ceiling lights stay steady (no flicker)" % tag)
     # A wave: Melties crawl through the porcelain and out of the cracks.
     M.start_wave_now()
     var t0 := Time.get_ticks_msec()
@@ -302,6 +304,36 @@ func _flush_checks() -> void:
             if b.planks < b.PLANKS:
                 cracked = true
     _check(cracked, "%s Melties break through a crack in the bowl" % tag)
+    # A Melty that falls off its climb, or gets hung up, is put back so the
+    # wave can always end.
+    var lost = null
+    for e in L.enemies:
+        if is_instance_valid(e) and e.alive and e.state == e.OUTSIDE:
+            lost = e
+            break
+    if lost == null:
+        lost = M._spawn_one("shambler")
+        M.alive -= 1
+    if lost != null:
+        lost.state = lost.OUTSIDE
+        lost.global_position = lost.barricade.global_position + lost.barricade.normal * 6.0 + Vector3(0, -8.0, 0)
+        var t1 := Time.get_ticks_msec()
+        while Time.get_ticks_msec() - t1 < 3000 and lost.rescues == 0:
+            await get_tree().physics_frame
+        _check(lost.rescues > 0 and lost.global_position.distance_to(lost.barricade.outside_point) < 3.0, "%s a Melty that fell off its climb is put back at its crack" % tag)
+        lost.state = lost.OUTSIDE
+        lost.global_position = lost.barricade.outside_point + lost.barricade.normal * 3.0
+        lost.set_physics_process(false)
+        await _frames(2)
+        lost.set_physics_process(true)
+        var r0: int = lost.rescues
+        var keep_v: float = lost.speed
+        lost.speed = 0.0                    # can't move: it's stuck
+        var t2 := Time.get_ticks_msec()
+        while Time.get_ticks_msec() - t2 < 9000 and lost.rescues == r0:
+            await get_tree().physics_frame
+        lost.speed = keep_v
+        _check(lost.rescues > r0, "%s a Melty hung up outside its crack is moved on" % tag)
 
 
 ## The Melty kinds and the bosses, each tested against the player.

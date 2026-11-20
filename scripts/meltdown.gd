@@ -189,7 +189,21 @@ func _build_ramp_door(d: Dictionary) -> Dictionary:
     # The sign goes over the roll, not in the middle of the room.
     var lbl := _label(text, roll.position + Vector3(0, cm.top_radius + 2.5, 0), Color(1.0, 0.85, 0.35))
     lbl.visibility_range_end = 80.0
-    return {"node": holder, "roll": roll, "cost": d["cost"], "opens": opens, "label": lbl, "pos": d["pos"] + Vector3(0, 1.0, 0),
+    # When the roll is up out of reach, the end of the paper hangs down to the
+    # spot where you buy it, with its own sign at eye level.
+    var low: Label3D = null
+    if roll.position.y - d["pos"].y > 4.0:
+        var tail := MeshInstance3D.new()
+        var bm := BoxMesh.new()
+        bm.size = Vector3(w * 0.8, 0.08, 2.4)
+        tail.mesh = bm
+        tail.material_override = _ramp_mat(look)
+        tail.position = d["pos"] + Vector3(0, 0.05, 0)
+        tail.rotation.y = atan2(along.x, along.z)
+        holder.add_child(tail)
+        low = _label("%s\nPress E here  -  %d COINS" % [d.get("verb", "UNROLL THE RAMP"), d["cost"]], d["pos"] + Vector3(0, 2.6, 0), Color(1.0, 0.85, 0.35), 40)
+    return {"node": holder, "roll": roll, "cost": d["cost"], "opens": opens, "label": lbl, "label_low": low, "pos": d["pos"] + Vector3(0, 1.0, 0),
+        "reach": maxf(INTERACT_RANGE, w * 0.5 + 1.0),
         "ramp": path, "ramp_width": w, "ramp_look": look,
         "prompt": "Press E to %s up to the %s  -  %d coins" % [d.get("verb", "unroll the ramp").to_lower(), sections[opens]["name"], d["cost"]]}
 
@@ -750,6 +764,8 @@ func open_door_index(i: int) -> void:
         d["node"].queue_free()
     if is_instance_valid(d["label"]):
         d["label"].queue_free()
+    if d.get("label_low") != null and is_instance_valid(d["label_low"]):
+        d["label_low"].queue_free()
     doors.remove_at(i)
     level.notify("THE %s IS OPEN" % sections[d["opens"]]["name"], 2.5)
     Game.play_sfx("throw" if d.has("ramp") else "explosion", d["pos"], -4.0 if d.has("ramp") else -8.0)
@@ -784,7 +800,7 @@ func _interact(delta: float) -> void:
     var best_d := INTERACT_RANGE
     for d in doors:
         var dd: float = d["pos"].distance_to(p.global_position + Vector3(0, 1, 0))
-        if dd < best_d + 1.0:
+        if dd < maxf(best_d + 1.0, d.get("reach", 0.0)):
             best_d = dd
             _focus = d
     for s in stations:
