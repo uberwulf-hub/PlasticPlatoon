@@ -33,6 +33,9 @@ var touch_mode := false         # touch controls are in use right now
 var touch_layout := {}          # touch button id -> Vector2 position (fraction of the screen)
 var touch_size := 1.0           # touch button size (0.7 - 1.4)
 var vibration := true           # phones buzz when you're hit or something blows up close by
+var left_fire := true           # touch: a second FIRE button above the joystick
+var aim_assist := true          # touch: aim slows and sticks a little near an enemy
+var ui_scale := 1.0             # menus and HUD size (phones start bigger, see _load)
 var weather := true             # clouds, rain and thunderstorms on outdoor maps
 var view_dist := 3.4             # on-foot camera distance (0 = first person); the wheel sets it
 var vehicle_zoom := 1.0          # vehicle chase-camera distance multiplier
@@ -66,6 +69,7 @@ func _ready() -> void:
     _load()
     _setup_buses()
     apply_graphics.call_deferred()
+    apply_ui_scale.call_deferred()
     _build_sfx()
     _load_sfx_files()
     _music = AudioStreamPlayer.new()
@@ -140,6 +144,11 @@ func _unhandled_input(event: InputEvent) -> void:
 ##   Low:    no anti-aliasing, no ambient occlusion or glow, short shadows, 3D at 75% (FSR upscaled)
 ##   Medium: 2x MSAA, glow, medium shadows, full resolution
 ##   High:   4x MSAA, ambient occlusion, glow, long shadows
+## Menus, text and the HUD drawn bigger (Settings > Text and button size).
+func apply_ui_scale() -> void:
+    get_tree().root.content_scale_factor = ui_scale
+
+
 ## A short buzz on phones (getting hit, a blast nearby). ms = how long.
 var buzzes := 0                   # tests read it
 var _buzz_t := 0
@@ -292,6 +301,9 @@ func save() -> void:
     cfg.set_value("settings", "touch_layout", touch_layout)
     cfg.set_value("settings", "touch_size", touch_size)
     cfg.set_value("settings", "vibration", vibration)
+    cfg.set_value("settings", "left_fire", left_fire)
+    cfg.set_value("settings", "aim_assist", aim_assist)
+    cfg.set_value("settings", "ui_scale", ui_scale)
     cfg.set_value("progress", "meltdown_best", meltdown_best)
     cfg.set_value("settings", "music_volume", music_volume)
     cfg.set_value("settings", "sfx_volume", sfx_volume)
@@ -304,6 +316,7 @@ func _load() -> void:
     if OS.has_feature("mobile"):
         graphics = 0                  # phones start on Low (changeable in Settings)
         fps_cap = 60                  # and capped at 60 fps, which saves battery
+        ui_scale = 1.25               # and bigger menus, text and buttons
     if cfg.load(SAVE_PATH) != OK:
         touch_mode = touch_controls
         return
@@ -328,6 +341,9 @@ func _load() -> void:
     touch_layout = cfg.get_value("settings", "touch_layout", {})
     touch_size = clampf(cfg.get_value("settings", "touch_size", 1.0), 0.7, 1.4)
     vibration = cfg.get_value("settings", "vibration", vibration)
+    left_fire = cfg.get_value("settings", "left_fire", left_fire)
+    aim_assist = cfg.get_value("settings", "aim_assist", aim_assist)
+    ui_scale = clampf(cfg.get_value("settings", "ui_scale", ui_scale), 1.0, 1.5)
     meltdown_best = cfg.get_value("progress", "meltdown_best", {})
     music_volume = cfg.get_value("settings", "music_volume", music_volume)
     sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)

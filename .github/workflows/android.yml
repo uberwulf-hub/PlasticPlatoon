@@ -120,7 +120,12 @@ jobs:
           grep '^version/' export_presets.cfg
 
       - name: Import assets (with ETC2/ASTC textures for phones)
-        run: $GODOT --headless --editor --quit || true
+        run: |
+          $GODOT --headless --path . --import || true
+          N=$(find .godot/imported -type f | wc -l)
+          echo "imported files: $N"
+          if [ "$N" -lt 500 ]; then $GODOT --headless --path . --import || true; N=$(find .godot/imported -type f | wc -l); echo "after a second pass: $N"; fi
+          test "$N" -ge 500
 
       - name: Export APK
         run: |

@@ -20,20 +20,28 @@ const SPRINT_PUSH := 0.9          # stick pushed this far forward = sprint
 
 ## id -> [default position (fraction of the screen), radius, label]. The id is
 ## the input action it sends, except "view", which is handled here.
+## Laid out like a modern mobile shooter: everything the right thumb needs
+## sits in a cluster round FIRE near the edge, which leaves the middle-right
+## of the screen free for dragging to look; a second FIRE sits above the
+## joystick for the left thumb. Dragging on FIRE or AIM also turns you.
 const DEFAULTS := {
-    "fire": [Vector2(0.88, 0.70), 78.0, "FIRE"],
-    "aim": [Vector2(0.75, 0.80), 52.0, "AIM"],
-    "jump": [Vector2(0.92, 0.45), 46.0, "JUMP"],
-    "crouch": [Vector2(0.80, 0.55), 42.0, "DUCK"],
-    "reload": [Vector2(0.68, 0.62), 40.0, "RELOAD"],
-    "grenade": [Vector2(0.80, 0.33), 38.0, "NADE"],
-    "drone": [Vector2(0.64, 0.25), 36.0, "DRONE"],
-    "interact": [Vector2(0.66, 0.42), 44.0, "USE"],
-    "squad_order": [Vector2(0.56, 0.20), 34.0, "SQUAD"],
-    "next_weapon": [Vector2(0.93, 0.31), 38.0, "SWAP"],
-    "view": [Vector2(0.72, 0.17), 32.0, "VIEW"],
+    "fire": [Vector2(0.87, 0.64), 76.0, "FIRE"],
+    "fire_l": [Vector2(0.10, 0.40), 46.0, "FIRE"],
+    "aim": [Vector2(0.95, 0.40), 46.0, "AIM"],
+    "jump": [Vector2(0.95, 0.86), 42.0, "JUMP"],
+    "crouch": [Vector2(0.83, 0.89), 40.0, "DUCK"],
+    "reload": [Vector2(0.74, 0.74), 38.0, "RELOAD"],
+    "grenade": [Vector2(0.84, 0.38), 36.0, "NADE"],
+    "drone": [Vector2(0.92, 0.25), 32.0, "DRONE"],
+    "interact": [Vector2(0.70, 0.50), 42.0, "USE"],
+    "squad_order": [Vector2(0.70, 0.27), 30.0, "SQUAD"],
+    "next_weapon": [Vector2(0.72, 0.90), 34.0, "SWAP"],
+    "view": [Vector2(0.78, 0.25), 30.0, "VIEW"],
     "pause": [Vector2(0.5, 0.07), 30.0, "II"],
 }
+const DRAG_LOOK := ["fire", "fire_l", "aim"]     # thumbs on these can steer too
+const ASSIST_CONE := 0.12          # radians off the crosshair that aim assist reaches
+const ASSIST_RANGE := 70.0
 
 var level: Node
 var editing := false              # layout editor: drag buttons, nothing is sent
@@ -47,6 +55,8 @@ var _stick_active := false
 var _move := Vector2.ZERO         # last sent joystick vector
 var _sprinting := false
 var _drag_off := Vector2.ZERO     # editing: finger offset from the button centre
+var _fire_held := 0               # FIRE and the left FIRE share one action
+var assist_target = null          # what aim assist is helping with (tests read it)
 
 
 func setup(lvl: Node) -> void:
@@ -160,6 +170,10 @@ func _on_drag(i: int, p: Vector2, rel: Vector2) -> void:
             role["pos"] = Vector2(clampf(np.x, 0.04, 0.96), clampf(np.y, 0.05, 0.95))
             root.queue_redraw()
         return
+    if role is Dictionary:
+        if role["action"] in DRAG_LOOK:
+            look(rel)                    # shoot and steer with the same thumb
+        return
     if role == "stick":
         _stick_pos = p
         var v := (p - _stick_origin) / (STICK_RADIUS * _k())
@@ -175,6 +189,13 @@ func _press(b: Dictionary, pressed: bool) -> void:
     if b["action"] == "view":
         if pressed:
             toggle_view()
+        return
+    if b["action"] in ["fire", "fire_l"]:
+        _fire_held = maxi(0, _fire_held + (1 if pressed else -1))
+        if pressed and _fire_held == 1:
+            _send("fire", true)
+        elif not pressed and _fire_held == 0:
+            _send("fire", false)
         return
     _send(b["action"], pressed)
 
@@ -200,7 +221,9 @@ func look(rel: Vector2) -> void:
         return
     var target = level.player.vehicle if level.player.vehicle != null else level.player
     if target.has_method("look"):
-        target.look(rel * LOOK_SENS / maxf(0.0001, Game.mouse_sensitivity))
+        # Aim assist "friction": the view slows a little over an enemy.
+        var k := 0.6 if assist_target != null else 1.0
+        target.look(rel * LOOK_SENS * k / maxf(0.0001, Game.mouse_sensitivity))
 
 
 func _set_move(v: Vector2) -> void:
@@ -244,7 +267,52 @@ func _process(_delta: float) -> void:
         root.queue_redraw()
     if visible:
         _apply_context(_context())
+        _aim_assist(_delta)
         root.queue_redraw()
+
+
+## Aim assist for thumbs: while you're aiming or firing, an enemy close to the
+## crosshair pulls your aim gently onto it (and look slows over it). Off in
+## Settings; never on a mouse.
+func _aim_assist(delta: float) -> void:
+    assist_target = null
+    if not Game.aim_assist or level == null or level.player == null or context != "foot":
+        return
+    var p = level.player
+    if not p.alive:
+        return
+    var cam := get_viewport().get_camera_3d()
+    if cam == null:
+        return
+    var from := cam.global_position
+    var fwd := -cam.global_transform.basis.z
+    var best = null
+    var best_a := ASSIST_CONE
+    for e in level.enemies:
+        if not is_instance_valid(e) or not e.get("alive"):
+            continue
+        var aim_at: Vector3 = e.global_position + Vector3(0, 1.0, 0)
+        var d := aim_at - from
+        if d.length() > ASSIST_RANGE or d.length() < 1.0:
+            continue
+        var a := fwd.angle_to(d)
+        if a < best_a:
+            var ex: Array[RID] = [p.get_rid()]
+            var hit: Dictionary = p.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, aim_at, 1, ex))
+            if hit.is_empty() or hit["collider"] == e:
+                best = e
+                best_a = a
+    assist_target = best
+    if best == null or not (Input.is_action_pressed("fire") or Input.is_action_pressed("aim")):
+        return
+    var d2: Vector3 = best.global_position + Vector3(0, 1.0, 0) - from
+    var want_yaw := atan2(-d2.x, -d2.z)
+    var want_pitch := atan2(d2.y, Vector2(d2.x, d2.z).length())
+    var cam_yaw := atan2(-fwd.x, -fwd.z)
+    var cam_pitch := asin(clampf(fwd.y, -1.0, 1.0))
+    var pull := minf(1.0, delta * (4.0 if Input.is_action_pressed("aim") else 2.5))
+    p.rotation.y += wrapf(want_yaw - cam_yaw, -PI, PI) * pull
+    p.pitch = clampf(p.pitch + (want_pitch - cam_pitch) * pull, -1.25, 0.95)
 
 
 ## What the player is doing right now, which decides the buttons.
@@ -282,6 +350,8 @@ func _apply_context(ctx: String) -> void:
                     shown = editing or (level != null and not level.squad.is_empty())
             "vehicle", "air", "ride":
                 shown = id in ["interact", "squad_order", "view", "pause"]
+                if id == "fire_l":
+                    shown = ctx != "ride" and Game.left_fire
                 if id == "squad_order":
                     shown = level != null and not level.squad.is_empty()
                 if ctx != "ride" and id in ["fire", "aim"]:
@@ -292,6 +362,8 @@ func _apply_context(ctx: String) -> void:
                     label = "UP" if id == "jump" else "DOWN"
                 if id == "interact":
                     label = "EXIT"
+        if id == "fire_l" and ctx == "foot":
+            shown = Game.left_fire or editing
         b["label"] = label
         b["glow"] = id == "interact" and prompt != "" and not editing
         if b["shown"] != shown:

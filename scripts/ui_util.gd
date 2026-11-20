@@ -69,9 +69,19 @@ static func button(text: String, cb: Callable, width := 340) -> Button:
 
 ## Full-screen root with a centered panel; returns the panel's VBox.
 static func centered_panel(parent: Node, min_width := 520) -> VBoxContainer:
+    # Scrolls when it's taller than the screen (big text on a short phone).
+    var scroll := ScrollContainer.new()
+    scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    parent.add_child(scroll)
     var center := CenterContainer.new()
-    center.set_anchors_preset(Control.PRESET_FULL_RECT)
-    parent.add_child(center)
+    center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.add_child(center)
+    # Fill the screen so short panels stay centred; grow past it if needed.
+    var fit := func(): center.custom_minimum_size = Vector2(0, scroll.size.y)
+    scroll.resized.connect(fit)
+    fit.call_deferred()
     var panel := PanelContainer.new()
     panel.custom_minimum_size = Vector2(min_width, 0)
     center.add_child(panel)

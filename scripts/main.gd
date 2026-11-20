@@ -110,14 +110,16 @@ func show_main_menu() -> void:
     shade.color = Color(0.03, 0.05, 0.02, 0.72)
     root.add_child(shade)
     var vb := VBoxContainer.new()
-    vb.add_theme_constant_override("separation", 14)
-    UI.place(vb, Vector2(0, 0), Rect2(70, 90, 560, 760))
+    # Short screens (a phone with big text): tighter title and spacing.
+    var short: bool = root.get_viewport_rect().size.y < 780
+    vb.add_theme_constant_override("separation", 10 if short else 14)
+    UI.place(vb, Vector2(0, 0), Rect2(70, 30 if short else 90, 560, 760))
     root.add_child(vb)
-    vb.add_child(UI.label("PLASTIC PLATOON", 56, UI.ACCENT, 10))
-    vb.add_child(UI.label("REVENGE 2026", 56, Color(0.95, 0.95, 0.88), 10))
+    vb.add_child(UI.label("PLASTIC PLATOON", 44 if short else 56, UI.ACCENT, 10))
+    vb.add_child(UI.label("REVENGE 2026", 44 if short else 56, Color(0.95, 0.95, 0.88), 10))
     vb.add_child(UI.label("Plastic soldiers. Modern warfare.", 22, Color(0.8, 0.85, 0.7), 4))
     var spacer := Control.new()
-    spacer.custom_minimum_size = Vector2(0, 30)
+    spacer.custom_minimum_size = Vector2(0, 8 if short else 30)
     vb.add_child(spacer)
     vb.add_child(UI.button("Campaign", show_campaign))
     vb.add_child(UI.button("Meltdown (wave survival)", show_meltdown))
@@ -320,8 +322,15 @@ func show_settings() -> void:
         Game.touch_mode = on
         Game.save()
         show_settings())
+    choice_row.call(right, "Text and button size", [[1.0, "Normal"], [1.25, "Large"], [1.5, "Extra large"]], Game.ui_scale, func(v):
+        Game.ui_scale = v
+        Game.apply_ui_scale()
+        Game.save()
+        show_settings())
     if Game.touch_controls:
         check.call(right, "Vibration (phones)", Game.vibration, func(on): Game.vibration = on)
+        check.call(right, "Aim assist (touch: aim sticks a little to enemies)", Game.aim_assist, func(on): Game.aim_assist = on)
+        check.call(right, "Second FIRE button for the left thumb", Game.left_fire, func(on): Game.left_fire = on)
         right.add_child(UI.button("Arrange touch buttons", show_touch_layout, 480))
 
     vb.add_child(UI.button("Back", func():

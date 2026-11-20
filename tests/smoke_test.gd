@@ -23,6 +23,7 @@ func _ready() -> void:
     await _frames(5)
     main.show_controls()
     await _frames(5)
+    await _ui_scale_test()
     for i in 3:
         await _play_level(i)
     # pause / restart path
@@ -711,7 +712,7 @@ func _touch_test(L, p) -> void:
     _check(hit != null and hit["action"] == "fire", "L0 a moved FIRE button is where the player put it")
     Game.touch_size = 1.3
     tc.apply_layout()
-    _check(absf(by.call("fire")["r"] - 78.0 * 1.3) < 0.01, "L0 button size setting makes the buttons bigger")
+    _check(absf(by.call("fire")["r"] - tc.DEFAULTS["fire"][1] * 1.3) < 0.01, "L0 button size setting makes the buttons bigger")
     # The layout editor: drag a button, it's saved.
     Game.touch_layout = {}
     Game.touch_size = 1.0
@@ -731,6 +732,63 @@ func _touch_test(L, p) -> void:
     Game.touch_layout = keep_layout
     Game.touch_size = keep_size
     tc.apply_layout()
+    # Drag on FIRE: shoot and steer with one thumb.
+    var fb: Dictionary = by.call("fire")
+    var fpos: Vector2 = fb["pos"] * s
+    var yaw_f: float = p.rotation.y
+    tc._on_touch(3, fpos, true)
+    tc._on_drag(3, fpos + Vector2(100, 0), Vector2(100, 0))
+    await _frames(2)
+    _check(Input.is_action_pressed("fire") and absf(p.rotation.y - yaw_f) > 0.1, "L0 dragging on FIRE fires and turns the soldier (COD-style)")
+    tc._on_touch(3, fpos + Vector2(100, 0), false)
+    # The left FIRE button.
+    var lf: Dictionary = by.call("fire_l")
+    tc._apply_context("foot")
+    _check(lf["shown"], "L0 a second FIRE button for the left thumb")
+    tc._on_touch(4, lf["pos"] * s, true)
+    await _frames(2)
+    _check(Input.is_action_pressed("fire"), "L0 the left FIRE button fires")
+    tc._on_touch(3, fpos, true)            # both thumbs on FIRE, then one lets go
+    tc._on_touch(4, lf["pos"] * s, false)
+    await _frames(2)
+    _check(Input.is_action_pressed("fire"), "L0 letting go of one FIRE keeps firing while the other's held")
+    tc._on_touch(3, fpos, false)
+    await _frames(2)
+    _check(not Input.is_action_pressed("fire"), "L0 ...and stops when both are let go")
+    # Aim assist: an enemy just off the crosshair pulls your aim onto it while aiming.
+    var cam: Camera3D = get_viewport().get_camera_3d()
+    var foe = null
+    for e in L.enemies:
+        if is_instance_valid(e) and e.get("alive"):
+            foe = e
+            break
+    if foe != null and cam != null:
+        var keep_pos: Vector3 = foe.global_position
+        foe.set_physics_process(false)
+        var fwd: Vector3 = -cam.global_transform.basis.z
+        var flat := Vector3(fwd.x, 0, fwd.z).normalized()
+        var side: Vector3 = flat.cross(Vector3.UP)
+        # On the ground 18 m ahead, a little to the side; tilt the view level
+        # with its chest so it's just off the crosshair (a few degrees).
+        foe.global_position = Vector3(cam.global_position.x, p.global_position.y, cam.global_position.z) + flat * 18.0 + side * 1.3
+        p.pitch = atan2(foe.global_position.y + 1.0 - cam.global_position.y, 18.0)
+        await _frames(5)
+        var aim0: float = (-cam.global_transform.basis.z).angle_to(foe.global_position + Vector3(0, 1, 0) - cam.global_position)
+        Input.action_press("aim")
+        for f in 30:
+            await _frames(1)
+        Input.action_release("aim")
+        var aim1: float = (-cam.global_transform.basis.z).angle_to(foe.global_position + Vector3(0, 1, 0) - cam.global_position)
+        _check(aim1 < aim0 * 0.7, "L0 aim assist pulls the crosshair toward a nearby enemy (%.1f -> %.1f deg)" % [rad_to_deg(aim0), rad_to_deg(aim1)])
+        Game.aim_assist = false
+        var yaw_a: float = p.rotation.y
+        Input.action_press("aim")
+        await _frames(10)
+        Input.action_release("aim")
+        _check(absf(p.rotation.y - yaw_a) < 0.001, "L0 aim assist can be turned off")
+        Game.aim_assist = true
+        foe.global_position = keep_pos
+        foe.set_physics_process(true)
     # Haptics: getting hit buzzes the phone.
     var keep_vib: bool = Game.vibration
     Game.vibration = true
@@ -747,6 +805,28 @@ func _touch_test(L, p) -> void:
     Game.vibration = keep_vib
     Game.touch_mode = keep
     await _frames(1)
+
+
+## Settings > Text and button size: at Extra large every main-menu button is
+## still on screen.
+func _ui_scale_test() -> void:
+    var keep: float = Game.ui_scale
+    Game.ui_scale = 1.5
+    Game.apply_ui_scale()
+    main.show_main_menu()
+    await _frames(5)
+    # On a phone the screen is 900 tall before scaling (wide phones get wider,
+    # not taller), so at 1.5x the menu has 600 to fit in. (The headless test
+    # window itself is tiny.)
+    var vh: float = 900.0 / Game.ui_scale
+    var buttons: Array = main.ui.find_children("*", "Button", true, false)
+    var lowest := 0.0
+    for b in buttons:
+        lowest = maxf(lowest, b.get_global_rect().end.y)
+    _check(buttons.size() >= 6 and lowest <= vh + 1.0, "Extra-large text: the main menu still fits (%d buttons, lowest %.0f of %.0f)" % [buttons.size(), lowest, vh])
+    Game.ui_scale = keep
+    Game.apply_ui_scale()
+    await _frames(2)
 
 
 func DEFAULTS_POS(tc, id: String) -> Vector2:

@@ -74,7 +74,14 @@ jobs:
           mv "$T.new" "$T"
 
       - name: Import assets
-        run: $GODOT --headless --editor --quit || true
+        # --import waits until every asset is imported (--editor --quit could exit
+        # early, leaving the tests without models or sounds). Fail loudly if so.
+        run: |
+          $GODOT --headless --path . --import || true
+          N=$(find .godot/imported -type f | wc -l)
+          echo "imported files: $N"
+          if [ "$N" -lt 500 ]; then $GODOT --headless --path . --import || true; N=$(find .godot/imported -type f | wc -l); echo "after a second pass: $N"; fi
+          test "$N" -ge 500
 
       - name: Smoke test (plays through every operation)
         run: $GODOT --headless --path . res://tests/smoke_test.tscn

@@ -10,9 +10,19 @@ func _ready() -> void:
     Game.touch_mode = true
     Game.touch_layout = {}
     Game.touch_size = 1.0
+    Game.ui_scale = 1.25
+    Game.apply_ui_scale()
     var main = load("res://scenes/main.tscn").instantiate()
     add_child(main)
     for i in 5: await get_tree().process_frame
+    main.show_main_menu()
+    for i in 10: await get_tree().process_frame
+    await RenderingServer.frame_post_draw
+    get_viewport().get_texture().get_image().save_png(out + "/touch_menu.png")
+    main.show_meltdown()
+    for i in 10: await get_tree().process_frame
+    await RenderingServer.frame_post_draw
+    get_viewport().get_texture().get_image().save_png(out + "/touch_meltdown_menu.png")
     main.start_level(1)
     for i in 15: await get_tree().process_frame
     var L = main.level
@@ -48,5 +58,6 @@ func _ready() -> void:
     Game.touch_size = 1.0
     Game.touch_controls = false
     Game.touch_mode = false
+    Game.ui_scale = 1.0
     Game.save()
     get_tree().quit()
