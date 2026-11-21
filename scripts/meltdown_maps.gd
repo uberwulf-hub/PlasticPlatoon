@@ -1403,7 +1403,7 @@ static func _giant_garage(L) -> void:
         _grod(L, mp + Vector3(s * 8, 9, -11), mp + Vector3(s * 8, 26, -26), 1.0, _gm("2b2f33", "15181a", 0.5))
     _gbox(L, mp + Vector3(0, 26, -26), Vector3(17, 1, 1), _gm("2b2f33", "15181a", 0.5))
     _gk_place(L, func(): _bm_toolbox(L, Vector3.ZERO), Vector3(24, 0, -58), -PI / 2)
-    _gfill(L, Vector3(24, 12, -45), Color("ffe6c8"), 14.0, 4.0, 32, 46)        # keeps the reused red toolbox readable
+    _gfill(L, Vector3(24, 12, -45), Color("ffe6c8"), 14.0, 5.5, 32, 46)        # keeps the reused red toolbox readable
     var peg := _gm("6f5d47", "3a3027", 0.9)
     _gbox(L, Vector3(44, 20, 36), Vector3(1, 24, 22), peg)
     var steel := _gm("85949a", "414c52", 0.3)
@@ -2057,7 +2057,7 @@ static func _beach_md(L) -> Dictionary:
         "start_weapons": ["carbine"],
         "sky_top": Color(0.25, 0.2, 0.45), "sky_horizon": Color(0.95, 0.5, 0.35),
         "sun_color": Color(1.0, 0.6, 0.4), "sun_energy": 0.7, "sun_rot": Vector3(-12, 200, 0),
-        "fog": 0.008, "ambient": 0.8, "exposure": 1.0,
+        "fog": 0.004, "ambient": 0.8, "exposure": 1.0,     # lighter sunset haze (art pass round 2)
         "music": "res://assets/audio/music/battle_theme_a.ogg", "ambience": "res://assets/audio/ambience/desert_wind.ogg", "ambience_db": -14.0,
         "objectives": [],
         "meltdown": {
@@ -2427,7 +2427,7 @@ static func _party(L) -> Dictionary:
         "start_weapons": ["carbine"],
         "sky_top": Color(0.2, 0.35, 0.65), "sky_horizon": Color(0.85, 0.65, 0.55),
         "sun_color": Color(1.0, 0.75, 0.55), "sun_energy": 0.7, "sun_rot": Vector3(-20, 150, 0),
-        "fog": 0.006, "ambient": 0.9, "exposure": 1.05,
+        "fog": 0.003, "ambient": 0.9, "exposure": 1.05,     # lighter haze (art pass round 2)
         "music": "res://assets/audio/music/battle_theme_a.ogg", "ambience": "res://assets/audio/ambience/clock_tick.ogg", "ambience_db": -18.0,
         "objectives": [],
         "meltdown": {
@@ -2494,7 +2494,7 @@ static func _snow_day(L) -> Dictionary:
         "start_weapons": ["carbine"],
         "sky_top": Color("7897b8"), "sky_horizon": Color("afc5d8"),
         "sun_color": Color(0.95, 0.97, 1.0), "sun_energy": 0.6, "sun_rot": Vector3(-35, 60, 0),
-        "fog": 0.012, "ambient": 0.8, "exposure": 0.95, "snow": true,
+        "fog": 0.006, "ambient": 0.8, "exposure": 0.95, "snow": true,     # less whiteout from high up (lighter fog)
         "music": "res://assets/audio/music/determined_pursuit.ogg", "ambience": "res://assets/audio/ambience/desert_wind.ogg", "ambience_db": -14.0,
         "objectives": [],
         "meltdown": {
