@@ -311,26 +311,26 @@ static func _basement_giant(L) -> void:
 
 
 ## Front-loading washing machine, door facing -x (into the room). base = floor centre.
-static func _bm_washer(L, base: Vector3) -> void:
-    var enamel = L.mat(BM_ENAMEL, 0.3)
+static func _bm_washer(L, base: Vector3, body := BM_ENAMEL, glass := BM_GLASS, clothes := true) -> void:
+    var enamel = L.mat(body, 0.3)
     var W := 16.0
     var H := 22.0
     var D := 16.0
     var fx: float = base.x - D * 0.5          # the front face
     L.box(base + Vector3(0, H * 0.5 + 0.8, 0), Vector3(D, H - 1.6, W), Color.WHITE, 0.0, false, enamel)
     L.box(base + Vector3(0, 0.4, 0), Vector3(D - 0.6, 0.8, W - 0.6), Color("3a3a3a"), 0.0, false)    # kick plate
-    L.box(base + Vector3(0, H - 0.4, 0), Vector3(D, 0.8, W), Color.WHITE, 0.0, false, L.mat(BM_ENAMEL.darkened(0.06), 0.25))
+    L.box(base + Vector3(0, H - 0.4, 0), Vector3(D, 0.8, W), Color.WHITE, 0.0, false, L.mat(body.darkened(0.06), 0.25))
     # Control panel along the top, a dial and a little glowing display.
     L.box(Vector3(fx - 0.1, H - 3.0, base.z), Vector3(0.3, 3.2, W - 0.6), Color.WHITE, 0.0, false, L.mat(Color("d4d4d2"), 0.35))
     L.cyl(Vector3(fx - 0.5, H - 3.0, base.z + 4.5), 1.25, 0.7, BM_CHROME, false, Vector3(0, 0, PI / 2), L.mat(BM_CHROME, 0.2, 0.8))
     L.box(Vector3(fx - 0.3, H - 3.0, base.z - 1.0), Vector3(0.2, 1.0, 3.2), Color.WHITE, 0.0, false, L.glow_mat(Color("5fd3c8"), 1.2))
-    L.box(Vector3(fx - 0.3, H - 3.0, base.z - 5.2), Vector3(0.3, 1.6, 3.4), Color.WHITE, 0.0, false, L.mat(BM_ENAMEL.darkened(0.12), 0.35))  # drawer
+    L.box(Vector3(fx - 0.3, H - 3.0, base.z - 5.2), Vector3(0.3, 1.6, 3.4), Color.WHITE, 0.0, false, L.mat(body.darkened(0.12), 0.35))  # drawer
     # The round door: chrome ring, dark glass, laundry tumbling behind it.
     var c := Vector3(fx - 0.2, 9.5, base.z)
     L.cyl(c, 6.0, 0.8, BM_CHROME, false, Vector3(0, 0, PI / 2), L.mat(BM_CHROME, 0.18, 0.85))
-    L.cyl(c + Vector3(-0.3, 0, 0), 4.7, 0.6, BM_GLASS, false, Vector3(0, 0, PI / 2), L.mat(BM_GLASS, 0.05, 0.3))
+    L.cyl(c + Vector3(-0.3, 0, 0), 4.7, 0.6, glass, false, Vector3(0, 0, PI / 2), L.mat(glass, 0.05, 0.3))
     var cloth := [Color("d94a4a"), Color("f2c230"), Color("f4f1ea"), Color("3f7fd6")]
-    for i in 4:
+    for i in (4 if clothes else 0):
         var a := i * TAU / 4.0 + 0.4
         L.sphere(c + Vector3(0.6, sin(a) * 2.2 - 0.6, cos(a) * 2.2), 1.6, cloth[i], Vector3(0.5, 0.8, 1.2), L.mat(cloth[i], 0.95))
     L.box(c + Vector3(-0.7, 0, 5.4), Vector3(0.6, 2.4, 0.9), BM_CHROME, 0.0, false, L.mat(BM_CHROME, 0.2, 0.8))   # handle
@@ -422,13 +422,13 @@ static func _bm_sofa(L, base: Vector3) -> void:
 
 ## A plain colour that never renders darker than `floor_c` (a faint glow of that
 ## colour), so faces turned away from the light keep the spec's shadow tone.
-static func _bm_floored(c: Color, floor_c: Color, rough: float) -> StandardMaterial3D:
+static func _bm_floored(c: Color, floor_c: Color, rough: float, energy := BM_SOFA_FLOOR) -> StandardMaterial3D:
     var m := StandardMaterial3D.new()
     m.albedo_color = c
     m.roughness = rough
     m.emission_enabled = true
     m.emission = floor_c
-    m.emission_energy_multiplier = BM_SOFA_FLOOR
+    m.emission_energy_multiplier = energy
     return m
 
 
@@ -522,6 +522,1098 @@ static func _bm_ceiling(L) -> void:
         L.box(Vector3(0, Y * 0.5, 119 * s), Vector3(212, Y, 2), Color.WHITE, 0.0, false, block)
 
 
+# ---- Midnight Kitchen: giant scale (Creative Collaboration: Plastic Platoon art pass, round 2) ----
+# Art direction: ChatGPT (creative director); spec approved by Andrew, 2026-11-21.
+# Same rules as The Basement: 25x human scale, every giant prop outside the play
+# edge (|x| > 24, |z| > 46) or overhead with no collision; colours are the spec's
+# hex values, and _bm_floored keeps a face from rendering darker than the spec's
+# shadow colour. Nothing random except the cereal, which uses a fixed seed.
+
+## Checkerboard lino for the floor outside the rooms: a 32 x 32 picture made
+## here in code (two muted squares and grout lines), tiled every 15 m (7.5 m squares).
+static func _gk_lino() -> StandardMaterial3D:
+    var img := Image.create(32, 32, false, Image.FORMAT_RGB8)
+    var a := Color("66717a")
+    var b := Color("46525d")
+    var g := Color("303b45")
+    for y in 32:
+        for x in 32:
+            var c: Color = a if ((x < 16) == (y < 16)) else b
+            if x % 16 == 0 or y % 16 == 0:
+                c = g
+            img.set_pixel(x, y, c)
+    var m := StandardMaterial3D.new()
+    m.albedo_texture = ImageTexture.create_from_image(img)
+    m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+    m.uv1_triplanar = true
+    m.uv1_world_triplanar = true
+    m.uv1_scale = Vector3.ONE / 15.0
+    m.roughness = 0.6
+    return m
+
+
+## Builds `build` around the origin, then turns it by `yaw` and moves it to `pos`
+## (so the Basement helpers can be reused facing another way, unchanged).
+static func _gk_place(L, build: Callable, pos: Vector3, yaw: float) -> void:
+    var before: int = L.get_child_count()
+    build.call()
+    var kids: Array = []
+    for i in range(before, L.get_child_count()):
+        kids.append(L.get_child(i))
+    var pivot := Node3D.new()
+    L.add_child(pivot)
+    for k in kids:
+        L.remove_child(k)
+        pivot.add_child(k)
+    pivot.transform = Transform3D(Basis(Vector3.UP, yaw), pos)
+
+
+## Black block letters (solid 3D text, so walls hide it), facing +z unless turned.
+static func _gk_word(L, text: String, pos: Vector3, yaw: float, height: float, col := Color("222222")) -> void:
+    var tm := TextMesh.new()
+    tm.text = text
+    tm.font_size = 64
+    tm.pixel_size = height / 64.0
+    tm.depth = 0.05
+    var mi := MeshInstance3D.new()
+    mi.mesh = tm
+    mi.material_override = L.mat(col, 0.9)
+    mi.position = pos
+    mi.rotation.y = yaw
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    L.add_child(mi)
+
+
+const GK_FLOOR := 1.1     # minimum-shadow glow strength for the kitchen props (the night scene is dark)
+
+
+static func _giant_kitchen(L) -> void:
+    # The rest of the kitchen floor, far out, and the dark ceiling 75 m up.
+    L.box(Vector3(0, -0.6, 0), Vector3(600, 1.0, 600), Color.WHITE, 0.0, false, _gk_lino())
+    var plaster := _bm_floored(Color("35404c"), Color("202a35"), 0.9, 0.5)
+    L.box(Vector3(0, 75.6, 0), Vector3(600, 1.2, 600), Color.WHITE, 0.0, false, plaster)
+    for z in [-40.0, 20.0]:                                                       # two broad beams
+        L.box(Vector3(0, 72.5, z), Vector3(600, 5.0, 6.0), Color.WHITE, 0.0, false, _bm_floored(Color("566473"), Color("202a35"), 0.9, 0.5))
+    var wall := _bm_floored(Color("35404c"), Color("202a35"), 0.9, 0.5)
+    for s in [-1.0, 1.0]:
+        L.box(Vector3(110 * s, 37.5, 0), Vector3(2, 75, 252), Color.WHITE, 0.0, false, wall)
+        L.box(Vector3(0, 37.5, 125 * s), Vector3(222, 75, 2), Color.WHITE, 0.0, false, wall)
+    _gk_table(L)
+    _gk_fridge(L)
+    _gk_counter(L)
+    _gk_spill(L)
+    _gk_pantry(L)
+    _gk_laundry(L)
+    _gk_window_pendant(L)
+    # Gate 1 review: a little local fill on the fridge, the table legs and the
+    # counter faces so they read against the bright start room. Cool-neutral to
+    # keep the midnight palette; every light stops well above the play floor.
+    var fill := Color("c9d6ea")
+    for f in [[Vector3(-20, 30, 23), 18.0, 1.3], [Vector3(-34, 30, 40), 18.0, 1.1], [Vector3(34, 30, 40), 18.0, 1.1],
+            [Vector3(22, 24, -15), 16.0, 1.2], [Vector3(22, 24, 15), 16.0, 1.2]]:
+        L.lamp(f[0], fill, f[1], f[2], false)
+
+
+## 1. The dining table, straddling the south play edge: legs as columns, the
+## underside as a ceiling over the south of the Kitchen Floor; three chairs.
+static func _gk_table(L) -> void:
+    var wood := _bm_floored(Color("a87545"), Color("513a2b"), 0.8, 0.95)   # underside reads as wood, not black
+    var hi = L.mat(Color("d5ad78"), 0.6)
+    var top := Vector3(0, 50.5, 62.5)
+    L.box(top, Vector3(90, 5, 55), Color.WHITE, 0.0, false, wood)
+    L.box(top + Vector3(0, 2.6, -27.6), Vector3(90.4, 0.4, 0.4), Color.WHITE, 0.0, false, hi)       # lit front edge
+    for s in [-1.0, 1.0]:                                                                           # aprons under the top
+        L.box(Vector3(39 * s, 45.5, 62.5), Vector3(2, 5, 46), Color.WHITE, 0.0, false, wood)
+        L.box(Vector3(0, 45.5, 62.5 + 23 * s), Vector3(78, 5, 2), Color.WHITE, 0.0, false, wood)
+        for z in [37.5, 87.5]:
+            L.box(Vector3(42 * s, 24, z), Vector3(5, 48, 5), Color.WHITE, 0.0, false, wood)
+    for ch in [[Vector3(56, 0, 58), -PI / 2], [Vector3(-56, 0, 70), PI / 2], [Vector3(0, 0, 100), PI]]:
+        _gk_place(L, func():
+            for lx in [-9.0, 9.0]:
+                for lz in [-9.0, 9.0]:
+                    L.box(Vector3(lx, 12, lz), Vector3(2, 24, 2), Color.WHITE, 0.0, false, wood)
+            L.box(Vector3(0, 25, 0), Vector3(22, 2, 22), Color.WHITE, 0.0, false, wood)
+            L.box(Vector3(0, 39, 10), Vector3(22, 26, 2), Color.WHITE, 0.0, false, wood)
+            L.box(Vector3(0, 26.1, -11.1), Vector3(22.2, 0.3, 0.3), Color.WHITE, 0.0, false, hi), ch[0], ch[1])
+
+
+## 2. The full-height refrigerator west of the Kitchen Floor, door ajar.
+static func _gk_fridge(L) -> void:
+    var enamel := _bm_floored(Color("d8e0e5"), Color("71818e"), 0.3, 0.45)
+    var hi = L.mat(Color("f5f8f7"), 0.2)
+    var seam = L.mat(Color("71818e"), 0.6)
+    var c := Vector3(-34, 0, 23)          # body x -42..-26 (front at -26), z 14..32
+    L.box(c + Vector3(0, 22.5, 0), Vector3(16, 45, 18), Color.WHITE, 0.0, false, enamel)
+    L.box(Vector3(-25.9, 31.0, 23), Vector3(0.3, 0.5, 18), Color.WHITE, 0.0, false, seam)             # freezer seam
+    L.box(Vector3(-25.6, 38.0, 16.0), Vector3(0.8, 8.0, 0.9), Color.WHITE, 0.0, false, hi)           # freezer handle
+    L.box(Vector3(-26.0, 44.9, 23), Vector3(0.4, 0.3, 18.2), Color.WHITE, 0.0, false, hi)
+    # The fridge door, hinged on the south edge and standing a little open:
+    # the warm interior shows in the gap.
+    L.box(Vector3(-26.4, 15.0, 22.0), Vector3(0.4, 29.0, 15.0), Color.WHITE, 0.0, false, L.glow_mat(Color("ddeeff"), 0.8))
+    var door := Node3D.new()
+    L.add_child(door)
+    door.position = Vector3(-26, 0.5, 32)
+    door.rotation.y = 0.32
+    var dm := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = Vector3(1.2, 29.5, 18)
+    dm.mesh = bm
+    dm.material_override = enamel
+    dm.position = Vector3(0.6, 14.75, -9)
+    door.add_child(dm)
+    var hm := MeshInstance3D.new()
+    var hb := BoxMesh.new()
+    hb.size = Vector3(0.8, 10, 0.9)
+    hm.mesh = hb
+    hm.material_override = hi
+    hm.position = Vector3(1.6, 16, -16.5)
+    door.add_child(hm)
+    # Magnets on the door: a star, an apple, a smiley, a letter A and a note.
+    var mags := [["star", Color("e7b84f"), Vector3(1.4, 22, -5)], ["apple", Color("c95b52"), Vector3(1.4, 18, -12)],
+        ["smile", Color("e5bf42"), Vector3(1.4, 12, -4)], ["A", Color("4c83b6"), Vector3(1.4, 25, -13)]]
+    for mg in mags:
+        var n := MeshInstance3D.new()
+        if mg[0] == "A" or mg[0] == "star":
+            var t := TextMesh.new()
+            t.text = "A" if mg[0] == "A" else "*"
+            t.font_size = 64
+            t.pixel_size = (2.6 if mg[0] == "A" else 4.0) / 64.0
+            t.depth = 0.3
+            n.mesh = t
+            n.rotation.y = PI / 2
+        else:
+            var sm := SphereMesh.new()
+            sm.radius = 1.1
+            sm.height = 2.2
+            n.mesh = sm
+            n.scale = Vector3(0.4, 1, 1)
+        n.material_override = L.mat(mg[1], 0.5)
+        n.position = mg[2]
+        door.add_child(n)
+    var note := MeshInstance3D.new()
+    var nb := BoxMesh.new()
+    nb.size = Vector3(0.2, 3.6, 6.0)
+    note.mesh = nb
+    note.material_override = L.mat(Color("f2eee5"), 0.9)
+    note.position = Vector3(1.3, 7, -9)
+    door.add_child(note)
+    var nt := TextMesh.new()
+    nt.text = "LEFTOVERS"
+    nt.font_size = 64
+    nt.pixel_size = 0.9 / 64.0
+    nt.depth = 0.05
+    var ntm := MeshInstance3D.new()
+    ntm.mesh = nt
+    ntm.material_override = L.mat(Color("222222"), 0.9)
+    ntm.position = Vector3(1.45, 7, -9)
+    ntm.rotation.y = PI / 2
+    door.add_child(ntm)
+    _gk_word(L, "KEEP COLD", Vector3(-25.7, 34.5, 23), PI / 2, 1.4, Color("71818e"))
+    # The fridge light: warm, the brightest local light, short reach (stops above the floor).
+    L.lamp(Vector3(-21, 18, 24), Color("ffdda0"), 14.0, 2.2, false)
+
+
+## 3 + 4. The counter run east of the play area: cabinets, worktop, oven with a
+## glowing clock, sink and faucet with a drip, toaster, cookie jar, trash can.
+static func _gk_counter(L) -> void:
+    var cab := _bm_floored(Color("b78a5b"), Color("614a37"), 0.8, GK_FLOOR)
+    var cab_hi = L.mat(Color("d8b58a"), 0.6)
+    var cab_line = L.mat(Color("614a37"), 0.8)
+    var top := _bm_floored(Color("d9d3c7"), Color("77746d"), 0.4, GK_FLOOR)
+    var top_hi = L.mat(Color("f2eee5"), 0.3)
+    var steel := _bm_floored(Color("aebbc2"), Color("53616a"), 0.25, GK_FLOOR)
+    var steel_hi = L.mat(Color("e8f0f3"), 0.15)
+    steel.metallic = 0.6
+    var z0 := -35.0
+    var z1 := 30.0
+    var zc := (z0 + z1) * 0.5
+    L.box(Vector3(33.5, 9, zc), Vector3(13, 18, z1 - z0), Color.WHITE, 0.0, false, cab)              # cabinets x 27..40
+    L.box(Vector3(33.0, 19, zc), Vector3(14, 2, z1 - z0 + 1), Color.WHITE, 0.0, false, top)           # worktop, front edge x 26
+    L.box(Vector3(25.95, 19.9, zc), Vector3(0.3, 0.3, z1 - z0 + 1), Color.WHITE, 0.0, false, top_hi)
+    L.box(Vector3(26.9, 1.0, zc), Vector3(0.4, 2.0, z1 - z0), Color.WHITE, 0.0, false, L.mat(Color("614a37"), 0.9))  # toe kick
+    var z := z0 + 6.5
+    while z < z1:                                                                                     # door seams and knobs
+        if absf(z - 20.0) > 9.0:
+            L.box(Vector3(26.9, 9, z - 6.5), Vector3(0.2, 16, 0.4), Color.WHITE, 0.0, false, cab_line)
+            L.sphere(Vector3(26.6, 14.0, z - 4.5), 0.5, Color.WHITE, Vector3.ONE, cab_hi)
+        z += 6.5
+    # Oven (15 wide, 15 tall) set into the cabinets, opposite the fridge.
+    var oven := _bm_floored(Color("343b43"), Color("1c2228"), 0.4, GK_FLOOR)
+    L.box(Vector3(26.8, 8.5, 20), Vector3(0.6, 15, 15), Color.WHITE, 0.0, false, oven)
+    L.box(Vector3(26.45, 7.5, 20), Vector3(0.2, 7, 10), Color.WHITE, 0.0, false, L.mat(Color("1a1f24"), 0.1, 0.3))  # oven window
+    L.box(Vector3(26.2, 12.4, 20), Vector3(0.5, 0.6, 11), Color.WHITE, 0.0, false, steel_hi)                  # handle
+    for i in 4:
+        L.cyl(Vector3(26.3, 15.3, 14.5 + i * 2.2 + (1.0 if i > 1 else 0.0)), 0.6, 0.6, Color.WHITE, false, Vector3(0, 0, PI / 2), steel)
+    L.box(Vector3(26.4, 15.3, 19.75), Vector3(0.2, 0.9, 2.2), Color.WHITE, 0.0, false, L.glow_mat(Color("e7a85b"), 2.2))  # clock
+    L.lamp(Vector3(25.0, 15.3, 19.75), Color("e7a85b"), 6.0, 0.8, false)
+    # Sink (12 x 9 opening) and a tall curved faucet with one big drip.
+    L.box(Vector3(33, 20.05, -5), Vector3(9.4, 0.2, 12.4), Color.WHITE, 0.0, false, steel)                    # rim
+    L.box(Vector3(33, 19.0, -5), Vector3(8.0, 2.1, 11.0), Color.WHITE, 0.0, false, L.mat(Color("53616a"), 0.3, 0.6))  # basin seen from the side
+    L.cyl(Vector3(38, 26, -5), 0.9, 12, Color.WHITE, false, Vector3.ZERO, steel)                             # faucet column
+    L.cyl(Vector3(35.5, 32.2, -5), 0.8, 5.2, Color.WHITE, false, Vector3(0, 0, PI / 2), steel)               # spout
+    L.cyl(Vector3(33.0, 31.2, -5), 0.8, 2.0, Color.WHITE, false, Vector3.ZERO, steel)
+    L.box(Vector3(38.0, 32.2, -5), Vector3(0.3, 0.3, 1.9), Color.WHITE, 0.0, false, steel_hi)
+    var water := StandardMaterial3D.new()
+    water.albedo_color = Color("8fcde8")
+    water.roughness = 0.05
+    water.emission_enabled = true
+    water.emission = Color("8fcde8")
+    water.emission_energy_multiplier = 0.25
+    L.sphere(Vector3(33.0, 28.6, -5), 0.75, Color.WHITE, Vector3(1, 1.3, 1), water)
+    # Toaster and cookie jar on the worktop, trash can beside the south end.
+    L.box(Vector3(34, 23.0, 4), Vector3(6, 6, 9), Color.WHITE, 0.0, false, steel)
+    for dz in [-2.0, 2.0]:
+        L.box(Vector3(34, 26.05, 4 + dz), Vector3(3.4, 0.1, 0.8), Color.WHITE, 0.0, false, L.mat(Color("222222"), 0.9))
+    L.box(Vector3(30.95, 23.0, 4), Vector3(0.1, 1.2, 9.0), Color.WHITE, 0.0, false, steel_hi)
+    L.cyl(Vector3(34, 23.5, -25), 3.0, 7.0, Color.WHITE, false, Vector3.ZERO, _bm_floored(Color("e6e0d4"), Color("77736c"), 0.4, GK_FLOOR))
+    L.cyl(Vector3(34, 27.4, -25), 2.4, 0.8, Color.WHITE, false, Vector3.ZERO, L.mat(Color("c0453a"), 0.5))
+    L.sphere(Vector3(34, 28.2, -25), 0.8, Color("c0453a"), Vector3.ONE, L.mat(Color("c0453a"), 0.5))
+    var bin := _bm_floored(Color("667078"), Color("333c43"), 0.4, GK_FLOOR)
+    bin.metallic = 0.4
+    L.cyl(Vector3(31, 9, 37), 4.0, 18.0, Color.WHITE, false, Vector3.ZERO, bin)
+    L.cyl(Vector3(31, 18.3, 37), 4.2, 0.6, Color.WHITE, false, Vector3.ZERO, L.mat(Color("9ba7ad"), 0.3, 0.5))
+    L.box(Vector3(26.9, 12, 37), Vector3(0.4, 3.0, 2.2), Color.WHITE, 0.0, false, L.mat(Color("333c43"), 0.5))  # pedal
+
+
+## 5. The breakfast spill: a tipped generic cereal box, a bowl, a spoon and cereal.
+static func _gk_spill(L) -> void:
+    var box := _bm_floored(Color("d4a64d"), Color("76552e"), 0.8, 0.45)
+    L.box_rot(Vector3(-32, 2.0, 48), Vector3(11, 4, 16), Color.WHITE, Vector3(0, 0.5, 0), false, box)
+    L.box_rot(Vector3(-32, 4.05, 48), Vector3(10.2, 0.1, 15.2), Color.WHITE, Vector3(0, 0.5, 0), false, L.mat(Color("f2d58d"), 0.7))
+    _gk_word(L, "CEREAL", Vector3(-32, 4.2, 48), 0.5, 2.6)
+    var w = L.get_child(L.get_child_count() - 1)
+    w.rotation = Vector3(-PI / 2, 0.5, 0)
+    var bowl := _bm_floored(Color("e6e0d4"), Color("77736c"), 0.3, 0.4)
+    L.cyl(Vector3(-40, 2, 57), 2.4, 4.0, Color.WHITE, false, Vector3.ZERO, bowl, 4.0)      # wide top, narrow foot
+    L.cyl(Vector3(-40, 4.02, 57), 3.6, 0.05, Color.WHITE, false, Vector3.ZERO, L.mat(Color("f2eee5"), 0.4))   # milk
+    var spoon = L.mat(Color("aebbc2"), 0.2, 0.7)
+    L.box_rot(Vector3(-30, 0.5, 58), Vector3(9, 0.6, 1.2), Color.WHITE, Vector3(0, 0.3, 0), false, spoon)
+    L.sphere(Vector3(-35.2, 0.6, 59.6), 1.6, Color.WHITE, Vector3(1.3, 0.35, 0.9), spoon)
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 7
+    for i in 16:
+        var c := Color("c58b4b") if i % 2 == 0 else Color("e7bd75")
+        var r := rng.randf_range(0.4, 0.75)
+        L.sphere(Vector3(rng.randf_range(-36, -26), r * 0.8, rng.randf_range(51, 58)), r, c, Vector3(1, 0.8, 1), L.mat(c, 0.9))
+
+
+## 6. Pantry shelving west of the Pantry: timber shelves of cans, jars and boxes.
+static func _gk_pantry(L) -> void:
+    var timber := _bm_floored(Color("956b43"), Color("49382b"), 0.85, GK_FLOOR)
+    var t_hi = L.mat(Color("c49a68"), 0.7)
+    var fx := -28.0                       # front of the unit; it runs z -36..14, back at x -40
+    L.box(Vector3(-39.5, 19, -11), Vector3(1, 38, 50), Color.WHITE, 0.0, false, timber)
+    for z in [-36.0, 14.0]:
+        L.box(Vector3(-34, 19, z), Vector3(12, 38, 1.2), Color.WHITE, 0.0, false, timber)
+    var levels := [1.0, 10.5, 20.0, 29.5]
+    for y in levels + [38.0]:
+        L.box(Vector3(-34, y - 0.5, -11), Vector3(12, 1, 50), Color.WHITE, 0.0, false, timber)
+        L.box(Vector3(fx + 0.05, y - 0.5, -11), Vector3(0.2, 1.0, 50), Color.WHITE, 0.0, false, t_hi)
+    var can := _bm_floored(Color("789a9b"), Color("3f5b60"), 0.35, GK_FLOOR)
+    can.metallic = 0.4
+    var can_hi = L.mat(Color("b5d0c8"), 0.3)
+    var jars := [Color("c99a4a"), Color("b05a4a"), Color("6f8a55")]
+    var words := [["SOUP", -30.0], ["PEACHES", -14.0], ["JAM", 2.0]]
+    for li in levels.size():
+        var y: float = levels[li]
+        var z := -33.0
+        var k := li
+        while z < 11.5:
+            var kind := k % 4
+            if kind == 0 or kind == 1:                                                    # cans
+                L.cyl(Vector3(-31, y + 3, z), 1.5, 6.0, Color.WHITE, false, Vector3.ZERO, can)
+                L.cyl(Vector3(-31, y + 6.02, z), 1.4, 0.05, Color.WHITE, false, Vector3.ZERO, can_hi)
+                z += 3.6
+            elif kind == 2:                                                               # jar with a lid
+                var jc: Color = jars[(k / 4) % 3]
+                L.cyl(Vector3(-31, y + 2.5, z), 1.5, 5.0, Color.WHITE, false, Vector3.ZERO, _bm_floored(jc, jc.darkened(0.5), 0.2, 0.4))
+                L.cyl(Vector3(-31, y + 5.3, z), 1.55, 0.6, Color.WHITE, false, Vector3.ZERO, L.mat(Color("8a8f94"), 0.3, 0.6))
+                z += 3.8
+            else:                                                                         # small cereal box
+                L.box(Vector3(-32, y + 3.5, z + 0.5), Vector3(3, 7, 4), Color.WHITE, 0.0, false, _bm_floored(Color("d4a64d"), Color("76552e"), 0.8, 0.4))
+                z += 5.0
+            k += 1
+    # Shelf-edge labels on the bottom shelf, block letters on cream strips.
+    for wd in words:
+        L.box(Vector3(fx + 0.15, 0.2, wd[1]), Vector3(0.1, 0.9, 6.5), Color.WHITE, 0.0, false, L.mat(Color("e5d7b5"), 0.9))
+        _gk_word(L, wd[0], Vector3(fx + 0.25, 0.2, wd[1]), PI / 2, 0.7)
+    _gk_word(L, "OATS", Vector3(-30.45, 13.5, -14.5), PI / 2, 0.9)
+    _gk_word(L, "RICE", Vector3(-30.45, 23.0, -4.5), PI / 2, 0.9)
+    # Dim neutral-warm fill on the shelf faces (short; stops above the floor).
+    L.lamp(Vector3(-24, 26, -11), Color("ffe6c8"), 22.0, 1.2, false)
+
+
+## 7a. The laundry beyond the north edge: the Basement washer (with its basket)
+## and a matching dryer, facing the play area, a detergent jug, an ironing board.
+static func _gk_laundry(L) -> void:
+    _gk_place(L, func():
+        _bm_washer(L, Vector3.ZERO)
+        _bm_basket(L, Vector3(0, 22, -1)), Vector3(-14, 0, -62), PI / 2)
+    _gk_place(L, func():
+        _bm_washer(L, Vector3.ZERO, Color("d7e0e5"), Color("29343d"), false), Vector3(6, 0, -62), PI / 2)
+    L.box(Vector3(6, 26, -62), Vector3(5, 8, 3.5), Color.WHITE, 0.0, false, _bm_floored(Color("5f86a8"), Color("2f4a63"), 0.4, 0.4))
+    L.cyl(Vector3(7.4, 30.8, -62), 0.8, 1.6, Color.WHITE, false, Vector3.ZERO, L.mat(Color("e5d7b5"), 0.5))
+    _gk_word(L, "DETERGENT", Vector3(6, 26, -60.2), 0.0, 0.8, Color("f2eee5"))
+    var fab := _bm_floored(Color("91aebb"), Color("4d6875"), 0.9, 0.4)
+    L.box(Vector3(28, 14, -56), Vector3(20, 2, 6), Color.WHITE, 0.0, false, fab)
+    L.box(Vector3(28, 15.05, -56), Vector3(19.6, 0.1, 5.6), Color.WHITE, 0.0, false, L.mat(Color("c4d8df"), 0.9))
+    var leg = L.mat(Color("87969b"), 0.3, 0.6)
+    for s in [-1.0, 1.0]:
+        L.box_rot(Vector3(28, 6.6, -56), Vector3(0.6, 15.5, 0.6), Color.WHITE, Vector3(0, 0, 0.6 * s), false, leg)
+    # Cool laundry fill (#A8C3D5, gate 1 review); neither light reaches the play floor.
+    L.lamp(Vector3(0, 30, -52), Color("a8c3d5"), 26.0, 2.2, false)
+    L.lamp(Vector3(-4, 18, -50), Color("a8c3d5"), 17.0, 1.4, false)
+    _gk_word(L, "TOWELS", Vector3(-14, 31.5, -56.2), 0.0, 0.9)
+
+
+## 7b. The moonlit window high on the west wall, and a pendant lamp over the Kitchen Floor.
+static func _gk_window_pendant(L) -> void:
+    var wc := Vector3(-108.6, 42, 10)
+    L.box(wc, Vector3(0.6, 20, 28), Color.WHITE, 0.0, false, L.glow_mat(Color("263d67"), 1.6))
+    L.box(wc + Vector3(0.3, 4, -4), Vector3(0.2, 8, 8), Color.WHITE, 0.0, false, L.glow_mat(Color("7896c5"), 1.2))   # moon reflection
+    var frame = L.mat(Color("18263e"), 0.8)
+    for dz in [-14.4, 0.0, 14.4]:
+        L.box(wc + Vector3(0.4, 0, dz), Vector3(1.0, 21, 1.0), Color.WHITE, 0.0, false, frame)
+    for dy in [-10.4, 10.4]:
+        L.box(wc + Vector3(0.4, dy, 0), Vector3(1.0, 1.0, 29.8), Color.WHITE, 0.0, false, frame)
+    L.lamp(Vector3(-86, 42, 10), Color("9bbceb"), 70.0, 1.3, false)       # moonlight onto the fridge and pantry side
+    # Pendant: cord from the ceiling, a dark shade, a small amber glow.
+    var pc := Vector3(6, 0, 8)
+    L.cyl(Vector3(pc.x, 66, pc.z), 0.15, 19.0, Color("222222"), false)
+    L.cyl(Vector3(pc.x, 51, pc.z), 2.5, 12.0, Color.WHITE, false, Vector3.ZERO, _bm_floored(Color("424b58"), Color("202833"), 0.5, 0.4), 1.0)
+    L.box(Vector3(pc.x + 2.0, 51, pc.z), Vector3(0.2, 9, 0.4), Color.WHITE, 0.0, false, L.mat(Color("7e8b9a"), 0.4))
+    L.sphere(Vector3(pc.x, 44.6, pc.z), 1.0, Color("e7a85b"), Vector3.ONE, L.glow_mat(Color("e7a85b"), 2.5))
+    L.lamp(Vector3(pc.x, 43.5, pc.z), Color("e7a85b"), 16.0, 1.0, false)
+
+
+# ---- Round 2, gate 2: the other 11 MELTDOWN maps at giant scale ----
+# Art direction: ChatGPT (creative director), spec approved by Andrew, 2026-11-21.
+# Same rules as The Basement and Midnight Kitchen: 25x human scale, decoration only
+# (no collision), outside the play edge or overhead; spec hex colours with a faint
+# glow so faces never render darker than the spec's shadow colour; local fill
+# lights that are cut short so they never reach the play floor. Nothing random.
+
+## A spec colour that never renders darker than its spec shadow.
+static func _gm(base: String, shadow: String, rough := 0.8, e := 0.6) -> StandardMaterial3D:
+    return _bm_floored(Color(base), Color(shadow), rough, e)
+
+
+## A fill light whose reach is cut so it stops 1 m short of the play floor
+## (the floor inside the play edge, |x| <= bx, |z| <= bz).
+static func _gfill(L, pos: Vector3, col: Color, rng: float, energy: float, bx: float, bz: float) -> void:
+    var near := Vector3(clampf(pos.x, -bx, bx), 0.0, clampf(pos.z, -bz, bz))
+    L.lamp(pos, col, minf(rng, pos.distance_to(near) - 1.0), energy, false)
+
+
+static func _gbox(L, pos: Vector3, size: Vector3, m: Material, rot := Vector3.ZERO) -> void:
+    L.box_rot(pos, size, Color.WHITE, rot, false, m)
+
+
+static func _gcone(L, pos: Vector3, r_bottom: float, r_top: float, h: float, m: Material, rot := Vector3.ZERO) -> void:
+    L.cyl(pos, r_bottom, h, Color.WHITE, false, rot, m, r_top)
+
+
+static func _gball(L, pos: Vector3, r: float, m: Material, sc := Vector3.ONE) -> void:
+    L.sphere(pos, r, Color.WHITE, sc, m)
+
+
+## A ring (TorusMesh); lies flat unless turned.
+static func _gring(L, pos: Vector3, r: float, thick: float, m: Material, rot := Vector3.ZERO) -> void:
+    var mi := MeshInstance3D.new()
+    var t := TorusMesh.new()
+    t.inner_radius = r - thick * 0.5
+    t.outer_radius = r + thick * 0.5
+    mi.mesh = t
+    mi.material_override = m
+    mi.position = pos
+    mi.rotation = rot
+    L.add_child(mi)
+
+
+## A triangular prism standing upright (a 3-sided cylinder).
+static func _gprism(L, pos: Vector3, r: float, h: float, m: Material, yaw := 0.0) -> void:
+    var mi := MeshInstance3D.new()
+    var c := CylinderMesh.new()
+    c.top_radius = r
+    c.bottom_radius = r
+    c.height = h
+    c.radial_segments = 3
+    c.rings = 1
+    mi.mesh = c
+    mi.material_override = m
+    mi.position = pos
+    mi.rotation.y = yaw
+    L.add_child(mi)
+
+
+## The rest of the room's floor, far out, just below the play floor.
+static func _gground(L, m: Material, y := -0.6) -> void:
+    L.box(Vector3(0, y, 0), Vector3(600, 1.0, 600), Color.WHITE, 0.0, false, m)
+
+
+## A rod between two points (a thin box).
+static func _grod(L, a: Vector3, b: Vector3, w: float, m: Material) -> void:
+    var mi := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = Vector3(w, w, a.distance_to(b))
+    mi.mesh = bm
+    mi.material_override = m
+    L.add_child(mi)
+    mi.look_at_from_position((a + b) * 0.5, b, Vector3.UP if absf((b - a).normalized().y) < 0.95 else Vector3.RIGHT)
+
+
+# ---------------------------------------------------------------- The Attic
+static func _giant_attic(L) -> void:
+    _gground(L, L.tex("wood_floor", Color("826a50"), 18.0))
+    # West, seen between the rafters: steamer trunk, picture frames, light coil.
+    var lea := _gm("72513d", "382b25", 0.6)
+    var brass := _gm("b28a4b", "5f4a2a", 0.35, 0.5)
+    brass.metallic = 0.6
+    _gbox(L, Vector3(-46, 10, 8), Vector3(18, 20, 35), lea)
+    L.cyl(Vector3(-46, 20, 8), 9.0, 35.0, Color.WHITE, false, Vector3(PI / 2, 0, 0), lea)        # domed lid
+    for dz in [-9.0, 9.0]:
+        _gbox(L, Vector3(-46, 10, 8 + dz), Vector3(18.4, 20.2, 1.4), brass)
+        L.cyl(Vector3(-46, 20, 8 + dz), 9.25, 1.4, Color.WHITE, false, Vector3(PI / 2, 0, 0), brass)
+    _gbox(L, Vector3(-36.8, 19.5, 8), Vector3(0.6, 2.4, 6), brass)                              # latch
+    _gbox(L, Vector3(-36.9, 21.8, 8), Vector3(0.4, 0.4, 8), L.mat(Color("a98465"), 0.5))          # highlight
+    var fw := _gm("8c6748", "493729", 0.7)
+    var sky := _gm("8fb3c9", "4d6a7c", 0.9, 0.5)
+    var hill := _gm("6f9467", "3b553a", 0.9, 0.5)
+    for k in 3:
+        var c := Vector3(-40 - k * 1.6, 15, -20 + k * 3.0)
+        var lean := Vector3(0, 0, 0.12 + k * 0.03)
+        _gbox(L, c, Vector3(3, 30, 20), fw, lean)
+        _gbox(L, c + Vector3(1.6, 0, 0), Vector3(0.3, 25, 15), sky, lean)
+        _gbox(L, c + Vector3(1.75, -7, 0), Vector3(0.3, 10, 15), hill, lean)
+    var cable := _gm("39443b", "1d241e", 0.6, 0.4)
+    var bulbs := [Color("b94a45"), Color("5f9a5f"), Color("d9a441"), Color("4f7fbf")]
+    for ring in 3:
+        var y := 0.6 + ring * 1.3
+        _gring(L, Vector3(-44, y, 36), 6.5 - ring * 0.6, 0.6, cable)
+        for i in 10:
+            var a := i * TAU / 10.0 + ring * 0.3
+            var rr := 6.5 - ring * 0.6
+            L.sphere(Vector3(-44 + cos(a) * rr, y + 0.5, 36 + sin(a) * rr), 0.55, Color.WHITE, Vector3(1, 1.4, 1), L.glow_mat(bulbs[(i + ring) % 4], 1.6))
+    # East: the old lamp (with its warm pool), the dress form, the rocking chair.
+    var dark_wood := _gm("4a3a2c", "2a211a", 0.6)
+    L.cyl(Vector3(40, 0.8, 18), 4.0, 1.6, Color.WHITE, false, Vector3.ZERO, dark_wood)
+    L.cyl(Vector3(40, 8, 18), 0.5, 13.0, Color.WHITE, false, Vector3.ZERO, brass)
+    _gcone(L, Vector3(40, 16.5, 18), 4.0, 2.4, 6.0, _gm("b99b6c", "66523b", 0.9))
+    L.sphere(Vector3(40, 14.6, 18), 1.0, Color.WHITE, Vector3.ONE, L.glow_mat(Color("ffd59a"), 3.0))
+    _gfill(L, Vector3(40, 14, 18), Color("ffd59a"), 24.0, 2.2, 26, 42)
+    var linen := _gm("b9aa91", "645b4e", 0.9)
+    for a in [0.0, 2.1, 4.2]:
+        _grod(L, Vector3(44, 9, -10), Vector3(44 + cos(a) * 5, 0, -10 + sin(a) * 5), 0.8, dark_wood)
+    L.cyl(Vector3(44, 11, -10), 0.6, 6.0, Color.WHITE, false, Vector3.ZERO, dark_wood)
+    _gball(L, Vector3(44, 21, -10), 6.0, linen, Vector3(0.8, 1.35, 1.0))
+    L.cyl(Vector3(44, 29.5, -10), 1.4, 3.0, Color.WHITE, false, Vector3.ZERO, linen)
+    _gball(L, Vector3(44, 31.5, -10), 1.6, dark_wood)
+    var rw := _gm("8b5c3d", "483326", 0.7)
+    var rc := Vector3(46, 0, -34)
+    for dz in [-6.5, 6.5]:
+        for i in 5:                                                                   # curved rocker
+            var x0 := -10.0 + i * 4.0
+            var y0 := 1.0 + pow((x0 + 2.0) / 10.0, 2) * 2.0
+            var y1 := 1.0 + pow((x0 + 6.0) / 10.0, 2) * 2.0
+            _grod(L, rc + Vector3(x0, y0, dz), rc + Vector3(x0 + 4.0, y1, dz), 1.0, rw)
+        for dx in [-6.0, 6.0]:
+            _gbox(L, rc + Vector3(dx, 6.5, dz), Vector3(1.2, 11, 1.2), rw)
+        _gbox(L, rc + Vector3(7.5, 20, dz), Vector3(1.2, 17, 1.2), rw, Vector3(0, 0, 0.12))   # back posts
+    _gbox(L, rc + Vector3(0, 12, 0), Vector3(15, 1.6, 15), rw)
+    for k in 4:
+        _gbox(L, rc + Vector3(8.3, 20, -4.5 + k * 3.0), Vector3(0.8, 14, 1.4), rw, Vector3(0, 0, 0.12))
+    _gbox(L, rc + Vector3(9.2, 28.3, 0), Vector3(1.4, 1.4, 15), rw, Vector3(0, 0, 0.12))
+    # A tiny attic window far to the west: cool blue-grey light.
+    _gbox(L, Vector3(-90, 22, 0), Vector3(0.6, 9, 12), L.glow_mat(Color("8fa5b8"), 1.2))
+    _gfill(L, Vector3(-60, 22, 4), Color("a9b8c8"), 40.0, 1.0, 26, 42)
+
+
+# ---------------------------------------------------------- The Garden Shed
+static func _giant_garden(L) -> void:
+    _gground(L, _gm("4b5145", "282f2b", 0.35, 0.35))
+    var terra := _gm("b96845", "633a30", 0.8)
+    var stem := _gm("4f7a45", "2b4527", 0.8)
+    var blooms := [Color("e0b84a"), Color("c95b6a"), Color("9a7ac0")]
+    var pots := [[Vector3(36, 0, 20), 7.0, 18.0], [Vector3(38, 0, 0), 5.0, 12.0], [Vector3(34, 0, -26), 4.0, 8.0]]
+    for k in pots.size():
+        var pp: Vector3 = pots[k][0]
+        var r: float = pots[k][1]
+        var h: float = pots[k][2]
+        _gcone(L, pp + Vector3(0, h * 0.5, 0), r * 0.75, r, h, terra)
+        L.cyl(pp + Vector3(0, h - 0.8, 0), r * 1.08, 1.6, Color.WHITE, false, Vector3.ZERO, terra)
+        L.cyl(pp + Vector3(0, h - 0.5, 0), r * 0.95, 0.2, Color.WHITE, false, Vector3.ZERO, _gm("3a2c22", "20180f", 0.9, 0.4))
+        L.cyl(pp + Vector3(0, h + h * 0.45, 0), 0.5, h * 0.9, Color.WHITE, false, Vector3.ZERO, stem)
+        var top := pp + Vector3(0, h + h * 0.9, 0)
+        var bm := _gm(blooms[k].to_html(false), blooms[k].darkened(0.45).to_html(false), 0.8)
+        for i in 5:
+            var a := i * TAU / 5.0
+            _gball(L, top + Vector3(cos(a), 0, sin(a)) * r * 0.45, r * 0.35, bm)
+        _gball(L, top, r * 0.25, _gm("e7bd75", "7a5d34", 0.8))
+        for s in [-1.0, 1.0]:
+            _gball(L, pp + Vector3(0, h + h * 0.4, s * r * 0.5), r * 0.4, stem, Vector3(0.5, 0.25, 1.0))
+    var can := _gm("66866a", "344d40", 0.45)
+    L.cyl(Vector3(-38, 7, 14), 6.0, 14.0, Color.WHITE, false, Vector3.ZERO, can)
+    _grod(L, Vector3(-38, 4, 18), Vector3(-36, 15, 30), 1.6, can)                          # spout
+    _gcone(L, Vector3(-35.8, 15.6, 31.0), 1.0, 2.4, 2.0, can, Vector3(-0.6, 0, 0))            # rose
+    _grod(L, Vector3(-38, 14, 9), Vector3(-38, 18, 14), 1.2, can)                            # handle
+    _grod(L, Vector3(-38, 18, 14), Vector3(-38, 14, 19), 1.2, can)
+    L.cyl(Vector3(-38, 14.05, 14), 5.6, 0.1, Color.WHITE, false, Vector3.ZERO, L.mat(Color("a4c09a"), 0.4))
+    var handle := _gm("a47a4f", "55402e", 0.7)
+    var metal := _gm("78848a", "3c4448", 0.35)
+    metal.metallic = 0.5
+    _gbox(L, Vector3(-28.5, 17, -30), Vector3(1.2, 35, 1.2), handle, Vector3(0, 0, -0.12))   # rake against the fence
+    _gbox(L, Vector3(-30.6, 33, -30), Vector3(1.2, 1.2, 10), metal)
+    for i in 7:
+        _gbox(L, Vector3(-30.6, 31, -34.5 + i * 1.5), Vector3(0.4, 3, 0.4), metal)
+    _gbox(L, Vector3(28.6, 14, -34), Vector3(1.2, 28, 1.2), handle, Vector3(0, 0, 0.1))      # shovel
+    _gbox(L, Vector3(27.2, 2.5, -34), Vector3(0.6, 8, 6), metal, Vector3(0, 0, 0.1))
+    _gbox(L, Vector3(30.0, 28.5, -34), Vector3(1.2, 1.2, 4), handle)
+    var paper := _gm("d8c99c", "766b4e", 0.9)
+    for sp in [[Vector3(-12, 0, 52), "FLOWERS", Color("c95b6a")], [Vector3(2, 0, 54), "HERBS", Color("5f9a5f")], [Vector3(16, 0, 52), "BEANS", Color("8a6a3e")]]:
+        var p0: Vector3 = sp[0]
+        _gbox(L, p0 + Vector3(0, 7.5, 0), Vector3(10, 15, 1), paper, Vector3(-0.08, 0, 0))
+        _gball(L, p0 + Vector3(0, 7.5, -0.7), 2.6, L.mat(sp[2], 0.8), Vector3(1, 1, 0.2))
+        _gk_word(L, sp[1], p0 + Vector3(0, 12.2, -1.35), PI, 1.6)   # in front of the leaning card
+    var coat := _gm("527da3", "2b4560", 0.8)
+    var skin := _gm("d9c6a5", "7d6f5a", 0.8)
+    var gp := Vector3(-14, 0, -54)
+    _gcone(L, gp + Vector3(0, 6, 0), 6.0, 3.0, 12.0, coat)
+    _gbox(L, gp + Vector3(0, 7, 0), Vector3(9.5, 1.0, 9.5), _gm("3a2c22", "20180f", 0.6))
+    _gball(L, gp + Vector3(0, 15, 0), 3.6, skin)
+    _gcone(L, gp + Vector3(0, 12.6, 1.4), 0.4, 3.0, 5.5, _gm("e8e2d5", "8a857a", 0.9))          # beard
+    _gball(L, gp + Vector3(0, 15.2, 3.4), 0.9, _gm("d98a7a", "7a4a40", 0.8))
+    for ex in [-1.3, 1.3]:
+        _gball(L, gp + Vector3(ex, 16.4, 3.1), 0.35, L.mat(Color("222222"), 0.5))
+    _gcone(L, gp + Vector3(0, 22.5, 0), 3.9, 0.3, 9.0, _gm("b94c3d", "632822", 0.8))
+    var tub := _gm("788a70", "39483a", 0.5)
+    var wb := Vector3(18, 0, -58)
+    _gcone(L, wb + Vector3(0, 10, 0), 4.5, 7.0, 7.0, tub)
+    _gbox(L, wb + Vector3(0, 10, 0), Vector3(22, 7, 12), tub)
+    L.cyl(wb + Vector3(-12, 4, 0), 4.0, 2.0, Color.WHITE, false, Vector3(PI / 2, 0, 0), _gm("2a2e31", "15181a", 0.7))
+    for s in [-1.0, 1.0]:
+        _grod(L, wb + Vector3(-8, 7, s * 4.5), wb + Vector3(16, 9, s * 5.5), 1.0, handle)
+        _gbox(L, wb + Vector3(8, 3, s * 4.5), Vector3(1, 6, 1), metal)
+    for f in [[Vector3(32, 20, 4), 30.0], [Vector3(-32, 16, 16), 26.0], [Vector3(0, 18, -50), 24.0], [Vector3(2, 14, 50), 20.0]]:
+        _gfill(L, f[0], Color("9fb3d6"), f[1], 1.4, 24, 44)
+
+
+# ---------------------------------------------------------- Toy Store After Hours
+static func _giant_toystore(L) -> void:
+    _gground(L, L.tex("tiles", Color("777a7c"), 22.0, 0.4))
+    var blue := _gm("477b9e", "294657", 0.6)
+    var toy_cols := ["c95a4d", "4c80b5", "d8b64d", "6d9b6b", "9b7ab8"]
+    _gbox(L, Vector3(-41.5, 20, 0), Vector3(1, 40, 60), blue)
+    for z in [-30.0, 30.0]:
+        _gbox(L, Vector3(-36, 20, z), Vector3(12, 40, 1.4), blue)
+    var k := 0
+    for y in [1.0, 11.0, 21.0, 31.0]:
+        _gbox(L, Vector3(-36, y - 0.5, 0), Vector3(12, 1, 60), blue)
+        _gbox(L, Vector3(-29.95, y - 0.5, 0), Vector3(0.2, 1.0, 60), L.mat(Color("83b3cc"), 0.5))
+        var z := -27.0
+        while z < 26.0:
+            var w := 4.0 + float(k % 3) * 1.5
+            var h := 5.0 + float((k * 7) % 4)
+            var c: String = toy_cols[k % 5]
+            _gbox(L, Vector3(-34, y + h * 0.5, z + w * 0.5), Vector3(7, h, w), _gm(c, Color(c).darkened(0.45).to_html(false), 0.7))
+            _gbox(L, Vector3(-30.45, y + h * 0.5, z + w * 0.5), Vector3(0.1, h * 0.6, w * 0.6), L.mat(Color(c).lightened(0.35), 0.3))   # box window
+            z += w + 1.0
+            k += 1
+    _gbox(L, Vector3(-29.8, 11.0 - 2.2, 12), Vector3(0.2, 2.6, 3.4), _gm("e5d7b5", "8c7d61", 0.9))
+    _gk_word(L, "$4", Vector3(-29.65, 11.0 - 2.9, 12), PI / 2, 1.6)
+    _gbox(L, Vector3(-29.8, 21.0 - 2.2, -14), Vector3(0.2, 2.6, 3.4), _gm("e5d7b5", "8c7d61", 0.9))
+    _gk_word(L, "$9", Vector3(-29.65, 21.0 - 2.9, -14), PI / 2, 1.6)
+    var fur := _gm("b9875b", "654a38", 0.95)
+    var muzzle := _gm("d9b48c", "7a6550", 0.95)
+    var bp := Vector3(38, 0, 14)
+    _gball(L, bp + Vector3(0, 10, 0), 9.0, fur, Vector3(0.9, 1.1, 1.0))
+    _gball(L, bp + Vector3(-1, 24, 0), 7.0, fur)
+    for s in [-1.0, 1.0]:
+        _gball(L, bp + Vector3(0, 30, s * 5.2), 2.6, fur)
+        _gball(L, bp + Vector3(-0.8, 30, s * 5.2), 1.4, muzzle)
+        _gball(L, bp + Vector3(-5, 12, s * 8.5), 3.4, fur, Vector3(1.6, 1, 1))        # arms
+        _gball(L, bp + Vector3(-7, 3.2, s * 5.0), 3.6, fur, Vector3(1.5, 0.9, 1))       # feet
+        _gball(L, bp + Vector3(-7.2, 26, s * 2.4), 0.8, L.mat(Color("1e1a18"), 0.3))     # eyes
+    _gball(L, bp + Vector3(-6.8, 22.5, 0), 2.8, muzzle, Vector3(0.8, 0.8, 1))
+    _gball(L, bp + Vector3(-9.1, 23.4, 0), 0.9, L.mat(Color("2a211c"), 0.3))
+    var bcols := ["c95a4d", "4c80b5", "d8b64d", "6d9b6b"]
+    var blocks := [[Vector3(-10, 0, 54), 10.0], [Vector3(1, 0, 53), 8.0], [Vector3(-6, 10, 54), 7.0], [Vector3(12, 0, 56), 6.0], [Vector3(20, 0, 52), 5.0], [Vector3(4, 8, 54), 5.0]]
+    var letters := ["A", "B", "C", "D", "E", "F"]
+    for i in blocks.size():
+        var p0: Vector3 = blocks[i][0]
+        var sz: float = blocks[i][1]
+        _gbox(L, p0 + Vector3(0, sz * 0.5, 0), Vector3(sz, sz, sz), _gm(bcols[i % 4], Color(bcols[i % 4]).darkened(0.4).to_html(false), 0.6), Vector3(0, 0.15 * i, 0))
+        _gk_word(L, letters[i], p0 + Vector3(0, sz * 0.25, -sz * 0.5 - 0.05), PI + 0.15 * i, sz * 0.55, Color("f2eee5"))
+    var red := _gm("c64d45", "71302c", 0.4)
+    var tp := Vector3(-12, 0, -56)
+    _gcone(L, tp + Vector3(0, 3.5, 0), 0.4, 6.0, 7.0, red)
+    L.cyl(tp + Vector3(0, 7.8, 0), 6.0, 1.6, Color.WHITE, false, Vector3.ZERO, red)
+    L.cyl(tp + Vector3(0, 8.7, 0), 5.2, 0.2, Color.WHITE, false, Vector3.ZERO, L.mat(Color("f18b69"), 0.4))
+    _gcone(L, tp + Vector3(0, 10.5, 0), 5.0, 1.4, 3.0, red)
+    L.cyl(tp + Vector3(0, 14, 0), 0.7, 4.0, Color.WHITE, false, Vector3.ZERO, _gm("e5d7b5", "8c7d61", 0.6))
+    _gfill(L, Vector3(-26, 26, 0), Color("ffe0b0"), 26.0, 1.6, 24, 46)        # warm display light on the shelves
+    _gfill(L, Vector3(30, 26, 14), Color("dfe8ff"), 24.0, 1.4, 24, 46)
+    _gfill(L, Vector3(4, 22, 50), Color("dfe8ff"), 22.0, 1.2, 24, 46)
+    _gfill(L, Vector3(-12, 22, -50), Color("ffe0b0"), 22.0, 1.2, 24, 46)
+
+
+# ---------------------------------------------------------- Recess Is Cancelled
+static func _giant_school(L) -> void:
+    _gground(L, L.tex("tiles", Color("85847b"), 22.0, 0.5))
+    var wood := _gm("98714f", "4e3c2d", 0.7)
+    var dp := Vector3(0, 0, 66)
+    _gbox(L, dp + Vector3(0, 24, 0), Vector3(45, 2, 25), wood)
+    _gbox(L, dp + Vector3(0, 25.05, -12.5), Vector3(45, 0.3, 0.3), L.mat(Color("c59c70"), 0.5))
+    for s in [-1.0, 1.0]:
+        _gbox(L, dp + Vector3(s * 21, 11.5, 11), Vector3(2, 23, 2), wood)
+    _gbox(L, dp + Vector3(14, 11.5, 0), Vector3(15, 23, 24), wood)                          # drawer pedestal
+    for i in 3:
+        _gbox(L, dp + Vector3(14, 4 + i * 7, -12.05), Vector3(13, 0.3, 0.2), L.mat(Color("4e3c2d"), 0.8))
+        _gbox(L, dp + Vector3(14, 7.3 + i * 7, -12.2), Vector3(4, 0.8, 0.5), L.mat(Color("c59c70"), 0.4))
+    _gbox(L, dp + Vector3(-1, 11.5, 11.5), Vector3(40, 18, 1), wood)                         # modesty panel
+    var gp := dp + Vector3(-10, 25, -2)
+    L.cyl(gp + Vector3(0, 0.6, 0), 3.0, 1.2, Color.WHITE, false, Vector3.ZERO, wood)
+    L.cyl(gp + Vector3(0, 3, 0), 0.5, 4.0, Color.WHITE, false, Vector3.ZERO, wood)
+    var ocean := _gm("477d9d", "25475d", 0.4)
+    _gball(L, gp + Vector3(0, 12, 0), 7.0, ocean)
+    var land := _gm("7fa65a", "40552d", 0.8)
+    for c in [[Vector3(-3, 14, -5.2), 3.2], [Vector3(3, 9, -5.5), 2.6], [Vector3(-5, 8, -3), 2.0], [Vector3(2, 16, -4.0), 2.0]]:
+        _gball(L, gp + c[0], c[1], land, Vector3(1.2, 1.0, 0.5))
+    _gring(L, gp + Vector3(0, 12, 0), 7.8, 0.6, wood, Vector3(PI / 2, 0, 0.3))
+    var cols := [["e1b84f", "7a6124"], ["c95b52", "6a2e2a"], ["4c83b6", "264561"], ["6c9b69", "374f35"], ["e1b84f", "7a6124"]]
+    for i in cols.size():
+        var bp := Vector3(40 + i * 1.5, 0, 16 + i * 4.5)
+        var rot := Vector3(0, 0, 0.18 - i * 0.07)
+        var m := _gm(cols[i][0], cols[i][1], 0.6)
+        _gbox(L, bp + Vector3(0, 18, 0), Vector3(4, 36, 4), m, rot)
+        var tip := bp + Vector3(-sin(rot.z) * 38, cos(rot.z) * 38, 0)
+        _gcone(L, tip, 2.0, 0.3, 4.0, _gm("d9b98a", "6d5c45", 0.8) if i % 2 == 0 else m, rot)
+    var purple := _gm("80679c", "433852", 0.85)
+    var bk := Vector3(-44, 0, 20)
+    _gbox(L, bk + Vector3(0, 11, 0), Vector3(12, 22, 20), purple)
+    L.cyl(bk + Vector3(0, 22, 0), 6.0, 20.0, Color.WHITE, false, Vector3(PI / 2, 0, 0), purple)
+    _gbox(L, bk + Vector3(6.5, 8, 0), Vector3(3, 10, 14), _gm("b49cc9", "5d4f6a", 0.85))      # front pocket
+    _gbox(L, bk + Vector3(8.05, 13.2, 0), Vector3(0.3, 0.5, 12), L.mat(Color("2a2430"), 0.5)) # zip
+    for dz in [-5.0, 5.0]:
+        _gbox(L, bk + Vector3(-6.4, 12, dz), Vector3(1, 18, 2.4), _gm("433852", "2a2333", 0.8))
+    var lk := _gm("617c91", "354a5c", 0.45)
+    lk.metallic = 0.3
+    for i in 6:
+        var z := -44.0 + i * 8.4
+        _gbox(L, Vector3(-38, 19, z), Vector3(8, 38, 8.0), lk)
+        for v in 4:
+            _gbox(L, Vector3(-33.95, 32 - v * 1.4, z), Vector3(0.1, 0.4, 4.5), L.mat(Color("354a5c"), 0.6))
+        _gbox(L, Vector3(-33.8, 19, z + 2.8), Vector3(0.4, 3.0, 0.8), L.mat(Color("a0b7c6"), 0.3, 0.5))
+    var hp := Vector3(0, 0, -66)
+    L.cyl(hp + Vector3(0, 20, -4), 1.5, 40.0, Color.WHITE, false, Vector3.ZERO, _gm("8a9399", "444b50", 0.4))
+    _gbox(L, hp + Vector3(0, 38, -2), Vector3(26, 16, 1), _gm("e8e6df", "7c7a74", 0.4))
+    for b in [[Vector3(0, 34.5, -1.4), Vector3(9, 0.6, 0.2)], [Vector3(0, 40.5, -1.4), Vector3(9, 0.6, 0.2)], [Vector3(-4.2, 37.5, -1.4), Vector3(0.6, 6.6, 0.2)], [Vector3(4.2, 37.5, -1.4), Vector3(0.6, 6.6, 0.2)]]:
+        _gbox(L, hp + b[0], b[1], L.mat(Color("b84c3d"), 0.5))
+    _gring(L, hp + Vector3(0, 33, 3.6), 4.6, 0.6, _gm("b84c3d", "5e2620", 0.4))
+    var orange := _gm("c87b43", "75452e", 0.8)
+    _gball(L, Vector3(20, 6, -58), 6.0, orange)
+    _gring(L, Vector3(20, 6, -58), 6.0, 0.25, L.mat(Color("3a2418"), 0.8), Vector3(PI / 2, 0, 0))
+    _gring(L, Vector3(20, 6, -58), 6.0, 0.25, L.mat(Color("3a2418"), 0.8), Vector3(0, 0, PI / 2))
+    for f in [[Vector3(-28, 28, -22), Color("dfe8ff"), 26.0, 1.4], [Vector3(30, 24, 26), Color("dfe8ff"), 24.0, 1.3], [Vector3(-30, 22, 20), Color("dfe8ff"), 24.0, 1.2],
+            [Vector3(0, 30, 52), Color("dfe8ff"), 22.0, 1.3], [Vector3(6, 30, -54), Color("ffe6c8"), 24.0, 1.5]]:
+        _gfill(L, f[0], f[1], f[2], f[3], 30, 48)
+
+
+## A beach-umbrella canopy: 8 panels alternating two colours, a cone of
+## triangles (drawn from both sides), with a faint glow of the shadow colour.
+static func _gumbrella(L, base: Vector3, r: float, h: float, a: Color, b: Color, shadow: Color) -> void:
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var top := Vector3(0, h, 0)
+    for i in 16:
+        var a0 := i * TAU / 16.0
+        var a1 := (i + 1) * TAU / 16.0
+        st.set_color(a if (i / 2) % 2 == 0 else b)
+        st.add_vertex(top)
+        st.add_vertex(Vector3(cos(a1) * r, 0, sin(a1) * r))
+        st.add_vertex(Vector3(cos(a0) * r, 0, sin(a0) * r))
+    st.generate_normals()
+    var mi := MeshInstance3D.new()
+    mi.mesh = st.commit()
+    var m := StandardMaterial3D.new()
+    m.vertex_color_use_as_albedo = true
+    m.cull_mode = BaseMaterial3D.CULL_DISABLED
+    m.roughness = 0.8
+    m.emission_enabled = true
+    m.emission = shadow
+    m.emission_energy_multiplier = 0.6
+    mi.material_override = m
+    mi.position = base
+    L.add_child(mi)
+
+
+# ---------------------------------------------------------- Sandcastle Beach at Dusk
+static func _giant_beach(L) -> void:
+    _gground(L, L.tex("beach_sand", Color("c7a36f"), 24.0))
+    var coral := _gm("d96f59", "784b48", 0.8)
+    var cream := _gm("e7d7b8", "7f7563", 0.8)
+    var up := Vector3(40, 0, 10)
+    L.cyl(up + Vector3(0, 16, 0), 0.8, 32.0, Color.WHITE, false, Vector3.ZERO, cream)
+    _gumbrella(L, up + Vector3(0, 27, 0), 17.5, 6.5, Color("d96f59"), Color("e7d7b8"), Color("784b48"))
+    _gball(L, up + Vector3(0, 33.6, 0), 1.0, cream)
+    var teal := _gm("4d9b9c", "285e64", 0.95)
+    _gbox(L, Vector3(-42, 0.5, 0), Vector3(18, 1, 35), teal)
+    for dz in [-11.0, 0.0, 11.0]:
+        _gbox(L, Vector3(-42, 1.02, dz), Vector3(18, 0.06, 3), _gm("8cc6b8", "4a6a62", 0.95))
+    var frame := _gm("313943", "171f28", 0.4)
+    for dz in [-4.2, 4.2]:
+        L.cyl(Vector3(-40, 1.3, -8 + dz), 3.6, 0.5, Color.WHITE, false, Vector3.ZERO, frame)
+        L.cyl(Vector3(-40, 1.6, -8 + dz), 3.1, 0.2, Color.WHITE, false, Vector3.ZERO, L.mat(Color("4e6a8a"), 0.05, 0.4))
+    _gbox(L, Vector3(-40, 1.4, -8), Vector3(1.0, 0.6, 2.0), frame)
+    for dz in [-7.6, 7.6]:
+        _gbox(L, Vector3(-46, 1.4, -8 + dz), Vector3(12, 0.6, 0.6), frame)
+    var yellow := _gm("d9b54c", "80652d", 0.5)
+    var bk := Vector3(12, 0, 56)
+    _gcone(L, bk + Vector3(0, 9, 0), 5.6, 7.0, 18.0, yellow)
+    L.cyl(bk + Vector3(0, 17.6, 0), 7.3, 0.8, Color.WHITE, false, Vector3.ZERO, yellow)
+    L.cyl(bk + Vector3(0, 17.0, 0), 6.6, 0.2, Color.WHITE, false, Vector3.ZERO, L.tex("beach_sand", Color("c7a36f"), 4.0))
+    _gring(L, bk + Vector3(0, 18, 0), 7.0, 0.5, yellow, Vector3(PI / 2, 0, 0))
+    var spade := _gm("4e86b5", "28455d", 0.5)
+    _gbox(L, Vector3(22, 6, 58), Vector3(1.2, 14, 1.2), spade, Vector3(0, 0, -0.25))
+    _gbox(L, Vector3(23.6, 0.5, 58), Vector3(0.5, 6, 5), spade, Vector3(0, 0, -0.25))
+    var red := _gm("c65b50", "70372f", 0.8)
+    for ff in [[Vector3(-14, 0.5, 56), 0.3], [Vector3(-4, 0.5, 60), -0.2]]:
+        _gball(L, ff[0], 1.0, red, Vector3(3.5, 0.5, 7.5))
+        var p0: Vector3 = ff[0]
+        _grod(L, p0 + Vector3(0, 0.6, -3), p0 + Vector3(-2.6, 1.6, 1.5), 0.6, L.mat(Color("e78b70"), 0.6))
+        _grod(L, p0 + Vector3(0, 0.6, -3), p0 + Vector3(2.6, 1.6, 1.5), 0.6, L.mat(Color("e78b70"), 0.6))
+    var crab := _gm("c85b4c", "73352e", 0.6)
+    var cp := Vector3(36, 0, -30)
+    _gball(L, cp + Vector3(0, 5, 0), 6.5, crab, Vector3(1.0, 0.55, 1.35))
+    for s in [-1.0, 1.0]:
+        _grod(L, cp + Vector3(-4, 7, s * 2), cp + Vector3(-5, 11, s * 2.4), 0.6, crab)
+        _gball(L, cp + Vector3(-5, 11.4, s * 2.4), 1.0, L.mat(Color("1e1a18"), 0.3))
+        _grod(L, cp + Vector3(-5, 5, s * 5), cp + Vector3(-10, 6, s * 8), 1.4, crab)
+        _gball(L, cp + Vector3(-12, 6.5, s * 8.5), 3.0, crab, Vector3(1.5, 0.9, 1.0))
+        for j in 3:
+            _grod(L, cp + Vector3(-1 + j * 3, 4, s * 7), cp + Vector3(1 + j * 3, 0.2, s * 12), 0.8, crab)
+    _gball(L, cp + Vector3(-4.5, 6.5, 0), 1.0, L.mat(Color("ed9274"), 0.5), Vector3(1, 0.3, 3))   # friendly smile line
+    for f in [[Vector3(36, 26, 10), Color("ffb98a")], [Vector3(-36, 18, 0), Color("b7a6e6")], [Vector3(8, 18, 50), Color("ffc89a")], [Vector3(32, 16, -28), Color("b7a6e6")]]:
+        _gfill(L, f[0], f[1], 26.0, 1.5, 26, 46)
+
+
+# ---------------------------------------------------------- Bath Time
+static func _giant_bathtime(L) -> void:
+    _gground(L, L.tex("tiles", Color("a0aaa9"), 18.0, 0.3))
+    _gbox(L, Vector3(0, -0.12, -230), Vector3(600, 0.1, 420), L.tex("carpet", Color("81768d"), 10.0))   # bedroom carpet to the north
+    var porc := _gm("e4e7e4", "87969a", 0.25)
+    var tp := Vector3(46, 0, 24)
+    _gbox(L, tp + Vector3(0, 8, 0), Vector3(22, 16, 45), porc)
+    _gbox(L, tp + Vector3(0, 16.6, 0), Vector3(23, 1.2, 46), _gm("ffffff", "9aa6a8", 0.2))
+    var bub := _gm("d5eaf1", "86a2ac", 0.3)
+    for i in 14:
+        var a := float(i) * 1.7
+        _gball(L, tp + Vector3(sin(a) * 6.5, 17.5 + float(i % 3) * 0.8, -18 + i * 2.8), 2.6 + float(i % 3) * 0.7, bub)
+    L.cyl(tp + Vector3(0, 21, -22), 1.0, 6.0, Color.WHITE, false, Vector3.ZERO, _gm("c9ccd1", "5b6066", 0.2))
+    _gbox(L, tp + Vector3(0, 23.5, -20), Vector3(1.6, 1.6, 6), _gm("c9ccd1", "5b6066", 0.2))
+    var duck := _gm("e5bf42", "896b2b", 0.4)
+    var dk := tp + Vector3(0, 20.5, 6)
+    _gball(L, dk, 6.0, duck, Vector3(1.0, 0.75, 1.25))
+    _gball(L, dk + Vector3(-1, 6, -3), 4.0, duck)
+    _gbox(L, dk + Vector3(-5.2, 5.4, -3), Vector3(3.0, 1.4, 2.4), _gm("e0893a", "7a4a20", 0.5))
+    for s in [-1.0, 1.0]:
+        _gball(L, dk + Vector3(-3.6, 7.4, -3 + s * 1.8), 0.6, L.mat(Color("1e1a18"), 0.3))
+    _gball(L, dk + Vector3(0, 2, 5.5), 3.0, duck, Vector3(1, 0.8, 1.2))          # tail
+    var cup := _gm("72a9a7", "3d666a", 0.4)
+    L.cyl(Vector3(-40, 6, 30), 4.0, 12.0, Color.WHITE, false, Vector3.ZERO, cup)
+    for b in [[Color("c95b52"), 0.25], [Color("4c83b6"), -0.2], [Color("d8b64d"), 0.05]]:
+        var rot := Vector3(b[1], 0, b[1] * 0.6)
+        _gbox(L, Vector3(-40 + b[1] * 6, 16, 30 + b[1] * 4), Vector3(1.2, 18, 1.2), _gm(b[0].to_html(false), b[0].darkened(0.45).to_html(false), 0.5), rot)
+        _gbox(L, Vector3(-40 + b[1] * 10, 24.5, 30 + b[1] * 8), Vector3(1.6, 3.0, 1.8), L.mat(Color("f2f4f5"), 0.8), rot)
+    var lav := _gm("9b8ab2", "51445f", 0.95)
+    for sp in [Vector3(-12, 0, 58), Vector3(2, 0, 60)]:
+        _gball(L, sp + Vector3(0, 1.2, 0), 1.0, lav, Vector3(4.0, 1.2, 8.0))
+        _gball(L, sp + Vector3(0, 2.6, -3.0), 1.0, lav, Vector3(3.6, 2.2, 4.2))
+        _gball(L, sp + Vector3(0, 4.6, -4.0), 1.4, _gm("cbbce0", "6a6178", 0.95))
+    var tim := _gm("98714f", "4f3c2f", 0.7)
+    var blanket := _gm("6485a8", "354b69", 0.95)
+    var bd := Vector3(0, 0, -70)
+    _gbox(L, bd + Vector3(0, 8, 0), Vector3(55, 8, 35), tim)
+    for c in [Vector3(-26, 2, -16), Vector3(26, 2, -16), Vector3(-26, 2, 16), Vector3(26, 2, 16)]:
+        _gbox(L, bd + c, Vector3(3, 4, 3), tim)
+    _gbox(L, bd + Vector3(0, 15, -18), Vector3(57, 30, 2), tim)
+    _gbox(L, bd + Vector3(0, 13.5, 4), Vector3(56, 3, 28), blanket)
+    _gbox(L, bd + Vector3(0, 15.05, 4), Vector3(56, 0.2, 2), _gm("a4bdd7", "556a82", 0.9))
+    _gball(L, bd + Vector3(0, 15, -12), 1.0, _gm("e8e4dc", "8a857a", 0.9), Vector3(18, 3, 5))
+    var lp := Vector3(-36, 0, -58)
+    _gbox(L, lp + Vector3(0, 6, 0), Vector3(12, 12, 12), tim)
+    L.cyl(lp + Vector3(0, 15, 0), 0.6, 6.0, Color.WHITE, false, Vector3.ZERO, tim)
+    _gcone(L, lp + Vector3(0, 20, 0), 4.0, 2.4, 6.0, _gm("d4b78a", "766044", 0.9))
+    L.sphere(lp + Vector3(0, 18.5, 0), 1.0, Color.WHITE, Vector3.ONE, L.glow_mat(Color("ffd9a0"), 3.0))
+    _gfill(L, lp + Vector3(2, 18, 2), Color("ffd9a0"), 28.0, 2.2, 30, 48)
+    _gfill(L, Vector3(40, 30, 24), Color("e6f0ff"), 28.0, 1.6, 30, 48)
+    _gfill(L, Vector3(-36, 20, 30), Color("e6f0ff"), 24.0, 1.3, 30, 48)
+    _gfill(L, Vector3(-4, 16, 54), Color("e6f0ff"), 20.0, 1.2, 30, 48)
+
+
+# ---------------------------------------------------------- The Garage
+static func _giant_garage(L) -> void:
+    _gground(L, L.tex("concrete", Color("777b78"), 30.0))
+    var body := _gm("6d8490", "344650", 0.35)
+    var tyre := _gm("252b30", "121518", 0.8)
+    var cp := Vector3(-72, 0, 0)                        # the car's nose points east, at x -38
+    _gbox(L, cp + Vector3(0, 19, 0), Vector3(64, 22, 58), body)
+    _gbox(L, cp + Vector3(-6, 36, 0), Vector3(36, 14, 52), body)
+    _gbox(L, cp + Vector3(12.3, 36, 0), Vector3(0.4, 11, 46), L.mat(Color("23303a"), 0.1, 0.3))    # windscreen
+    _gbox(L, Vector3(-39, 12, 0), Vector3(10, 12, 60), _gm("a9c0c8", "4c5a60", 0.3))                # bumper
+    for s in [-1.0, 1.0]:
+        L.sphere(Vector3(-40.1, 22, s * 20), 3.0, Color.WHITE, Vector3(0.3, 0.8, 1.4), L.glow_mat(Color("e8e2cf"), 0.6))
+        for wx in [-16.0, 20.0]:
+            L.cyl(cp + Vector3(wx, 10, s * 29.5), 10.0, 6.0, Color.WHITE, false, Vector3(PI / 2, 0, 0), tyre)
+            L.cyl(cp + Vector3(wx, 10, s * 32.6), 5.0, 0.4, Color.WHITE, false, Vector3(PI / 2, 0, 0), _gm("596067", "2a2e31", 0.4))
+    var shelf := _gm("8b755a", "4b3f32", 0.8)
+    _gbox(L, Vector3(47.5, 19, 0), Vector3(1, 38, 45), shelf)
+    var can_cols := ["b85a4e", "4c7fae", "d0ae4a", "6a956a", "e2ddd1"]
+    var k := 0
+    for y in [1.0, 11.0, 21.0, 31.0]:
+        _gbox(L, Vector3(42, y - 0.5, 0), Vector3(12, 1, 45), shelf)
+        var z := -20.0
+        while z < 20.0:
+            var c: String = can_cols[k % 5]
+            L.cyl(Vector3(40, y + 3, z), 2.6, 6.0, Color.WHITE, false, Vector3.ZERO, _gm(c, Color(c).darkened(0.45).to_html(false), 0.4))
+            L.cyl(Vector3(40, y + 6.05, z), 2.4, 0.1, Color.WHITE, false, Vector3.ZERO, L.mat(Color("8e969a"), 0.3, 0.6))
+            z += 6.0
+            k += 1
+    var frame := _gm("477d8c", "294650", 0.4)
+    var bp := Vector3(0, 0, 60)
+    for wx in [-12.0, 12.0]:
+        _gring(L, bp + Vector3(wx, 9, 0), 8.5, 1.4, tyre, Vector3(PI / 2, 0, 0))
+        _gring(L, bp + Vector3(wx, 9, 0), 7.4, 0.3, _gm("c5d0d2", "5e6668", 0.3), Vector3(PI / 2, 0, 0))
+    _grod(L, bp + Vector3(-12, 9, 0), bp + Vector3(-2, 9, 0), 1.0, frame)
+    _grod(L, bp + Vector3(-2, 9, 0), bp + Vector3(-5, 21, 0), 1.0, frame)
+    _grod(L, bp + Vector3(-5, 21, 0), bp + Vector3(8, 21, 0), 1.0, frame)
+    _grod(L, bp + Vector3(8, 21, 0), bp + Vector3(-2, 9, 0), 1.0, frame)
+    _grod(L, bp + Vector3(8, 21, 0), bp + Vector3(12, 9, 0), 1.0, frame)
+    _grod(L, bp + Vector3(-12, 9, 0), bp + Vector3(-5, 21, 0), 1.0, frame)
+    _grod(L, bp + Vector3(9, 21, 0), bp + Vector3(9, 26, 0), 1.0, frame)
+    _gbox(L, bp + Vector3(9, 26, 0), Vector3(1, 1, 10), _gm("2b2f33", "15181a", 0.6))           # handlebar
+    _gbox(L, bp + Vector3(-5, 22.5, 0), Vector3(6, 1.2, 3), _gm("2b2f33", "15181a", 0.6))       # saddle
+    var green := _gm("66865a", "34442f", 0.5)
+    var mp := Vector3(-16, 0, -58)
+    _gbox(L, mp + Vector3(0, 6, 0), Vector3(30, 8, 25), green)
+    L.cyl(mp + Vector3(0, 13, 2), 5.0, 6.0, Color.WHITE, false, Vector3.ZERO, _gm("3a3f44", "1d2023", 0.4))
+    for wx in [-12.0, 12.0]:
+        for wz in [-11.0, 11.0]:
+            L.cyl(mp + Vector3(wx, 3.5, wz), 3.5, 2.0, Color.WHITE, false, Vector3(PI / 2, 0, 0), tyre)
+    for s in [-1.0, 1.0]:
+        _grod(L, mp + Vector3(s * 8, 9, -11), mp + Vector3(s * 8, 26, -26), 1.0, _gm("2b2f33", "15181a", 0.5))
+    _gbox(L, mp + Vector3(0, 26, -26), Vector3(17, 1, 1), _gm("2b2f33", "15181a", 0.5))
+    _gk_place(L, func(): _bm_toolbox(L, Vector3.ZERO), Vector3(24, 0, -58), -PI / 2)
+    _gfill(L, Vector3(24, 12, -45), Color("ffe6c8"), 14.0, 5.5, 32, 46)        # keeps the reused red toolbox readable
+    var peg := _gm("6f5d47", "3a3027", 0.9)
+    _gbox(L, Vector3(44, 20, 36), Vector3(1, 24, 22), peg)
+    var steel := _gm("85949a", "414c52", 0.3)
+    steel.metallic = 0.5
+    _gbox(L, Vector3(43, 24, 30), Vector3(0.6, 12, 1.4), steel)                        # spanner
+    _gring(L, Vector3(43, 31, 30), 2.0, 0.8, steel, Vector3(0, 0, PI / 2))
+    _gbox(L, Vector3(43, 20, 37), Vector3(0.8, 14, 1.4), _gm("a4774c", "55402e", 0.7))  # hammer
+    _gbox(L, Vector3(43, 27.5, 37), Vector3(1.6, 2.4, 6), steel)
+    _gring(L, Vector3(43, 21, 44), 3.2, 1.2, _gm("5f8a55", "2f4529", 0.6), Vector3(0, 0, PI / 2))   # hose
+    _gfill(L, Vector3(36, 24, 34), Color("ffd59a"), 22.0, 2.0, 32, 46)        # warm workbench light
+    for f in [[Vector3(-38, 30, 0), 28.0], [Vector3(36, 24, 0), 22.0], [Vector3(0, 26, 52), 24.0], [Vector3(2, 22, -52), 24.0]]:
+        _gfill(L, f[0], Color("e6ecf2"), f[1], 1.4, 32, 46)
+
+
+# ---------------------------------------------------------- Pillow Fort
+static func _giant_pillowfort(L) -> void:
+    _gground(L, L.tex("carpet", Color("776b62"), 14.0))
+    _bm_sofa(L, Vector3(0, 0, 62))
+    var fab := _gm("6b7c8d", "35404e", 0.95)
+    var ap := Vector3(-50, 0, 16)
+    _gbox(L, ap + Vector3(0, 6, 0), Vector3(28, 12, 30), fab)
+    _gbox(L, ap + Vector3(2, 14, 0), Vector3(22, 4, 22), _gm("a4b4c1", "4e5a64", 0.95))
+    _gbox(L, ap + Vector3(-11, 20, 0), Vector3(6, 28, 30), fab)
+    for s in [-1.0, 1.0]:
+        _gbox(L, ap + Vector3(0, 11, s * 13), Vector3(28, 18, 5), fab)
+    var wood := _gm("79583f", "3f3028", 0.7)
+    var tv := Vector3(0, 0, -62)
+    _gbox(L, tv + Vector3(0, 9, 0), Vector3(40, 18, 12), wood)
+    for dx in [-10.0, 10.0]:
+        _gbox(L, tv + Vector3(dx, 9, 6.05), Vector3(0.2, 15, 0.2), L.mat(Color("3f3028"), 0.8))
+    _gbox(L, tv + Vector3(0, 30, 0), Vector3(36, 22, 2), _gm("23272c", "121417", 0.4))
+    _gbox(L, tv + Vector3(0, 30, 1.05), Vector3(33, 19, 0.1), L.glow_mat(Color("1c2934"), 0.6))
+    _gbox(L, tv + Vector3(6, 34, 1.15), Vector3(12, 4, 0.05), L.glow_mat(Color("2c4a66"), 0.5), Vector3(0, 0, 0.4))   # faint reflection
+    _gbox(L, tv + Vector3(0, 19.5, 0), Vector3(8, 1, 6), _gm("23272c", "121417", 0.4))
+    var brick := _gm("895b49", "49372f", 0.9)
+    var fp := Vector3(46, 0, -20)
+    _gbox(L, fp + Vector3(0, 22.5, 0), Vector3(15, 45, 35), brick)
+    _gbox(L, fp + Vector3(-7.4, 8, 0), Vector3(1, 14, 18), _gm("1c1512", "0e0a08", 0.9))       # firebox
+    _gbox(L, fp + Vector3(-8.5, 17, 0), Vector3(3, 1.6, 38), _gm("b78567", "5d4334", 0.7))     # mantel
+    for i in 6:
+        _gbox(L, fp + Vector3(-7.6, 28 + (i % 3) * 5, -12 + i * 4.5), Vector3(0.2, 0.3, 4.0), L.mat(Color("49372f"), 0.9))
+    _gbox(L, fp + Vector3(-6, 2, 0), Vector3(3, 2, 12), _gm("5a3a22", "2d1d11", 0.8), Vector3(0, 0.2, 0))   # logs
+    for i in 3:
+        L.sphere(fp + Vector3(-6.5, 5 + i * 1.6, -3 + i * 3), 1.8 - i * 0.3, Color.WHITE, Vector3(1, 1.6, 1), L.glow_mat(Color("f2a65a"), 3.0))
+    _gfill(L, fp + Vector3(-9, 8, 0), Color("f2a65a"), 26.0, 2.6, 32, 48)
+    var rug := _gm("81515a", "49313e", 0.95)
+    var rp := Vector3(-48, 0.4, -26)
+    _gbox(L, rp, Vector3(30, 0.8, 45), rug)
+    for d in [Vector3(0, 0.42, -18), Vector3(0, 0.42, 18), Vector3(0, 0.42, 0)]:
+        _gbox(L, rp + d, Vector3(26, 0.05, 2), _gm("b67c7d", "5b3e3e", 0.95))
+    _gbox(L, rp + Vector3(0, 0.42, 0), Vector3(2, 0.05, 41), _gm("b67c7d", "5b3e3e", 0.95))
+    var rem := _gm("343a40", "1b2026", 0.5)
+    _gbox(L, Vector3(-44, 2.3, -14), Vector3(6, 3, 18), rem, Vector3(0, 0.4, 0))
+    for i in 4:
+        L.sphere(Vector3(-44 - sin(0.4) * (i * 3 - 5), 3.8, -14 - cos(0.4) * (i * 3 - 5)), 0.7, Color.WHITE, Vector3(1, 0.4, 1), L.mat(Color("707b83") if i else Color("c95b52"), 0.5))
+    for f in [[Vector3(0, 30, 52), Color("ffd2a6"), 30.0, 2.4], [Vector3(-40, 22, 16), Color("ffe0bf"), 22.0, 1.4], [Vector3(0, 30, -50), Color("ffe0bf"), 24.0, 1.4], [Vector3(-40, 16, -26), Color("ffe0bf"), 20.0, 1.2]]:
+        _gfill(L, f[0], f[1], f[2], f[3], 32, 48)
+
+
+# ---------------------------------------------------------- Model Railway
+static func _giant_railway(L) -> void:
+    # The layout is on a big table: its timber edge, and the hobby room's floor 20 m below.
+    _gground(L, L.tex("wood_floor", Color("80664c"), 20.0), -20.6)
+    var tim := _gm("8e6847", "4a3528", 0.75)
+    _gbox(L, Vector3(0, -4.02, 10), Vector3(120, 8, 150), tim)
+    _gbox(L, Vector3(0, 0.0, 85.1), Vector3(120.2, 0.3, 0.3), L.mat(Color("c09263"), 0.5))
+    for x in [-56.0, 56.0]:
+        for z in [-60.0, 80.0]:
+            _gbox(L, Vector3(x, -14, z), Vector3(6, 12, 6), tim)
+    var shade := _gm("66818a", "34454c", 0.5)
+    var lp := Vector3(46, 0, 10)
+    _gbox(L, lp + Vector3(0, 1, 0), Vector3(6, 2, 6), shade)
+    _grod(L, lp + Vector3(0, 2, 0), lp + Vector3(-2, 16, -4), 1.0, _gm("87969b", "414c52", 0.3))
+    _grod(L, lp + Vector3(-2, 16, -4), lp + Vector3(-8, 24, -2), 1.0, _gm("87969b", "414c52", 0.3))
+    _gcone(L, lp + Vector3(-9, 22, -2), 5.0, 2.0, 6.0, shade)
+    L.sphere(lp + Vector3(-9, 19.5, -2), 1.2, Color.WHITE, Vector3.ONE, L.glow_mat(Color("ffd59a"), 3.0))
+    _gfill(L, lp + Vector3(-9, 19, -2), Color("ffd59a"), 30.0, 2.6, 24, 46)
+    var mug := _gm("b66b50", "613c34", 0.4)
+    L.cyl(Vector3(-44, 6, 20), 5.0, 12.0, Color.WHITE, false, Vector3.ZERO, mug)
+    L.cyl(Vector3(-44, 11.6, 20), 4.4, 0.4, Color.WHITE, false, Vector3.ZERO, L.mat(Color("3a2418"), 0.2))
+    _gring(L, Vector3(-44, 6.5, 26), 3.2, 1.2, mug, Vector3(PI / 2, 0, 0))
+    var steel := _gm("87969b", "414c52", 0.3)
+    steel.metallic = 0.5
+    var pots := [["b85a4e", Vector3(38, 0, -24)], ["4c7fae", Vector3(42, 0, -18)], ["6a956a", Vector3(36, 0, -14)], ["d0ae4a", Vector3(44, 0, -28)]]
+    for pt in pots:
+        L.cyl(pt[1] + Vector3(0, 2, 0), 2.5, 4.0, Color.WHITE, false, Vector3.ZERO, _gm(pt[0], Color(pt[0]).darkened(0.45).to_html(false), 0.5))
+        L.cyl(pt[1] + Vector3(0, 4.1, 0), 2.6, 0.3, Color.WHITE, false, Vector3.ZERO, steel)
+    _gbox(L, Vector3(34, 0.5, -34), Vector3(1.0, 1.0, 8.0), steel, Vector3(0, 0.3, 0))      # tweezers
+    _gbox(L, Vector3(35, 0.5, -34), Vector3(1.0, 1.0, 8.0), steel, Vector3(0, 0.45, 0))
+    _gbox(L, Vector3(40, 0.6, -38), Vector3(1.2, 1.2, 8), _gm("a4774c", "55402e", 0.6), Vector3(0, -0.5, 0))   # brush
+    _gbox(L, Vector3(37.6, 0.6, -41.6), Vector3(1.4, 1.4, 2.0), _gm("2b2f33", "15181a", 0.7), Vector3(0, -0.5, 0))
+    var leaf := _gm("527453", "2c4637", 0.85)
+    var trunk := _gm("79553b", "3e2c1f", 0.8)
+    for t in [[Vector3(-16, 0, 52), 26.0], [Vector3(-2, 0, 54), 18.0], [Vector3(14, 0, 52), 32.0], [Vector3(-12, 0, -52), 22.0], [Vector3(10, 0, -54), 15.0], [Vector3(-30, 0, -40), 28.0], [Vector3(30, 0, 40), 20.0]]:
+        var h: float = t[1]
+        L.cyl(t[0] + Vector3(0, h * 0.12, 0), h * 0.04, h * 0.24, Color.WHITE, false, Vector3.ZERO, trunk)
+        _gcone(L, t[0] + Vector3(0, h * 0.5, 0), h * 0.3, 0.2, h * 0.6, leaf)
+        _gcone(L, t[0] + Vector3(0, h * 0.75, 0), h * 0.22, 0.2, h * 0.45, leaf)
+    _gfill(L, Vector3(-36, 18, 20), Color("c9d6ea"), 22.0, 1.2, 24, 46)
+    _gfill(L, Vector3(0, 20, 50), Color("c9d6ea"), 22.0, 1.2, 24, 46)
+    _gfill(L, Vector3(0, 20, -50), Color("c9d6ea"), 22.0, 1.2, 24, 46)
+
+
+# ---------------------------------------------------------- Birthday Party
+static func _giant_party(L) -> void:
+    _gground(L, L.tex("wood_floor", Color("8b7964"), 18.0))
+    var sponge := _gm("d9b779", "84643d", 0.8)
+    var icing := _gm("d986a0", "78475d", 0.6)
+    var ck := Vector3(0, 0, 62)
+    _gprism(L, ck + Vector3(0, 11, 0), 20.0, 22.0, sponge, PI / 6.0)
+    _gprism(L, ck + Vector3(0, 11, 0), 20.3, 2.0, icing, PI / 6.0)
+    _gprism(L, ck + Vector3(0, 23.5, 0), 20.4, 3.0, icing, PI / 6.0)
+    _gball(L, ck + Vector3(0, 26.5, 2), 2.4, _gm("c0453a", "5e211c", 0.4))
+    L.cyl(ck + Vector3(-6, 30, 4), 0.7, 8.0, Color.WHITE, false, Vector3.ZERO, _gm("75a9c0", "3d657c", 0.6))
+    L.sphere(ck + Vector3(-6, 35, 4), 0.9, Color.WHITE, Vector3(1, 1.8, 1), L.glow_mat(Color("ffd59a"), 3.0))
+    var plate := _gm("e5ddc9", "7f786a", 0.4)
+    var cupm := _gm("75a9c0", "3d657c", 0.4)
+    for i in 3:
+        L.cyl(Vector3(42, 0.6 + i * 1.2, 8), 9.0, 1.0, Color.WHITE, false, Vector3.ZERO, plate)
+    for c in [Vector3(40, 0, -6), Vector3(48, 0, 22)]:
+        _gcone(L, c + Vector3(0, 5, 0), 3.5, 5.0, 10.0, cupm)
+        L.cyl(c + Vector3(0, 10.05, 0), 4.6, 0.1, Color.WHITE, false, Vector3.ZERO, L.mat(Color("b7dce5"), 0.3))
+    var gifts := [[Vector3(-44, 0, 0), 30.0, "4f7fae", "bd5b50"], [Vector3(-42, 30, -1), 20.0, "648d69", "d8b64d"], [Vector3(-40, 0, -28), 22.0, "bd5b50", "d8b64d"]]
+    for g in gifts:
+        var p0: Vector3 = g[0]
+        var sz: float = g[1]
+        _gbox(L, p0 + Vector3(0, sz * 0.5, 0), Vector3(sz, sz, sz), _gm(g[2], Color(g[2]).darkened(0.45).to_html(false), 0.7))
+        var rib := _gm(g[3], Color(g[3]).darkened(0.45).to_html(false), 0.5)
+        _gbox(L, p0 + Vector3(0, sz * 0.5, 0), Vector3(sz + 0.2, sz + 0.2, 3), rib)
+        _gbox(L, p0 + Vector3(0, sz * 0.5, 0), Vector3(3, sz + 0.2, sz + 0.2), rib)
+        for s in [-1.0, 1.0]:
+            _gball(L, p0 + Vector3(s * 2.5, sz + 1.5, 0), 2.2, rib, Vector3(1.3, 0.8, 0.6))
+    var hats := [[Vector3(-10, 0, -52), "d8b64d", "c0453a"], [Vector3(8, 0, -54), "c0453a", "d8b64d"], [Vector3(22, 0, -50), "4f7fae", "e5ddc9"]]
+    for h in hats:
+        _gcone(L, h[0] + Vector3(0, 10, 0), 7.5, 0.4, 20.0, _gm(h[1], Color(h[1]).darkened(0.45).to_html(false), 0.7))
+        _gcone(L, h[0] + Vector3(0, 6, 0), 5.85, 5.2, 1.6, _gm(h[2], Color(h[2]).darkened(0.45).to_html(false), 0.7))
+        _gball(L, h[0] + Vector3(0, 20.5, 0), 1.8, _gm(h[2], Color(h[2]).darkened(0.45).to_html(false), 0.9))
+    var swags := [[Vector3(-42, 50, -2), Vector3(-6, 34, 60), "4c9b99"], [Vector3(-42, 48, -2), Vector3(42, 12, 8), "d46f5c"], [Vector3(-40, 22, -28), Vector3(22, 20, -50), "d9b64c"]]
+    for sw in swags:
+        var a: Vector3 = sw[0]
+        var b: Vector3 = sw[1]
+        var sm := _gm(sw[2], Color(sw[2]).darkened(0.45).to_html(false), 0.8)
+        var prev := a
+        for i in range(1, 15):
+            var t := i / 14.0
+            var p := a.lerp(b, t) + Vector3(0, -sin(t * PI) * 8.0, 0)
+            _grod(L, prev, p, 2.0, sm)
+            prev = p
+    var bal := [[Vector3(-34, 48, -50), 8.0, "b9554c"], [Vector3(34, 54, -44), 7.0, "4f7fae"], [Vector3(44, 50, 40), 9.0, "d8b64d"], [Vector3(-40, 56, 42), 7.5, "648d69"]]
+    for bl in bal:
+        _gball(L, bl[0], bl[1], _gm(bl[2], Color(bl[2]).darkened(0.45).to_html(false), 0.3), Vector3(1, 1.15, 1))
+        _gball(L, bl[0] + Vector3(-bl[1] * 0.4, bl[1] * 0.5, -bl[1] * 0.4), bl[1] * 0.2, L.mat(Color("f2eee5"), 0.2))
+        L.cyl(bl[0] + Vector3(0, -bl[1] * 1.15 - bl[0].y * 0.5 + bl[1] * 0.6, 0), 0.12, bl[0].y - bl[1], Color("e5ddc9"), false)
+    for f in [[Vector3(0, 34, 50), Color("ffd9b0"), 30.0, 2.0], [Vector3(-34, 34, 0), Color("ffd9b0"), 26.0, 1.6], [Vector3(36, 22, 8), Color("ffe6c8"), 22.0, 1.4], [Vector3(8, 28, -46), Color("ffd9b0"), 24.0, 1.5]]:
+        _gfill(L, f[0], f[1], f[2], f[3], 26, 42)
+    _gfill(L, Vector3(-30, 40, 30), Color("d986a0"), 30.0, 0.8, 26, 42)        # small coloured accents
+    _gfill(L, Vector3(30, 40, -30), Color("75a9c0"), 30.0, 0.8, 26, 42)
+
+
+# ---------------------------------------------------------- Snow Day
+static func _giant_snowday(L) -> void:
+    _gground(L, L.tex("snow", Color("a8b8c6"), 20.0))   # renders close to the spec #C5D5E3
+    var snowman := _gm("d2dde5", "849bae", 0.6, 0.5)
+    var sp := Vector3(0, 0, 64)
+    _gball(L, sp + Vector3(0, 13, 0), 14.0, snowman)
+    _gball(L, sp + Vector3(0, 33, 0), 10.0, snowman)
+    _gball(L, sp + Vector3(0, 48, 0), 7.0, snowman)
+    var coal = L.mat(Color("23262a"), 0.7)
+    for ex in [-2.6, 2.6]:
+        _gball(L, sp + Vector3(ex, 50, -6.2), 0.9, coal)
+    for by in [28.0, 33.0, 38.0]:
+        _gball(L, sp + Vector3(0, by, -9.6), 1.0, coal)
+    _gcone(L, sp + Vector3(0, 47.5, -9.5), 1.2, 0.2, 5.0, _gm("d9822b", "6d4115", 0.6), Vector3(-PI / 2, 0, 0))
+    var scarf := _gm("418c91", "24565e", 0.9)
+    _gring(L, sp + Vector3(0, 42, 0), 7.2, 2.6, scarf)
+    _gbox(L, sp + Vector3(4, 35, -6.5), Vector3(3.6, 12, 1.4), scarf, Vector3(0.15, 0, 0.1))
+    _gbox(L, sp + Vector3(4.2, 29.5, -7.2), Vector3(3.6, 1.0, 1.5), _gm("82c0b9", "41605c", 0.9), Vector3(0.15, 0, 0.1))
+    var navy := _gm("344b66", "1b2b40", 0.6)
+    var sole := _gm("343a40", "1b2026", 0.7)
+    for bz in [4.0, 18.0]:
+        var b0 := Vector3(38, 0, bz)
+        _gbox(L, b0 + Vector3(2, 16, 0), Vector3(12, 22, 12), navy)
+        _gbox(L, b0 + Vector3(-6, 5, 0), Vector3(16, 8, 12), navy)
+        _gbox(L, b0 + Vector3(-2, 1, 0), Vector3(24, 2, 13), sole)
+        _gbox(L, b0 + Vector3(2, 26, 0), Vector3(12.6, 3, 12.6), _gm("6f8ba6", "3a4a5a", 0.8))
+    var mit := _gm("a94e54", "5e303a", 0.95)
+    var mp := Vector3(-38, 0, 16)
+    _gball(L, mp + Vector3(0, 13, 0), 1.0, mit, Vector3(6, 10, 9))
+    _gball(L, mp + Vector3(0, 10, -9), 1.0, mit, Vector3(3.5, 6, 3.5))
+    L.cyl(mp + Vector3(0, 3, 0), 7.5, 6.0, Color.WHITE, false, Vector3.ZERO, _gm("d88984", "6e4542", 0.95))
+    var red := _gm("b94c43", "632d2b", 0.5)
+    var steel := _gm("84949c", "414a4e", 0.3)
+    steel.metallic = 0.5
+    var sl := Vector3(0, 0, -56)
+    _gbox(L, sl + Vector3(0, 6, 0), Vector3(40, 2, 20), red)
+    for i in 4:
+        _gbox(L, sl + Vector3(-15 + i * 10, 7.05, 0), Vector3(0.4, 0.1, 19), _gm("e37c67", "71403a", 0.6))
+    for s in [-1.0, 1.0]:
+        _gbox(L, sl + Vector3(0, 1, s * 8), Vector3(40, 1, 1.2), steel)
+        for dx in [-12.0, 0.0, 12.0]:
+            _gbox(L, sl + Vector3(dx, 3.5, s * 8), Vector3(1, 4, 1), steel)
+        _gring(L, sl + Vector3(-21, 4.5, s * 8), 3.6, 1.0, steel, Vector3(PI / 2, 0, 0))
+    var wood := _gm("9a704b", "503a2a", 0.7)
+    _gbox(L, Vector3(-34, 16, -30), Vector3(1.6, 30, 1.6), wood, Vector3(0, 0, 0.14))
+    _gbox(L, Vector3(-36.3, 31.5, -30), Vector3(1.4, 1.4, 5), wood)
+    _gbox(L, Vector3(-31.8, 1.5, -30), Vector3(0.8, 9, 8), _gm("748b9c", "394f62", 0.4), Vector3(0, 0, 0.14))
+    for f in [[Vector3(30, 26, 12), 26.0], [Vector3(-30, 20, 16), 22.0], [Vector3(0, 40, 52), 30.0], [Vector3(0, 18, -50), 22.0], [Vector3(-30, 22, -28), 20.0]]:
+        _gfill(L, f[0], Color("ffe8cf"), f[1], 0.9, 24, 44)      # faint warm reflected fill
+
+
 # ================================================== shared map helpers ====
 
 ## A row of rooms from south (+z) to north (-z). Each room is a dictionary:
@@ -593,8 +1685,9 @@ static func _attic(L) -> Dictionary:
         {"id": "C", "x0": -12, "x1": 12, "z0": -36, "z1": -12, "win_w": [-24], "win_e": [-30], "win_n": [0]},
     ]
     var floor_m = L.tex("wood_floor", Color(0.85, 0.75, 0.62), 10.0)
-    _floors(L, rooms, L.tex("carpet", Color(1.25, 0.7, 0.75), 3.0), 26, 42, {"A": floor_m, "B": floor_m, "C": floor_m})
+    _floors(L, rooms, L.tex("wood_floor", Color("826a50"), 10.0), 26, 42, {"A": floor_m, "B": floor_m, "C": floor_m})
     L.bounds(26, 42)
+    _giant_attic(L)
     var lay := _rooms(L, rooms, 4.6, L.tex("table_wood", Color(0.8, 0.68, 0.55), 4.0))
     # Roof: sloping rafters and the ridge beam (overhead, decorative).
     var beam = L.tex("table_wood", Color(0.55, 0.42, 0.32), 3.0)
@@ -654,9 +1747,10 @@ static func _garden(L) -> Dictionary:
         {"id": "B", "x0": -18, "x1": 18, "z0": -10, "z1": 16, "win_w": [8, -4], "win_e": [2], "door_x": -6, "door_cost": 1250},
         {"id": "C", "x0": -16, "x1": 16, "z0": -38, "z1": -10, "win_w": [-24], "win_e": [-30], "win_n": [-6, 8]},
     ]
-    _floors(L, rooms, L.tex("grass", Color(0.75, 0.85, 0.7), 6.0), 24, 44,
+    _floors(L, rooms, _gm("4b5145", "282f2b", 0.35, 0.35), 24, 44,
         {"A": L.tex("table_wood", Color(0.7, 0.6, 0.5), 5.0), "B": L.tex("tiles", Color(0.75, 0.8, 0.75), 6.0), "C": L.tex("forest", Color(0.7, 0.62, 0.55), 5.0)})
     L.bounds(24, 44)
+    _giant_garden(L)
     var lay := _rooms(L, rooms, 4.4, L.tex("table_wood", Color(0.62, 0.72, 0.55), 4.0),
         {"B": _glass(L), "C": L.tex("rock", Color(1.3, 1.25, 1.2), 5.0)})
     # Greenhouse frame + benches of seedlings.
@@ -726,8 +1820,9 @@ static func _toystore(L) -> Dictionary:
         {"id": "C", "x0": -14, "x1": 14, "z0": -40, "z1": -14, "win_w": [-26], "win_e": [-34], "win_n": [0]},
     ]
     var tiles = L.tex("tiles", Color(0.95, 0.95, 1.0), 4.0)
-    _floors(L, rooms, L.tex("asphalt", Color(0.7, 0.7, 0.72), 8.0), 24, 46, {"A": tiles, "B": tiles, "C": L.tex("concrete", Color(0.85, 0.85, 0.85), 6.0)})
+    _floors(L, rooms, L.tex("tiles", Color("777a7c"), 6.0, 0.4), 24, 46, {"A": tiles, "B": tiles, "C": L.tex("concrete", Color(0.85, 0.85, 0.85), 6.0)})
     L.bounds(24, 46)
+    _giant_toystore(L)
     var lay := _rooms(L, rooms, 5.0, L.tex("wall", Color(0.85, 0.9, 1.0), 6.0),
         {"A": L.tex("wall", Color(1.05, 0.85, 0.95), 6.0), "C": L.tex("concrete", Color(0.75, 0.75, 0.75), 5.0)})
     # Checkout counters + a gumball machine.
@@ -792,9 +1887,10 @@ static func _kitchen(L) -> Dictionary:
         {"id": "B", "x0": -12, "x1": 12, "z0": -14, "z1": 14, "win_w": [0], "win_e": [-6], "door_x": 6, "door_cost": 1250},
         {"id": "C", "x0": -16, "x1": 16, "z0": -40, "z1": -14, "win_w": [-27], "win_e": [-33], "win_n": [0]},
     ]
-    _floors(L, rooms, L.tex("wood_floor", Color(0.55, 0.45, 0.38), 10.0), 24, 46,
+    _floors(L, rooms, _gk_lino(), 24, 46,
         {"A": L.tex("tiles", Color(1.0, 0.97, 0.9), 3.0), "B": L.tex("wood_floor", Color(0.8, 0.7, 0.6), 8.0), "C": L.tex("concrete", Color(0.85, 0.85, 0.88), 6.0)})
     L.bounds(24, 46)
+    _giant_kitchen(L)
     var lay := _rooms(L, rooms, 4.8, L.tex("wall", Color(1.05, 0.98, 0.75), 6.0),
         {"B": L.tex("table_wood", Color(0.7, 0.58, 0.45), 4.0), "C": L.tex("wall", Color(0.8, 0.9, 1.0), 6.0)})
     var white: Material = L.mat(Color(0.95, 0.95, 0.93), 0.3)
@@ -859,9 +1955,10 @@ static func _school(L) -> Dictionary:
         {"id": "B", "x0": -24, "x1": 24, "z0": 4, "z1": 16, "win_w": [10], "win_e": [10], "door_x": -14, "door_cost": 1000},
         {"id": "C", "x0": -20, "x1": 20, "z0": -42, "z1": 4, "win_w": [-10, -30], "win_e": [-20], "win_n": [-8, 8]},
     ]
-    _floors(L, rooms, L.tex("asphalt", Color(0.6, 0.6, 0.62), 8.0), 30, 48,
+    _floors(L, rooms, L.tex("tiles", Color("85847b"), 6.0, 0.5), 30, 48,
         {"A": L.tex("wood_floor", Color(0.9, 0.8, 0.65), 8.0), "B": L.tex("tiles", Color(0.85, 0.9, 0.85), 3.0), "C": L.tex("wood_floor", Color(1.05, 0.9, 0.65), 12.0)})
     L.bounds(30, 48)
+    _giant_school(L)
     var lay := _rooms(L, rooms, 5.0, L.tex("wall", Color(0.85, 0.95, 0.85), 6.0),
         {"C": L.tex("concrete", Color(0.9, 0.85, 0.75), 5.0)})
     # Classroom: rows of desks, the teacher's desk and a chalkboard.
@@ -929,9 +2026,10 @@ static func _beach_md(L) -> Dictionary:
         {"id": "C", "x0": -10, "x1": 10, "z0": -40, "z1": -12, "win_w": [-22, -34], "win_e": [-28], "win_n": [0]},
     ]
     var sand = L.tex("beach_sand", Color(1.2, 1.1, 0.95), 7.0)
-    _floors(L, rooms, sand, 26, 46,
+    _floors(L, rooms, L.tex("beach_sand", Color("c7a36f"), 8.0), 26, 46,
         {"A": L.tex("table_wood", Color(0.75, 0.6, 0.45), 4.0), "C": L.tex("table_wood", Color(0.65, 0.55, 0.45), 3.0)})
     L.bounds(26, 46)
+    _giant_beach(L)
     var lay := _rooms(L, rooms, 4.2, L.tex("table_wood", Color(0.95, 0.85, 0.7), 4.0),
         {"B": L.tex("beach_sand", Color(1.25, 1.12, 0.9), 4.0)})
     # The sea beyond the pier, and the surf line.
@@ -959,7 +2057,7 @@ static func _beach_md(L) -> Dictionary:
         "start_weapons": ["carbine"],
         "sky_top": Color(0.25, 0.2, 0.45), "sky_horizon": Color(0.95, 0.5, 0.35),
         "sun_color": Color(1.0, 0.6, 0.4), "sun_energy": 0.7, "sun_rot": Vector3(-12, 200, 0),
-        "fog": 0.008, "ambient": 0.8, "exposure": 1.0,
+        "fog": 0.004, "ambient": 0.8, "exposure": 1.0,     # lighter sunset haze (art pass round 2)
         "music": "res://assets/audio/music/battle_theme_a.ogg", "ambience": "res://assets/audio/ambience/desert_wind.ogg", "ambience_db": -14.0,
         "objectives": [],
         "meltdown": {
@@ -993,9 +2091,10 @@ static func _bathroom(L) -> Dictionary:
     ]
     var tiles = L.tex("tiles", Color(0.85, 0.95, 1.0), 2.5, 0.3)
     var carpet = L.tex("carpet", Color(0.55, 0.65, 1.0), 4.0)
-    _floors(L, rooms, L.tex("grass", Color(0.45, 0.55, 0.5), 6.0), 30, 48,
+    _floors(L, rooms, L.tex("tiles", Color("a0aaa9"), 5.0, 0.3), 30, 48,
         {"A": tiles, "B": L.tex("carpet", Color(1.0, 0.85, 0.6), 4.0), "C": carpet})
     L.bounds(30, 48)
+    _giant_bathtime(L)
     var lay := _rooms(L, rooms, 4.6, L.tex("wall", Color(1.0, 0.95, 0.85), 5.0),
         {"A": L.tex("tiles", Color(0.8, 0.92, 1.0), 2.0, 0.3), "C": L.tex("wall", Color(0.8, 0.88, 1.0), 5.0)})
     # Bathroom: the tub (still full) with a rubber duck, the loo, the sink, a bath mat.
@@ -1059,8 +2158,9 @@ static func _garage(L) -> Dictionary:
         {"id": "C", "x0": -16, "x1": 16, "z0": -40, "z1": -14, "win_w": [-26], "win_e": [-34], "win_n": [-6, 6]},
     ]
     var concrete = L.tex("concrete", Color(0.8, 0.8, 0.78), 7.0)
-    _floors(L, rooms, L.tex("asphalt", Color(0.55, 0.55, 0.58), 8.0), 32, 46, {"A": concrete, "B": concrete, "C": concrete})
+    _floors(L, rooms, L.tex("concrete", Color("777b78"), 8.0), 32, 46, {"A": concrete, "B": concrete, "C": concrete})
     L.bounds(32, 46)
+    _giant_garage(L)
     var lay := _rooms(L, rooms, 5.0, L.tex("concrete", Color(0.75, 0.78, 0.82), 5.0),
         {"A": L.tex("wall", Color(0.85, 0.8, 0.7), 5.0)})
     var wood = L.tex("table_wood", Color(0.85, 0.7, 0.5), 2.0)
@@ -1133,9 +2233,10 @@ static func _pillow_fort(L) -> Dictionary:
         {"id": "C", "x0": -14, "x1": 14, "z0": -40, "z1": -14, "win_w": [-24], "win_e": [-32], "win_n": [-6, 6]},
     ]
     var rug = L.tex("carpet", Color(1.1, 0.75, 0.6), 4.0)
-    _floors(L, rooms, L.tex("wood_floor", Color(0.6, 0.48, 0.38), 10.0), 32, 48,
+    _floors(L, rooms, L.tex("carpet", Color("776b62"), 6.0), 32, 48,
         {"A": L.tex("carpet", Color(1.0, 0.95, 1.2), 3.0), "B": rug, "C": L.tex("wood_floor", Color(0.9, 0.7, 0.55), 8.0)})
     L.bounds(32, 48)
+    _giant_pillowfort(L)
     var lay := _rooms(L, rooms, 4.4, L.tex("wall", Color(0.95, 0.88, 0.75), 5.0),
         {"A": L.tex("carpet", Color(1.25, 0.6, 0.7), 2.0), "C": L.tex("rock", Color(0.85, 0.75, 0.7), 4.0)})
     # The fort: a sagging blanket roof, cushions to duck behind, fairy lights.
@@ -1207,6 +2308,7 @@ static func _railway(L) -> Dictionary:
     _floors(L, rooms, L.tex("grass", Color(0.55, 0.75, 0.45), 5.0), 24, 46,
         {"A": L.tex("concrete", Color(0.9, 0.88, 0.85), 5.0), "B": L.tex("rock", Color(0.65, 0.6, 0.55), 5.0), "C": L.tex("concrete", Color(0.7, 0.7, 0.72), 5.0)})
     L.bounds(24, 46)
+    _giant_railway(L)
     var lay := _rooms(L, rooms, 5.0, L.tex("wall", Color(0.95, 0.85, 0.7), 5.0),
         {"B": L.tex("wall", Color(0.75, 0.85, 0.7), 5.0), "C": L.tex("table_wood", Color(0.7, 0.5, 0.35), 3.0)})
     # Platform: yellow edge line, benches, the station clock and the ticket booth.
@@ -1276,9 +2378,10 @@ static func _party(L) -> Dictionary:
         {"id": "B", "x0": -20, "x1": 20, "z0": -12, "z1": 14, "win_w": [6, -6], "win_e": [0], "door_x": -8, "door_cost": 1500},
         {"id": "C", "x0": -12, "x1": 12, "z0": -36, "z1": -12, "win_w": [-24], "win_e": [-30], "win_n": [0]},
     ]
-    _floors(L, rooms, L.tex("grass", Color(0.6, 0.8, 0.5), 6.0), 26, 42,
+    _floors(L, rooms, L.tex("wood_floor", Color("8b7964"), 8.0), 26, 42,
         {"A": L.tex("wood_floor", Color(1.0, 0.85, 0.7), 8.0), "B": L.tex("carpet", Color(0.8, 1.0, 1.2), 3.0), "C": L.tex("carpet", Color(1.2, 1.1, 0.6), 3.0)})
     L.bounds(26, 42)
+    _giant_party(L)
     var lay := _rooms(L, rooms, 4.6, L.tex("wall", Color(1.0, 0.85, 0.9), 5.0),
         {"B": L.tex("wall", Color(0.85, 0.95, 1.0), 5.0), "C": L.tex("wall", Color(1.0, 1.0, 0.8), 5.0)})
     var party := [Color(0.95, 0.3, 0.35), Color(0.3, 0.6, 0.95), Color(0.98, 0.8, 0.2), Color(0.4, 0.85, 0.4), Color(0.8, 0.45, 0.9)]
@@ -1324,7 +2427,7 @@ static func _party(L) -> Dictionary:
         "start_weapons": ["carbine"],
         "sky_top": Color(0.2, 0.35, 0.65), "sky_horizon": Color(0.85, 0.65, 0.55),
         "sun_color": Color(1.0, 0.75, 0.55), "sun_energy": 0.7, "sun_rot": Vector3(-20, 150, 0),
-        "fog": 0.006, "ambient": 0.9, "exposure": 1.05,
+        "fog": 0.003, "ambient": 0.9, "exposure": 1.05,     # lighter haze (art pass round 2)
         "music": "res://assets/audio/music/battle_theme_a.ogg", "ambience": "res://assets/audio/ambience/clock_tick.ogg", "ambience_db": -18.0,
         "objectives": [],
         "meltdown": {
@@ -1357,11 +2460,12 @@ static func _snow_day(L) -> Dictionary:
         {"id": "C", "x0": -16, "x1": 16, "z0": -38, "z1": -10, "win_w": [-24], "win_e": [-30], "win_n": [-6, 8]},
     ]
     var snow = L.tex("snow", Color(1.0, 1.0, 1.05), 6.0)
-    _floors(L, rooms, snow, 24, 44, {"C": L.tex("wood_floor", Color(0.75, 0.6, 0.45), 8.0)})
+    _floors(L, rooms, L.tex("snow", Color("a8b8c6"), 6.0), 24, 44, {"C": L.tex("wood_floor", Color(0.75, 0.6, 0.45), 8.0)})
     L.bounds(24, 44)
-    var lay := _rooms(L, rooms, 4.0, L.tex("snow", Color(0.95, 0.97, 1.05), 3.0),
+    _giant_snowday(L)
+    var lay := _rooms(L, rooms, 4.0, L.tex("snow", Color("95a8b8"), 3.0),
         {"C": L.tex("table_wood", Color(0.75, 0.5, 0.35), 3.0)})
-    var white: Material = L.mat(Color(0.97, 0.98, 1.0), 0.6)
+    var white: Material = _gm("d2dde5", "849bae", 0.6, 0.5)      # snowmen: warm off-white, never white-on-white
     # Snow fort: a pile of snowballs, a little flag.
     for k in 7:
         L.sphere(Vector3(-6 + (k % 4) * 0.55, 0.3 + int(k / 4) * 0.45, 20 + (k % 2) * 0.3), 0.3, Color.WHITE, Vector3.ONE, white)
@@ -1388,9 +2492,9 @@ static func _snow_day(L) -> Dictionary:
     return {
         "spawn": Vector3(0, 0.5, 30), "spawn_yaw": 0.0, "drones": 0, "safe_radius": 0.0,
         "start_weapons": ["carbine"],
-        "sky_top": Color(0.55, 0.65, 0.8), "sky_horizon": Color(0.88, 0.9, 0.95),
-        "sun_color": Color(0.95, 0.97, 1.0), "sun_energy": 0.9, "sun_rot": Vector3(-35, 60, 0),
-        "fog": 0.012, "ambient": 1.0, "exposure": 0.95, "snow": true,
+        "sky_top": Color("7897b8"), "sky_horizon": Color("afc5d8"),
+        "sun_color": Color(0.95, 0.97, 1.0), "sun_energy": 0.6, "sun_rot": Vector3(-35, 60, 0),
+        "fog": 0.006, "ambient": 0.8, "exposure": 0.95, "snow": true,     # less whiteout from high up (lighter fog)
         "music": "res://assets/audio/music/determined_pursuit.ogg", "ambience": "res://assets/audio/ambience/desert_wind.ogg", "ambience_db": -14.0,
         "objectives": [],
         "meltdown": {

@@ -131,7 +131,7 @@ const WEATHER := {
     10: {"clouds": 0.7},                                   # Mountain Pass
     102: {"clouds": 0.7, "rain": 0.6, "storm": true},      # MELTDOWN: Garden Shed after dark
     106: {"clouds": 0.5},                                  # MELTDOWN: Beach at dusk
-    112: {"clouds": 0.75},                                 # MELTDOWN: Snow Day
+    112: {"clouds": 0.35},                                 # MELTDOWN: Snow Day (fewer clouds so the blue sky reads; art pass round 2)
 }
 const VEHICLE_NAMES := {"jeep": "Jeep", "tank": "Tank", "apc": "Troop carrier", "heli": "Helicopter"}
 const WEAPON_NAMES := {"carbine": "M4A1 Carbine", "lmg": "M249 SAW", "shotgun": "M1014 Shotgun", "sniper": "Mk 22 Sniper", "launcher": "AT4 Launcher"}
