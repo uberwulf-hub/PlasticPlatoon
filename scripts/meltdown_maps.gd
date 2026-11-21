@@ -175,7 +175,11 @@ static func _basement(L) -> Dictionary:
     _basement_giant(L)
 
     var H := 5.0
-    var wall = L.tex("plaster", Color(0.95, 0.95, 0.9), 5.0)
+    # Revision 1 (ChatGPT review): room walls toward neutral concrete grey (#85827A).
+    var wall: StandardMaterial3D = L.tex("plaster", BM_WALL, 5.0).duplicate()
+    wall.emission_enabled = true              # shadows no darker than #555957
+    wall.emission = Color("555957")
+    wall.emission_energy_multiplier = BM_WALL_FLOOR
     var GAP := 2.4
     _wall_x(L, 40, -16, 16, [[-8, GAP], [8, GAP]], H, wall)                         # south (A)
     _wall_x(L, -40, -16, 16, [[0, GAP]], H, wall)                                    # north (C)
@@ -186,7 +190,7 @@ static func _basement(L) -> Dictionary:
     # Bare bulbs and a dim, dusty gloom.
     for p in [Vector3(-7, 4.4, 33), Vector3(7, 4.4, 23), Vector3(-8, 4.4, 8), Vector3(8, 4.4, -6),
             Vector3(-7, 4.4, -22), Vector3(7, 4.4, -34)]:
-        L.lamp(p, Color(1.0, 0.82, 0.6), 20.0, 3.2)
+        L.lamp(p, BM_ROOM_BULB, 20.0, 3.2)
     for p in [Vector3(-19, 3.5, 26), Vector3(19, 3.5, -6), Vector3(0, 3.5, -43)]:
         L.lamp(p, Color(0.5, 0.7, 1.0), 9.0, 0.8, false)
 
@@ -258,13 +262,18 @@ const BM_ENAMEL := Color("e9e7e1")      # washer / heater white enamel
 const BM_CHROME := Color("c9ccd1")
 const BM_GLASS := Color("2b3440")
 const BM_BASKET := Color("2f7fd1")      # blue plastic laundry basket
-const BM_CARD := Color("b08a5a")        # cardboard
+const BM_CARD := Color("b08a5a")        # cardboard (seams are this darkened)
+const BM_BOX_FLOOR := 1.0               # strength of the #806D53 minimum on dark box faces
 const BM_TAPE := Color("d2b27a")        # packing tape (lighter, glossier)
 const BM_TOOL := Color("c7322a")        # red toolbox
-const BM_SOFA := Color("b5532e")        # burnt-orange sofa
+const BM_SOFA := Color("b5532e")        # burnt-orange sofa (first build; revision 1 uses the colours in _bm_sofa)
+const BM_SOFA_FLOOR := 0.45             # strength of the #553A32 minimum on the sofa
 const BM_COPPER := Color("b8733a")
 const BM_PINE := Color("d9b98a")        # 2x4 lumber
 const BM_BULB := Color("ffd9a0")
+const BM_WALL := Color("85827a")        # room walls (revision 1)
+const BM_WALL_FLOOR := 0.75             # strength of the #555957 minimum on the walls
+const BM_ROOM_BULB := Color(1.0, 0.9, 0.78)   # the rooms' bulbs, a softer warm (was 1.0, 0.82, 0.6)
 const BM_MOON := Color("6f8fd8")        # cool light through the high window
 
 
@@ -293,9 +302,11 @@ static func _basement_giant(L) -> void:
     _bm_ceiling(L)
     # Fill light on the giant things (no shadows; too far out to light the rooms):
     # warm on the sofa and boxes, neutral on the washer, cool moonlight on the heater.
-    for f in [[Vector3(30, 26, 16), Color("fff1dc"), 34.0, 1.6], [Vector3(0, 26, 48), Color("ffd2a6"), 44.0, 2.0],
-            [Vector3(-30, 20, 8), Color("ffdcae"), 42.0, 1.5], [Vector3(-32, 14, -34), Color("ffe6c8"), 26.0, 1.3],
-            [Vector3(6, 26, -46), Color("a9c1ff"), 36.0, 1.5]]:
+    # Revision 1: moved out and shortened so warm light stays on the furniture,
+    # not the outer rooms.
+    for f in [[Vector3(26, 24, 16), Color("fff1dc"), 22.0, 2.0], [Vector3(0, 30, 50), Color("ffd2a6"), 29.0, 4.5],
+            [Vector3(-27, 26, 10), Color("ffdcae"), 24.0, 3.0], [Vector3(-30, 18, -40), Color("ffe6c8"), 18.0, 2.0],
+            [Vector3(6, 26, -46), Color("a9c1ff"), 20.0, 2.0]]:
         L.lamp(f[0], f[1], f[2], f[3], false)
 
 
@@ -374,29 +385,63 @@ static func _bm_heater(L, base: Vector3) -> void:
 
 ## A big sofa, its front facing -z (the play area). base = floor centre.
 static func _bm_sofa(L, base: Vector3) -> void:
-    var fab = L.tex("carpet", BM_SOFA, 8.0)
-    var fab_dark = L.tex("carpet", BM_SOFA.darkened(0.35), 8.0)
+    # Revision 1 (ChatGPT review): flat upholstery colours, 8 m raised cushions,
+    # #553A32 in the creases and under the skirt, #D9A17E piping on the edges.
+    var main := _bm_floored(Color("986047"), Color("553a32"), 0.95)
+    var seat := _bm_floored(Color("c58b69"), Color("553a32"), 0.95)
+    var back_c := _bm_floored(Color("b9795b"), Color("553a32"), 0.95)
+    var shade := _bm_floored(Color("553a32"), Color("553a32"), 1.0)
+    var hi := _bm_floored(Color("d9a17e"), Color("553a32"), 0.8)
     var W := 68.0
     var fz: float = base.z - 10.0          # front of the seat
-    L.box(Vector3(base.x, 6.5, base.z), Vector3(W, 11.0, 20.0), Color.WHITE, 0.0, false, fab_dark)     # body / skirt
-    for i in 3:                                                                                     # seat cushions
-        var x: float = base.x + (i - 1) * (W / 3.0)
-        L.box(Vector3(x, 13.5, base.z - 1.0), Vector3(W / 3.0 - 0.6, 4.0, 20.5), Color.WHITE, 0.0, false, fab)
-        L.box_rot(Vector3(x, 23.0, base.z + 8.0), Vector3(W / 3.0 - 0.8, 15.0, 5.0), Color.WHITE, Vector3(-0.18, 0, 0), false, fab)  # back cushions
-    L.box(Vector3(base.x, 21.0, base.z + 12.0), Vector3(W + 0.2, 28.0, 6.0), Color.WHITE, 0.0, false, fab_dark)   # back
+    L.box(Vector3(base.x, 6.5, base.z), Vector3(W, 11.0, 20.0), Color.WHITE, 0.0, false, main)         # body / skirt
+    L.box(Vector3(base.x, 1.2, base.z - 0.2), Vector3(W - 0.4, 1.6, 20.0), Color.WHITE, 0.0, false, shade)   # shadow under the skirt
+    L.box(Vector3(base.x, 21.0, base.z + 12.0), Vector3(W + 0.2, 30.0, 6.0), Color.WHITE, 0.0, false, main)  # back (6..36)
+    var cw := W / 3.0
+    for i in 3:
+        var x: float = base.x + (i - 1) * cw
+        L.box(Vector3(x, 16.0, base.z - 1.0), Vector3(cw - 1.2, 8.0, 20.5), Color.WHITE, 0.0, false, seat)        # seat cushion 12..20
+        L.box(Vector3(x, 19.85, fz - 0.05), Vector3(cw - 1.4, 0.5, 0.5), Color.WHITE, 0.0, false, hi)             # piping, front top edge
+        L.box_rot(Vector3(x, 28.0, base.z + 7.5), Vector3(cw - 1.4, 16.0, 6.0), Color.WHITE, Vector3(-0.16, 0, 0), false, back_c)  # back cushion
+    for i in 2:                                                                                                   # creases between cushions
+        var cx: float = base.x + (i - 0.5) * cw
+        L.box(Vector3(cx, 16.0, base.z - 1.0), Vector3(1.1, 7.8, 20.4), Color.WHITE, 0.0, false, shade)
+        L.box(Vector3(cx, 28.0, base.z + 8.0), Vector3(1.3, 15.5, 5.0), Color.WHITE, 0.0, false, shade)
+    L.box(Vector3(base.x, 12.3, fz + 0.4), Vector3(W, 0.6, 1.0), Color.WHITE, 0.0, false, shade)                    # seat meets the skirt
     for s in [-1.0, 1.0]:
         var ax: float = base.x + s * (W * 0.5 + 4.0)
-        L.box(Vector3(ax, 9.0, base.z + 1.0), Vector3(8.0, 18.0, 22.0), Color.WHITE, 0.0, false, fab)
-        L.cyl(Vector3(ax, 18.0, base.z + 1.0), 4.4, 22.0, BM_SOFA, false, Vector3(PI / 2, 0, 0), fab)   # rolled arm
+        L.box(Vector3(ax, 11.0, base.z + 1.0), Vector3(8.0, 22.0, 22.0), Color.WHITE, 0.0, false, main)
+        L.cyl(Vector3(ax, 22.0, base.z + 1.0), 4.4, 22.0, Color.WHITE, false, Vector3(PI / 2, 0, 0), main)          # rolled arm
+        L.box(Vector3(ax, 26.3, base.z + 1.0), Vector3(1.4, 0.4, 22.2), Color.WHITE, 0.0, false, hi)                # highlight on the roll
+        L.box(Vector3(ax - s * 4.05, 11.0, base.z + 1.0), Vector3(0.3, 21.0, 22.0), Color.WHITE, 0.0, false, shade) # crease beside the seat
     var foot = L.tex("table_wood", Color("5a3a22"), 2.0)
     for s in [-1.0, 1.0]:
         for z in [fz + 2.0, base.z + 12.0]:
             L.cyl(Vector3(base.x + s * (W * 0.5 + 2.0), 0.5, z), 1.4, 1.0, Color.BROWN, false, Vector3.ZERO, foot)
 
 
+## A plain colour that never renders darker than `floor_c` (a faint glow of that
+## colour), so faces turned away from the light keep the spec's shadow tone.
+static func _bm_floored(c: Color, floor_c: Color, rough: float) -> StandardMaterial3D:
+    var m := StandardMaterial3D.new()
+    m.albedo_color = c
+    m.roughness = rough
+    m.emission_enabled = true
+    m.emission = floor_c
+    m.emission_energy_multiplier = BM_SOFA_FLOOR
+    return m
+
+
 ## A taped cardboard storage box with a marker label on the side facing the play area (+x).
 static func _bm_box(L, base: Vector3, size: Vector3, rot_y: float, word: String) -> void:
-    var card = L.tex("plaster", BM_CARD, 4.0, 0.95)
+    # Revision 1 (ChatGPT review): lit faces #C5A477; a faint #806D53 glow keeps
+    # faces turned away from the light from going darker than that.
+    var card := StandardMaterial3D.new()
+    card.albedo_color = Color("c5a477")
+    card.roughness = 0.95
+    card.emission_enabled = true
+    card.emission = Color("806d53")
+    card.emission_energy_multiplier = BM_BOX_FLOOR
     var tape = L.mat(BM_TAPE, 0.35)
     var seam = L.mat(BM_CARD.darkened(0.45), 0.95)
     var c := base + Vector3(0, size.y * 0.5, 0)
@@ -459,7 +504,7 @@ static func _bm_ceiling(L) -> void:
         L.cyl(Vector3(p.x, Y - 9.0, p.z), 0.15, 18.0, Color("222222"), false)
         L.cyl(Vector3(p.x, Y - 18.8, p.z), 1.0, 1.8, Color("3a3a3a"), false, Vector3.ZERO, L.mat(Color("3a3a3a"), 0.5, 0.5))
         L.sphere(Vector3(p.x, Y - 21.6, p.z), 2.2, BM_BULB, Vector3(1, 1.2, 1), L.glow_mat(BM_BULB, 3.0))
-        L.lamp(Vector3(p.x, Y - 24.0, p.z), BM_BULB, 110.0, 1.8, false)
+        L.lamp(Vector3(p.x, Y - 24.0, p.z), BM_BULB, 100.0, 1.2, false)
     # A high basement window: cool light from outside.
     var wc := Vector3(-30, Y - 14.0, -117.6)
     L.box(wc, Vector3(34, 10, 0.6), Color.WHITE, 0.0, false, L.glow_mat(BM_MOON, 1.4))
