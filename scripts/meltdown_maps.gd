@@ -311,26 +311,26 @@ static func _basement_giant(L) -> void:
 
 
 ## Front-loading washing machine, door facing -x (into the room). base = floor centre.
-static func _bm_washer(L, base: Vector3) -> void:
-    var enamel = L.mat(BM_ENAMEL, 0.3)
+static func _bm_washer(L, base: Vector3, body := BM_ENAMEL, glass := BM_GLASS, clothes := true) -> void:
+    var enamel = L.mat(body, 0.3)
     var W := 16.0
     var H := 22.0
     var D := 16.0
     var fx: float = base.x - D * 0.5          # the front face
     L.box(base + Vector3(0, H * 0.5 + 0.8, 0), Vector3(D, H - 1.6, W), Color.WHITE, 0.0, false, enamel)
     L.box(base + Vector3(0, 0.4, 0), Vector3(D - 0.6, 0.8, W - 0.6), Color("3a3a3a"), 0.0, false)    # kick plate
-    L.box(base + Vector3(0, H - 0.4, 0), Vector3(D, 0.8, W), Color.WHITE, 0.0, false, L.mat(BM_ENAMEL.darkened(0.06), 0.25))
+    L.box(base + Vector3(0, H - 0.4, 0), Vector3(D, 0.8, W), Color.WHITE, 0.0, false, L.mat(body.darkened(0.06), 0.25))
     # Control panel along the top, a dial and a little glowing display.
     L.box(Vector3(fx - 0.1, H - 3.0, base.z), Vector3(0.3, 3.2, W - 0.6), Color.WHITE, 0.0, false, L.mat(Color("d4d4d2"), 0.35))
     L.cyl(Vector3(fx - 0.5, H - 3.0, base.z + 4.5), 1.25, 0.7, BM_CHROME, false, Vector3(0, 0, PI / 2), L.mat(BM_CHROME, 0.2, 0.8))
     L.box(Vector3(fx - 0.3, H - 3.0, base.z - 1.0), Vector3(0.2, 1.0, 3.2), Color.WHITE, 0.0, false, L.glow_mat(Color("5fd3c8"), 1.2))
-    L.box(Vector3(fx - 0.3, H - 3.0, base.z - 5.2), Vector3(0.3, 1.6, 3.4), Color.WHITE, 0.0, false, L.mat(BM_ENAMEL.darkened(0.12), 0.35))  # drawer
+    L.box(Vector3(fx - 0.3, H - 3.0, base.z - 5.2), Vector3(0.3, 1.6, 3.4), Color.WHITE, 0.0, false, L.mat(body.darkened(0.12), 0.35))  # drawer
     # The round door: chrome ring, dark glass, laundry tumbling behind it.
     var c := Vector3(fx - 0.2, 9.5, base.z)
     L.cyl(c, 6.0, 0.8, BM_CHROME, false, Vector3(0, 0, PI / 2), L.mat(BM_CHROME, 0.18, 0.85))
-    L.cyl(c + Vector3(-0.3, 0, 0), 4.7, 0.6, BM_GLASS, false, Vector3(0, 0, PI / 2), L.mat(BM_GLASS, 0.05, 0.3))
+    L.cyl(c + Vector3(-0.3, 0, 0), 4.7, 0.6, glass, false, Vector3(0, 0, PI / 2), L.mat(glass, 0.05, 0.3))
     var cloth := [Color("d94a4a"), Color("f2c230"), Color("f4f1ea"), Color("3f7fd6")]
-    for i in 4:
+    for i in (4 if clothes else 0):
         var a := i * TAU / 4.0 + 0.4
         L.sphere(c + Vector3(0.6, sin(a) * 2.2 - 0.6, cos(a) * 2.2), 1.6, cloth[i], Vector3(0.5, 0.8, 1.2), L.mat(cloth[i], 0.95))
     L.box(c + Vector3(-0.7, 0, 5.4), Vector3(0.6, 2.4, 0.9), BM_CHROME, 0.0, false, L.mat(BM_CHROME, 0.2, 0.8))   # handle
@@ -422,13 +422,13 @@ static func _bm_sofa(L, base: Vector3) -> void:
 
 ## A plain colour that never renders darker than `floor_c` (a faint glow of that
 ## colour), so faces turned away from the light keep the spec's shadow tone.
-static func _bm_floored(c: Color, floor_c: Color, rough: float) -> StandardMaterial3D:
+static func _bm_floored(c: Color, floor_c: Color, rough: float, energy := BM_SOFA_FLOOR) -> StandardMaterial3D:
     var m := StandardMaterial3D.new()
     m.albedo_color = c
     m.roughness = rough
     m.emission_enabled = true
     m.emission = floor_c
-    m.emission_energy_multiplier = BM_SOFA_FLOOR
+    m.emission_energy_multiplier = energy
     return m
 
 
@@ -520,6 +520,361 @@ static func _bm_ceiling(L) -> void:
     for s in [-1.0, 1.0]:
         L.box(Vector3(105 * s, Y * 0.5, 0), Vector3(2, Y, 240), Color.WHITE, 0.0, false, block)
         L.box(Vector3(0, Y * 0.5, 119 * s), Vector3(212, Y, 2), Color.WHITE, 0.0, false, block)
+
+
+# ---- Midnight Kitchen: giant scale (Creative Collaboration: Plastic Platoon art pass, round 2) ----
+# Art direction: ChatGPT (creative director); spec approved by Andrew, 2026-11-21.
+# Same rules as The Basement: 25x human scale, every giant prop outside the play
+# edge (|x| > 24, |z| > 46) or overhead with no collision; colours are the spec's
+# hex values, and _bm_floored keeps a face from rendering darker than the spec's
+# shadow colour. Nothing random except the cereal, which uses a fixed seed.
+
+## Checkerboard lino for the floor outside the rooms: a 32 x 32 picture made
+## here in code (two muted squares and grout lines), tiled every 15 m (7.5 m squares).
+static func _gk_lino() -> StandardMaterial3D:
+    var img := Image.create(32, 32, false, Image.FORMAT_RGB8)
+    var a := Color("66717a")
+    var b := Color("46525d")
+    var g := Color("303b45")
+    for y in 32:
+        for x in 32:
+            var c: Color = a if ((x < 16) == (y < 16)) else b
+            if x % 16 == 0 or y % 16 == 0:
+                c = g
+            img.set_pixel(x, y, c)
+    var m := StandardMaterial3D.new()
+    m.albedo_texture = ImageTexture.create_from_image(img)
+    m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+    m.uv1_triplanar = true
+    m.uv1_world_triplanar = true
+    m.uv1_scale = Vector3.ONE / 15.0
+    m.roughness = 0.6
+    return m
+
+
+## Builds `build` around the origin, then turns it by `yaw` and moves it to `pos`
+## (so the Basement helpers can be reused facing another way, unchanged).
+static func _gk_place(L, build: Callable, pos: Vector3, yaw: float) -> void:
+    var before: int = L.get_child_count()
+    build.call()
+    var kids: Array = []
+    for i in range(before, L.get_child_count()):
+        kids.append(L.get_child(i))
+    var pivot := Node3D.new()
+    L.add_child(pivot)
+    for k in kids:
+        L.remove_child(k)
+        pivot.add_child(k)
+    pivot.transform = Transform3D(Basis(Vector3.UP, yaw), pos)
+
+
+## Black block letters (solid 3D text, so walls hide it), facing +z unless turned.
+static func _gk_word(L, text: String, pos: Vector3, yaw: float, height: float, col := Color("222222")) -> void:
+    var tm := TextMesh.new()
+    tm.text = text
+    tm.font_size = 64
+    tm.pixel_size = height / 64.0
+    tm.depth = 0.05
+    var mi := MeshInstance3D.new()
+    mi.mesh = tm
+    mi.material_override = L.mat(col, 0.9)
+    mi.position = pos
+    mi.rotation.y = yaw
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    L.add_child(mi)
+
+
+const GK_FLOOR := 1.1     # minimum-shadow glow strength for the kitchen props (the night scene is dark)
+
+
+static func _giant_kitchen(L) -> void:
+    # The rest of the kitchen floor, far out, and the dark ceiling 75 m up.
+    L.box(Vector3(0, -0.6, 0), Vector3(600, 1.0, 600), Color.WHITE, 0.0, false, _gk_lino())
+    var plaster := _bm_floored(Color("35404c"), Color("202a35"), 0.9, 0.5)
+    L.box(Vector3(0, 75.6, 0), Vector3(600, 1.2, 600), Color.WHITE, 0.0, false, plaster)
+    for z in [-40.0, 20.0]:                                                       # two broad beams
+        L.box(Vector3(0, 72.5, z), Vector3(600, 5.0, 6.0), Color.WHITE, 0.0, false, _bm_floored(Color("566473"), Color("202a35"), 0.9, 0.5))
+    var wall := _bm_floored(Color("35404c"), Color("202a35"), 0.9, 0.5)
+    for s in [-1.0, 1.0]:
+        L.box(Vector3(110 * s, 37.5, 0), Vector3(2, 75, 252), Color.WHITE, 0.0, false, wall)
+        L.box(Vector3(0, 37.5, 125 * s), Vector3(222, 75, 2), Color.WHITE, 0.0, false, wall)
+    _gk_table(L)
+    _gk_fridge(L)
+    _gk_counter(L)
+    _gk_spill(L)
+    _gk_pantry(L)
+    _gk_laundry(L)
+    _gk_window_pendant(L)
+
+
+## 1. The dining table, straddling the south play edge: legs as columns, the
+## underside as a ceiling over the south of the Kitchen Floor; three chairs.
+static func _gk_table(L) -> void:
+    var wood := _bm_floored(Color("a87545"), Color("513a2b"), 0.8, 0.95)   # underside reads as wood, not black
+    var hi = L.mat(Color("d5ad78"), 0.6)
+    var top := Vector3(0, 50.5, 62.5)
+    L.box(top, Vector3(90, 5, 55), Color.WHITE, 0.0, false, wood)
+    L.box(top + Vector3(0, 2.6, -27.6), Vector3(90.4, 0.4, 0.4), Color.WHITE, 0.0, false, hi)       # lit front edge
+    for s in [-1.0, 1.0]:                                                                           # aprons under the top
+        L.box(Vector3(39 * s, 45.5, 62.5), Vector3(2, 5, 46), Color.WHITE, 0.0, false, wood)
+        L.box(Vector3(0, 45.5, 62.5 + 23 * s), Vector3(78, 5, 2), Color.WHITE, 0.0, false, wood)
+        for z in [37.5, 87.5]:
+            L.box(Vector3(42 * s, 24, z), Vector3(5, 48, 5), Color.WHITE, 0.0, false, wood)
+    for ch in [[Vector3(56, 0, 58), -PI / 2], [Vector3(-56, 0, 70), PI / 2], [Vector3(0, 0, 100), PI]]:
+        _gk_place(L, func():
+            for lx in [-9.0, 9.0]:
+                for lz in [-9.0, 9.0]:
+                    L.box(Vector3(lx, 12, lz), Vector3(2, 24, 2), Color.WHITE, 0.0, false, wood)
+            L.box(Vector3(0, 25, 0), Vector3(22, 2, 22), Color.WHITE, 0.0, false, wood)
+            L.box(Vector3(0, 39, 10), Vector3(22, 26, 2), Color.WHITE, 0.0, false, wood)
+            L.box(Vector3(0, 26.1, -11.1), Vector3(22.2, 0.3, 0.3), Color.WHITE, 0.0, false, hi), ch[0], ch[1])
+
+
+## 2. The full-height refrigerator west of the Kitchen Floor, door ajar.
+static func _gk_fridge(L) -> void:
+    var enamel := _bm_floored(Color("d8e0e5"), Color("71818e"), 0.3, 0.45)
+    var hi = L.mat(Color("f5f8f7"), 0.2)
+    var seam = L.mat(Color("71818e"), 0.6)
+    var c := Vector3(-34, 0, 23)          # body x -42..-26 (front at -26), z 14..32
+    L.box(c + Vector3(0, 22.5, 0), Vector3(16, 45, 18), Color.WHITE, 0.0, false, enamel)
+    L.box(Vector3(-25.9, 31.0, 23), Vector3(0.3, 0.5, 18), Color.WHITE, 0.0, false, seam)             # freezer seam
+    L.box(Vector3(-25.6, 38.0, 16.0), Vector3(0.8, 8.0, 0.9), Color.WHITE, 0.0, false, hi)           # freezer handle
+    L.box(Vector3(-26.0, 44.9, 23), Vector3(0.4, 0.3, 18.2), Color.WHITE, 0.0, false, hi)
+    # The fridge door, hinged on the south edge and standing a little open:
+    # the warm interior shows in the gap.
+    L.box(Vector3(-26.4, 15.0, 22.0), Vector3(0.4, 29.0, 15.0), Color.WHITE, 0.0, false, L.glow_mat(Color("ddeeff"), 0.8))
+    var door := Node3D.new()
+    L.add_child(door)
+    door.position = Vector3(-26, 0.5, 32)
+    door.rotation.y = 0.32
+    var dm := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = Vector3(1.2, 29.5, 18)
+    dm.mesh = bm
+    dm.material_override = enamel
+    dm.position = Vector3(0.6, 14.75, -9)
+    door.add_child(dm)
+    var hm := MeshInstance3D.new()
+    var hb := BoxMesh.new()
+    hb.size = Vector3(0.8, 10, 0.9)
+    hm.mesh = hb
+    hm.material_override = hi
+    hm.position = Vector3(1.6, 16, -16.5)
+    door.add_child(hm)
+    # Magnets on the door: a star, an apple, a smiley, a letter A and a note.
+    var mags := [["star", Color("e7b84f"), Vector3(1.4, 22, -5)], ["apple", Color("c95b52"), Vector3(1.4, 18, -12)],
+        ["smile", Color("e5bf42"), Vector3(1.4, 12, -4)], ["A", Color("4c83b6"), Vector3(1.4, 25, -13)]]
+    for mg in mags:
+        var n := MeshInstance3D.new()
+        if mg[0] == "A" or mg[0] == "star":
+            var t := TextMesh.new()
+            t.text = "A" if mg[0] == "A" else "*"
+            t.font_size = 64
+            t.pixel_size = (2.6 if mg[0] == "A" else 4.0) / 64.0
+            t.depth = 0.3
+            n.mesh = t
+            n.rotation.y = PI / 2
+        else:
+            var sm := SphereMesh.new()
+            sm.radius = 1.1
+            sm.height = 2.2
+            n.mesh = sm
+            n.scale = Vector3(0.4, 1, 1)
+        n.material_override = L.mat(mg[1], 0.5)
+        n.position = mg[2]
+        door.add_child(n)
+    var note := MeshInstance3D.new()
+    var nb := BoxMesh.new()
+    nb.size = Vector3(0.2, 3.6, 6.0)
+    note.mesh = nb
+    note.material_override = L.mat(Color("f2eee5"), 0.9)
+    note.position = Vector3(1.3, 7, -9)
+    door.add_child(note)
+    var nt := TextMesh.new()
+    nt.text = "LEFTOVERS"
+    nt.font_size = 64
+    nt.pixel_size = 0.9 / 64.0
+    nt.depth = 0.05
+    var ntm := MeshInstance3D.new()
+    ntm.mesh = nt
+    ntm.material_override = L.mat(Color("222222"), 0.9)
+    ntm.position = Vector3(1.45, 7, -9)
+    ntm.rotation.y = PI / 2
+    door.add_child(ntm)
+    _gk_word(L, "KEEP COLD", Vector3(-25.7, 34.5, 23), PI / 2, 1.4, Color("71818e"))
+    # The fridge light: warm, the brightest local light, short reach (stops above the floor).
+    L.lamp(Vector3(-21, 18, 24), Color("ffdda0"), 14.0, 2.2, false)
+
+
+## 3 + 4. The counter run east of the play area: cabinets, worktop, oven with a
+## glowing clock, sink and faucet with a drip, toaster, cookie jar, trash can.
+static func _gk_counter(L) -> void:
+    var cab := _bm_floored(Color("b78a5b"), Color("614a37"), 0.8, GK_FLOOR)
+    var cab_hi = L.mat(Color("d8b58a"), 0.6)
+    var cab_line = L.mat(Color("614a37"), 0.8)
+    var top := _bm_floored(Color("d9d3c7"), Color("77746d"), 0.4, GK_FLOOR)
+    var top_hi = L.mat(Color("f2eee5"), 0.3)
+    var steel := _bm_floored(Color("aebbc2"), Color("53616a"), 0.25, GK_FLOOR)
+    var steel_hi = L.mat(Color("e8f0f3"), 0.15)
+    steel.metallic = 0.6
+    var z0 := -35.0
+    var z1 := 30.0
+    var zc := (z0 + z1) * 0.5
+    L.box(Vector3(33.5, 9, zc), Vector3(13, 18, z1 - z0), Color.WHITE, 0.0, false, cab)              # cabinets x 27..40
+    L.box(Vector3(33.0, 19, zc), Vector3(14, 2, z1 - z0 + 1), Color.WHITE, 0.0, false, top)           # worktop, front edge x 26
+    L.box(Vector3(25.95, 19.9, zc), Vector3(0.3, 0.3, z1 - z0 + 1), Color.WHITE, 0.0, false, top_hi)
+    L.box(Vector3(26.9, 1.0, zc), Vector3(0.4, 2.0, z1 - z0), Color.WHITE, 0.0, false, L.mat(Color("614a37"), 0.9))  # toe kick
+    var z := z0 + 6.5
+    while z < z1:                                                                                     # door seams and knobs
+        if absf(z - 20.0) > 9.0:
+            L.box(Vector3(26.9, 9, z - 6.5), Vector3(0.2, 16, 0.4), Color.WHITE, 0.0, false, cab_line)
+            L.sphere(Vector3(26.6, 14.0, z - 4.5), 0.5, Color.WHITE, Vector3.ONE, cab_hi)
+        z += 6.5
+    # Oven (15 wide, 15 tall) set into the cabinets, opposite the fridge.
+    var oven := _bm_floored(Color("343b43"), Color("1c2228"), 0.4, GK_FLOOR)
+    L.box(Vector3(26.8, 8.5, 20), Vector3(0.6, 15, 15), Color.WHITE, 0.0, false, oven)
+    L.box(Vector3(26.45, 7.5, 20), Vector3(0.2, 7, 10), Color.WHITE, 0.0, false, L.mat(Color("1a1f24"), 0.1, 0.3))  # oven window
+    L.box(Vector3(26.2, 12.4, 20), Vector3(0.5, 0.6, 11), Color.WHITE, 0.0, false, steel_hi)                  # handle
+    for i in 4:
+        L.cyl(Vector3(26.3, 15.3, 14.5 + i * 2.2 + (1.0 if i > 1 else 0.0)), 0.6, 0.6, Color.WHITE, false, Vector3(0, 0, PI / 2), steel)
+    L.box(Vector3(26.4, 15.3, 19.75), Vector3(0.2, 0.9, 2.2), Color.WHITE, 0.0, false, L.glow_mat(Color("e7a85b"), 2.2))  # clock
+    L.lamp(Vector3(25.0, 15.3, 19.75), Color("e7a85b"), 6.0, 0.8, false)
+    # Sink (12 x 9 opening) and a tall curved faucet with one big drip.
+    L.box(Vector3(33, 20.05, -5), Vector3(9.4, 0.2, 12.4), Color.WHITE, 0.0, false, steel)                    # rim
+    L.box(Vector3(33, 19.0, -5), Vector3(8.0, 2.1, 11.0), Color.WHITE, 0.0, false, L.mat(Color("53616a"), 0.3, 0.6))  # basin seen from the side
+    L.cyl(Vector3(38, 26, -5), 0.9, 12, Color.WHITE, false, Vector3.ZERO, steel)                             # faucet column
+    L.cyl(Vector3(35.5, 32.2, -5), 0.8, 5.2, Color.WHITE, false, Vector3(0, 0, PI / 2), steel)               # spout
+    L.cyl(Vector3(33.0, 31.2, -5), 0.8, 2.0, Color.WHITE, false, Vector3.ZERO, steel)
+    L.box(Vector3(38.0, 32.2, -5), Vector3(0.3, 0.3, 1.9), Color.WHITE, 0.0, false, steel_hi)
+    var water := StandardMaterial3D.new()
+    water.albedo_color = Color("8fcde8")
+    water.roughness = 0.05
+    water.emission_enabled = true
+    water.emission = Color("8fcde8")
+    water.emission_energy_multiplier = 0.25
+    L.sphere(Vector3(33.0, 28.6, -5), 0.75, Color.WHITE, Vector3(1, 1.3, 1), water)
+    # Toaster and cookie jar on the worktop, trash can beside the south end.
+    L.box(Vector3(34, 23.0, 4), Vector3(6, 6, 9), Color.WHITE, 0.0, false, steel)
+    for dz in [-2.0, 2.0]:
+        L.box(Vector3(34, 26.05, 4 + dz), Vector3(3.4, 0.1, 0.8), Color.WHITE, 0.0, false, L.mat(Color("222222"), 0.9))
+    L.box(Vector3(30.95, 23.0, 4), Vector3(0.1, 1.2, 9.0), Color.WHITE, 0.0, false, steel_hi)
+    L.cyl(Vector3(34, 23.5, -25), 3.0, 7.0, Color.WHITE, false, Vector3.ZERO, _bm_floored(Color("e6e0d4"), Color("77736c"), 0.4, GK_FLOOR))
+    L.cyl(Vector3(34, 27.4, -25), 2.4, 0.8, Color.WHITE, false, Vector3.ZERO, L.mat(Color("c0453a"), 0.5))
+    L.sphere(Vector3(34, 28.2, -25), 0.8, Color("c0453a"), Vector3.ONE, L.mat(Color("c0453a"), 0.5))
+    var bin := _bm_floored(Color("667078"), Color("333c43"), 0.4, GK_FLOOR)
+    bin.metallic = 0.4
+    L.cyl(Vector3(31, 9, 37), 4.0, 18.0, Color.WHITE, false, Vector3.ZERO, bin)
+    L.cyl(Vector3(31, 18.3, 37), 4.2, 0.6, Color.WHITE, false, Vector3.ZERO, L.mat(Color("9ba7ad"), 0.3, 0.5))
+    L.box(Vector3(26.9, 12, 37), Vector3(0.4, 3.0, 2.2), Color.WHITE, 0.0, false, L.mat(Color("333c43"), 0.5))  # pedal
+
+
+## 5. The breakfast spill: a tipped generic cereal box, a bowl, a spoon and cereal.
+static func _gk_spill(L) -> void:
+    var box := _bm_floored(Color("d4a64d"), Color("76552e"), 0.8, 0.45)
+    L.box_rot(Vector3(-32, 2.0, 48), Vector3(11, 4, 16), Color.WHITE, Vector3(0, 0.5, 0), false, box)
+    L.box_rot(Vector3(-32, 4.05, 48), Vector3(10.2, 0.1, 15.2), Color.WHITE, Vector3(0, 0.5, 0), false, L.mat(Color("f2d58d"), 0.7))
+    _gk_word(L, "CEREAL", Vector3(-32, 4.2, 48), 0.5, 2.6)
+    var w = L.get_child(L.get_child_count() - 1)
+    w.rotation = Vector3(-PI / 2, 0.5, 0)
+    var bowl := _bm_floored(Color("e6e0d4"), Color("77736c"), 0.3, 0.4)
+    L.cyl(Vector3(-40, 2, 57), 2.4, 4.0, Color.WHITE, false, Vector3.ZERO, bowl, 4.0)      # wide top, narrow foot
+    L.cyl(Vector3(-40, 4.02, 57), 3.6, 0.05, Color.WHITE, false, Vector3.ZERO, L.mat(Color("f2eee5"), 0.4))   # milk
+    var spoon = L.mat(Color("aebbc2"), 0.2, 0.7)
+    L.box_rot(Vector3(-30, 0.5, 58), Vector3(9, 0.6, 1.2), Color.WHITE, Vector3(0, 0.3, 0), false, spoon)
+    L.sphere(Vector3(-35.2, 0.6, 59.6), 1.6, Color.WHITE, Vector3(1.3, 0.35, 0.9), spoon)
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 7
+    for i in 16:
+        var c := Color("c58b4b") if i % 2 == 0 else Color("e7bd75")
+        var r := rng.randf_range(0.4, 0.75)
+        L.sphere(Vector3(rng.randf_range(-36, -26), r * 0.8, rng.randf_range(51, 58)), r, c, Vector3(1, 0.8, 1), L.mat(c, 0.9))
+
+
+## 6. Pantry shelving west of the Pantry: timber shelves of cans, jars and boxes.
+static func _gk_pantry(L) -> void:
+    var timber := _bm_floored(Color("956b43"), Color("49382b"), 0.85, GK_FLOOR)
+    var t_hi = L.mat(Color("c49a68"), 0.7)
+    var fx := -28.0                       # front of the unit; it runs z -36..14, back at x -40
+    L.box(Vector3(-39.5, 19, -11), Vector3(1, 38, 50), Color.WHITE, 0.0, false, timber)
+    for z in [-36.0, 14.0]:
+        L.box(Vector3(-34, 19, z), Vector3(12, 38, 1.2), Color.WHITE, 0.0, false, timber)
+    var levels := [1.0, 10.5, 20.0, 29.5]
+    for y in levels + [38.0]:
+        L.box(Vector3(-34, y - 0.5, -11), Vector3(12, 1, 50), Color.WHITE, 0.0, false, timber)
+        L.box(Vector3(fx + 0.05, y - 0.5, -11), Vector3(0.2, 1.0, 50), Color.WHITE, 0.0, false, t_hi)
+    var can := _bm_floored(Color("789a9b"), Color("3f5b60"), 0.35, GK_FLOOR)
+    can.metallic = 0.4
+    var can_hi = L.mat(Color("b5d0c8"), 0.3)
+    var jars := [Color("c99a4a"), Color("b05a4a"), Color("6f8a55")]
+    var words := [["SOUP", -30.0], ["PEACHES", -14.0], ["JAM", 2.0]]
+    for li in levels.size():
+        var y: float = levels[li]
+        var z := -33.0
+        var k := li
+        while z < 11.5:
+            var kind := k % 4
+            if kind == 0 or kind == 1:                                                    # cans
+                L.cyl(Vector3(-31, y + 3, z), 1.5, 6.0, Color.WHITE, false, Vector3.ZERO, can)
+                L.cyl(Vector3(-31, y + 6.02, z), 1.4, 0.05, Color.WHITE, false, Vector3.ZERO, can_hi)
+                z += 3.6
+            elif kind == 2:                                                               # jar with a lid
+                var jc: Color = jars[(k / 4) % 3]
+                L.cyl(Vector3(-31, y + 2.5, z), 1.5, 5.0, Color.WHITE, false, Vector3.ZERO, _bm_floored(jc, jc.darkened(0.5), 0.2, 0.4))
+                L.cyl(Vector3(-31, y + 5.3, z), 1.55, 0.6, Color.WHITE, false, Vector3.ZERO, L.mat(Color("8a8f94"), 0.3, 0.6))
+                z += 3.8
+            else:                                                                         # small cereal box
+                L.box(Vector3(-32, y + 3.5, z + 0.5), Vector3(3, 7, 4), Color.WHITE, 0.0, false, _bm_floored(Color("d4a64d"), Color("76552e"), 0.8, 0.4))
+                z += 5.0
+            k += 1
+    # Shelf-edge labels on the bottom shelf, block letters on cream strips.
+    for wd in words:
+        L.box(Vector3(fx + 0.15, 0.2, wd[1]), Vector3(0.1, 0.9, 6.5), Color.WHITE, 0.0, false, L.mat(Color("e5d7b5"), 0.9))
+        _gk_word(L, wd[0], Vector3(fx + 0.25, 0.2, wd[1]), PI / 2, 0.7)
+    _gk_word(L, "OATS", Vector3(-30.45, 13.5, -14.5), PI / 2, 0.9)
+    _gk_word(L, "RICE", Vector3(-30.45, 23.0, -4.5), PI / 2, 0.9)
+    # Dim neutral-warm fill on the shelf faces (short; stops above the floor).
+    L.lamp(Vector3(-24, 26, -11), Color("ffe6c8"), 22.0, 1.2, false)
+
+
+## 7a. The laundry beyond the north edge: the Basement washer (with its basket)
+## and a matching dryer, facing the play area, a detergent jug, an ironing board.
+static func _gk_laundry(L) -> void:
+    _gk_place(L, func():
+        _bm_washer(L, Vector3.ZERO)
+        _bm_basket(L, Vector3(0, 22, -1)), Vector3(-14, 0, -62), PI / 2)
+    _gk_place(L, func():
+        _bm_washer(L, Vector3.ZERO, Color("d7e0e5"), Color("29343d"), false), Vector3(6, 0, -62), PI / 2)
+    L.box(Vector3(6, 26, -62), Vector3(5, 8, 3.5), Color.WHITE, 0.0, false, _bm_floored(Color("5f86a8"), Color("2f4a63"), 0.4, 0.4))
+    L.cyl(Vector3(7.4, 30.8, -62), 0.8, 1.6, Color.WHITE, false, Vector3.ZERO, L.mat(Color("e5d7b5"), 0.5))
+    _gk_word(L, "DETERGENT", Vector3(6, 26, -60.2), 0.0, 0.8, Color("f2eee5"))
+    var fab := _bm_floored(Color("91aebb"), Color("4d6875"), 0.9, 0.4)
+    L.box(Vector3(28, 14, -56), Vector3(20, 2, 6), Color.WHITE, 0.0, false, fab)
+    L.box(Vector3(28, 15.05, -56), Vector3(19.6, 0.1, 5.6), Color.WHITE, 0.0, false, L.mat(Color("c4d8df"), 0.9))
+    var leg = L.mat(Color("87969b"), 0.3, 0.6)
+    for s in [-1.0, 1.0]:
+        L.box_rot(Vector3(28, 6.6, -56), Vector3(0.6, 15.5, 0.6), Color.WHITE, Vector3(0, 0, 0.6 * s), false, leg)
+    L.lamp(Vector3(0, 30, -52), Color("dfe8ff"), 22.0, 1.4, false)   # cool neutral laundry fill
+    _gk_word(L, "TOWELS", Vector3(-14, 31.5, -56.2), 0.0, 0.9)
+
+
+## 7b. The moonlit window high on the west wall, and a pendant lamp over the Kitchen Floor.
+static func _gk_window_pendant(L) -> void:
+    var wc := Vector3(-108.6, 42, 10)
+    L.box(wc, Vector3(0.6, 20, 28), Color.WHITE, 0.0, false, L.glow_mat(Color("263d67"), 1.6))
+    L.box(wc + Vector3(0.3, 4, -4), Vector3(0.2, 8, 8), Color.WHITE, 0.0, false, L.glow_mat(Color("7896c5"), 1.2))   # moon reflection
+    var frame = L.mat(Color("18263e"), 0.8)
+    for dz in [-14.4, 0.0, 14.4]:
+        L.box(wc + Vector3(0.4, 0, dz), Vector3(1.0, 21, 1.0), Color.WHITE, 0.0, false, frame)
+    for dy in [-10.4, 10.4]:
+        L.box(wc + Vector3(0.4, dy, 0), Vector3(1.0, 1.0, 29.8), Color.WHITE, 0.0, false, frame)
+    L.lamp(Vector3(-86, 42, 10), Color("9bbceb"), 70.0, 1.3, false)       # moonlight onto the fridge and pantry side
+    # Pendant: cord from the ceiling, a dark shade, a small amber glow.
+    var pc := Vector3(6, 0, 8)
+    L.cyl(Vector3(pc.x, 66, pc.z), 0.15, 19.0, Color("222222"), false)
+    L.cyl(Vector3(pc.x, 51, pc.z), 2.5, 12.0, Color.WHITE, false, Vector3.ZERO, _bm_floored(Color("424b58"), Color("202833"), 0.5, 0.4), 1.0)
+    L.box(Vector3(pc.x + 2.0, 51, pc.z), Vector3(0.2, 9, 0.4), Color.WHITE, 0.0, false, L.mat(Color("7e8b9a"), 0.4))
+    L.sphere(Vector3(pc.x, 44.6, pc.z), 1.0, Color("e7a85b"), Vector3.ONE, L.glow_mat(Color("e7a85b"), 2.5))
+    L.lamp(Vector3(pc.x, 43.5, pc.z), Color("e7a85b"), 16.0, 1.0, false)
 
 
 # ================================================== shared map helpers ====
@@ -792,9 +1147,10 @@ static func _kitchen(L) -> Dictionary:
         {"id": "B", "x0": -12, "x1": 12, "z0": -14, "z1": 14, "win_w": [0], "win_e": [-6], "door_x": 6, "door_cost": 1250},
         {"id": "C", "x0": -16, "x1": 16, "z0": -40, "z1": -14, "win_w": [-27], "win_e": [-33], "win_n": [0]},
     ]
-    _floors(L, rooms, L.tex("wood_floor", Color(0.55, 0.45, 0.38), 10.0), 24, 46,
+    _floors(L, rooms, _gk_lino(), 24, 46,
         {"A": L.tex("tiles", Color(1.0, 0.97, 0.9), 3.0), "B": L.tex("wood_floor", Color(0.8, 0.7, 0.6), 8.0), "C": L.tex("concrete", Color(0.85, 0.85, 0.88), 6.0)})
     L.bounds(24, 46)
+    _giant_kitchen(L)
     var lay := _rooms(L, rooms, 4.8, L.tex("wall", Color(1.05, 0.98, 0.75), 6.0),
         {"B": L.tex("table_wood", Color(0.7, 0.58, 0.45), 4.0), "C": L.tex("wall", Color(0.8, 0.9, 1.0), 6.0)})
     var white: Material = L.mat(Color(0.95, 0.95, 0.93), 0.3)
